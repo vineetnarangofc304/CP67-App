@@ -307,53 +307,113 @@ const AdminUsers = () => {
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-semibold flex items-center gap-2">
               <Database className="h-5 w-5 text-orange-600" />
-              System Tools
+              System Tools - Fundle Customer Import
             </CardTitle>
             <CardDescription>
-              Administrative tools for managing customer data
+              Import and sync existing Fundle customers to mark them as "Existing" in the system
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div className="flex-1">
-                <h4 className="font-medium text-slate-900">Sync Fundle Customers</h4>
-                <p className="text-sm text-slate-600 mt-1">
-                  Force update all users whose phone numbers are in the imported Fundle Excel list to be marked as "Existing" customers.
-                  This runs without any condition checks.
-                </p>
-                {syncResult && (
-                  <div className="mt-3 p-3 bg-white rounded-lg border border-green-200">
-                    <div className="flex items-center gap-2 text-green-700 mb-2">
-                      <CheckCircle className="h-4 w-4" />
-                      <span className="font-medium">Sync Complete</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div>Fundle List: <span className="font-semibold">{syncResult.fundle_customers_count?.toLocaleString()}</span></div>
-                      <div>Total Users: <span className="font-semibold">{syncResult.total_users?.toLocaleString()}</span></div>
-                      <div>Updated to Existing: <span className="font-semibold text-green-600">{syncResult.updated_to_existing}</span></div>
-                      <div>Already Existing: <span className="font-semibold">{syncResult.already_existing}</span></div>
-                    </div>
+          <CardContent className="space-y-6">
+            {/* Step 1: Upload Excel */}
+            <div className="p-4 bg-white rounded-lg border border-orange-200">
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-orange-600 font-bold text-sm">1</span>
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium text-slate-900">Upload Excel with Phone Numbers</h4>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Upload an Excel (.xlsx) or CSV file with Fundle customer phone numbers in the first column.
+                    These numbers will be stored and used to identify existing customers.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 ml-11">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="excel-upload"
+                />
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  variant="outline"
+                  className="border-orange-300 hover:bg-orange-100"
+                  data-testid="upload-excel-btn"
+                >
+                  {uploading ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Excel File
+                    </>
+                  )}
+                </Button>
+                
+                {uploadResult && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <span className="text-green-700">
+                      Imported <strong>{uploadResult.imported?.toLocaleString()}</strong> numbers 
+                      (Total in DB: <strong>{uploadResult.total_in_database?.toLocaleString()}</strong>)
+                    </span>
                   </div>
                 )}
               </div>
-              <Button
-                onClick={syncFundleCustomers}
-                disabled={syncing}
-                className="bg-orange-600 hover:bg-orange-700 whitespace-nowrap"
-                data-testid="sync-fundle-btn"
-              >
-                {syncing ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Syncing...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Sync Now
-                  </>
+            </div>
+
+            {/* Step 2: Sync */}
+            <div className="p-4 bg-white rounded-lg border border-orange-200">
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-orange-600 font-bold text-sm">2</span>
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium text-slate-900">Sync Users to "Existing"</h4>
+                  <p className="text-sm text-slate-600 mt-1">
+                    After uploading, click Sync to update all registered users whose phone numbers 
+                    match the uploaded list to "Existing" customer type. No conditions - just hard converts.
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 ml-11">
+                <Button
+                  onClick={syncFundleCustomers}
+                  disabled={syncing}
+                  className="bg-orange-600 hover:bg-orange-700"
+                  data-testid="sync-fundle-btn"
+                >
+                  {syncing ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Syncing...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Sync Now
+                    </>
+                  )}
+                </Button>
+                
+                {syncResult && (
+                  <div className="flex items-center gap-4 text-sm">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <span>Fundle List: <strong>{syncResult.fundle_customers_count?.toLocaleString()}</strong></span>
+                    <span>Users: <strong>{syncResult.total_users?.toLocaleString()}</strong></span>
+                    <span className="text-green-700">Updated: <strong>{syncResult.updated_to_existing}</strong></span>
+                  </div>
                 )}
-              </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
