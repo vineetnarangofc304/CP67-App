@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../App';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -26,7 +26,10 @@ import {
   Mail,
   Key,
   User,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw,
+  Database,
+  CheckCircle
 } from 'lucide-react';
 
 const AdminUsers = () => {
@@ -37,6 +40,8 @@ const AdminUsers = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
   
   // Form state
   const [formData, setFormData] = useState({
