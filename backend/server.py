@@ -1117,6 +1117,57 @@ async def check_fundle_customer(phone: str, payload: dict = Depends(verify_jwt_t
     existing = await db.fundle_customers.find_one({"phone_10": clean_phone})
     return {"phone": phone, "is_fundle_customer": existing is not None}
 
+@api_router.post("/admin/sync-fundle-customers")
+async def sync_fundle_customers(payload: dict = Depends(verify_jwt_token)):
+    """Force sync ALL users with fundle_customers list.
+    Any user whose phone is in fundle_customers will be marked as 'existing'.
+    This runs WITHOUT any condition checks - just hard converts based on phone match.
+    """
+    logger.info("Starting force sync of users with fundle_customers list...")
+    
+    # Get all phone numbers from fundle_customers
+    fundle_phones = await db.fundle_customers.find({}, {"phone_10": 1, "_id": 0}).to_list(50000)
+    phone_set_10 = set(doc["phone_10"] for doc in fundle_phones)
+    phone_set_12 = set("91" + doc["phone_10"] for doc in fundle_phones)
+    
+    logger.info(f"Found {len(phone_set_10)} phone numbers in fundle_customers list")
+    
+    # Get all users
+    all_users = await db.users.find({}, {"_id": 0, "id": 1, "phone": 1, "customer_type": 1}).to_list(100000)
+    logger.info(f"Found {len(all_users)} total users in database")
+    
+    updated_count = 0
+    already_existing = 0
+    
+    for user in all_users:
+        phone = user.get("phone", "")
+        # Extract 10-digit number
+        phone_10 = phone[2:] if phone.startswith("91") and len(phone) == 12 else phone
+        
+        # Check if this phone is in fundle_customers
+        if phone_10 in phone_set_10 or phone in phone_set_12:
+            if user.get("customer_type") != "existing":
+                # Force update to existing
+                await db.users.update_one(
+                    {"id": user["id"]},
+                    {"$set": {"customer_type": "existing"}}
+                )
+                updated_count += 1
+                logger.info(f"Updated user {phone} to 'existing'")
+            else:
+                already_existing += 1
+    
+    logger.info(f"Sync complete: {updated_count} users updated to 'existing', {already_existing} already existing")
+    
+    return {
+        "success": True,
+        "message": f"Force synced users with fundle_customers list",
+        "fundle_customers_count": len(phone_set_10),
+        "total_users": len(all_users),
+        "updated_to_existing": updated_count,
+        "already_existing": already_existing
+    }
+
 # ======================== WHATSAPP LOGS ROUTES ========================
 
 @api_router.get("/whatsapp/logs")
