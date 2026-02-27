@@ -3621,7 +3621,32 @@ Enjoy your visit to CP67 Mall! 🛍️✨"""
         )
         await db.whatsapp_logs.insert_one(outbound_log.model_dump())
         
-        # Send WhatsApp message with buttons (more reliable than image)
+        # Generate QR code image
+        qr_image = await generate_parking_qr_image(session_code)
+        
+        # Try to send QR image first, fall back to buttons if image fails
+        if qr_image:
+            qr_caption = f"""🅿️ *Welcome to CP67 Mall Parking!*
+
+Your FREE parking session has started ✅
+
+📋 *Session Code:* {session_code}
+📅 *Date:* {entry_date}
+⏰ *Entry Time:* {entry_time}
+
+👆 *Show this QR code at the exit counter*
+
+Enjoy your visit to CP67 Mall! 🛍️✨"""
+            
+            # Try sending image
+            image_sent = await send_whatsapp_image(clean_phone, qr_image, qr_caption)
+            
+            if image_sent:
+                logger.info(f"Parking QR image sent successfully to {clean_phone}")
+                return
+        
+        # Fallback: Send text message with buttons
+        logger.info(f"Falling back to text message for parking entry {session_code}")
         buttons = [
             {"id": "upload_bill", "title": "Upload Bill"},
             {"id": "my_points", "title": "Check Points"}
