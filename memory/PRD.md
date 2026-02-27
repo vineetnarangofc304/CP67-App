@@ -358,3 +358,10 @@ https://your-domain.com/api/whatsapp/webhook
 - Fundle API requires exact brand name match from master list
 - Karix requires webhook URL to be publicly accessible
 - Parking QR scanning requires manual code entry (camera QR scanning not implemented)
+
+## Technical Debt
+- **CRITICAL:** `backend/server.py` is ~4000 lines and needs refactoring into:
+  - `/app/backend/routers/` - API route handlers
+  - `/app/backend/models/` - Pydantic models
+  - `/app/backend/services/` - Business logic
+  - `/app/backend/db/` - Database operations
