@@ -1059,6 +1059,46 @@ async def bulk_mark_existing(
         "total_phones_provided": len(phone_numbers)
     }
 
+@api_router.post("/admin/import-fundle-customers")
+async def import_fundle_customers(
+    phone_numbers: List[str],
+    payload: dict = Depends(verify_jwt_token)
+):
+    """Import Fundle customer phone numbers for future reference.
+    These numbers will be used to identify existing customers when they scan our QR.
+    """
+    # Store in a separate collection for reference
+    inserted_count = 0
+    
+    for phone in phone_numbers:
+        clean_phone = ''.join(filter(str.isdigit, phone))
+        if len(clean_phone) == 10:
+            try:
+                await db.fundle_customers.update_one(
+                    {"phone_10": clean_phone},
+                    {"$set": {"phone_10": clean_phone, "imported_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True
+                )
+                inserted_count += 1
+            except:
+                pass
+    
+    return {
+        "message": f"Imported {inserted_count} Fundle customer phone numbers",
+        "imported": inserted_count,
+        "total_provided": len(phone_numbers)
+    }
+
+@api_router.get("/admin/check-fundle-customer/{phone}")
+async def check_fundle_customer(phone: str, payload: dict = Depends(verify_jwt_token)):
+    """Check if a phone number is in the imported Fundle customer list"""
+    clean_phone = ''.join(filter(str.isdigit, phone))
+    if len(clean_phone) == 12 and clean_phone.startswith('91'):
+        clean_phone = clean_phone[2:]
+    
+    existing = await db.fundle_customers.find_one({"phone_10": clean_phone})
+    return {"phone": phone, "is_fundle_customer": existing is not None}
+
 # ======================== WHATSAPP LOGS ROUTES ========================
 
 @api_router.get("/whatsapp/logs")
