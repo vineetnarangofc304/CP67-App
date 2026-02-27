@@ -404,6 +404,7 @@ const Bills = () => {
                 <SelectItem value="all">All Status</SelectItem>
                 <SelectItem value="auto_approved">Auto Approved</SelectItem>
                 <SelectItem value="manual_review">Manual Review</SelectItem>
+                <SelectItem value="pending_review">Pending Review</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
                 <SelectItem value="rejected">Rejected</SelectItem>
                 <SelectItem value="duplicate">Duplicate</SelectItem>
