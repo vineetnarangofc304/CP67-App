@@ -29,7 +29,9 @@ import {
   AlertTriangle,
   RefreshCw,
   Database,
-  CheckCircle
+  CheckCircle,
+  Upload,
+  FileSpreadsheet
 } from 'lucide-react';
 
 const AdminUsers = () => {
