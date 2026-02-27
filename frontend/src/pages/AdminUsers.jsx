@@ -176,20 +176,33 @@ const AdminUsers = () => {
       return;
     }
 
+    // Check file size (max 50MB)
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('File too large. Maximum size is 50MB');
+      return;
+    }
+
     setUploading(true);
     setUploadResult(null);
+    toast.info(`Uploading ${file.name} (${(file.size / 1024).toFixed(1)} KB)...`);
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min timeout
+
       const response = await fetch(`${API_URL}/admin/upload-fundle-excel`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
         },
-        body: formData
+        body: formData,
+        signal: controller.signal
       });
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
       setUploadResult(data);
@@ -202,7 +215,12 @@ const AdminUsers = () => {
         toast.error(data.detail || data.message || 'Failed to upload file');
       }
     } catch (error) {
-      toast.error('Failed to upload Excel file');
+      console.error('Upload error:', error);
+      if (error.name === 'AbortError') {
+        toast.error('Upload timed out. Try a smaller file or CSV format.');
+      } else {
+        toast.error(`Upload failed: ${error.message || 'Network error'}`);
+      }
     } finally {
       setUploading(false);
       // Reset file input
