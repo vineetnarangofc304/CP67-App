@@ -1022,6 +1022,43 @@ async def set_default_customer_type(
         "modified": result.modified_count
     }
 
+@api_router.post("/admin/bulk-mark-existing")
+async def bulk_mark_existing(
+    phone_numbers: List[str],
+    payload: dict = Depends(verify_jwt_token)
+):
+    """Bulk mark phone numbers as 'existing' customers from Fundle export"""
+    updated_count = 0
+    not_found = []
+    
+    for phone in phone_numbers:
+        # Normalize phone - add 91 prefix if needed
+        clean_phone = ''.join(filter(str.isdigit, phone))
+        if len(clean_phone) == 10:
+            full_phone = f"91{clean_phone}"
+        elif len(clean_phone) == 12 and clean_phone.startswith('91'):
+            full_phone = clean_phone
+        else:
+            continue
+        
+        # Update user if exists in our system
+        result = await db.users.update_one(
+            {"phone": full_phone},
+            {"$set": {"customer_type": "existing", "fundle_existing": True}}
+        )
+        
+        if result.modified_count > 0:
+            updated_count += 1
+        elif result.matched_count == 0:
+            # User not in our system - we can optionally add them
+            pass
+    
+    return {
+        "message": f"Marked {updated_count} users as 'existing'",
+        "updated": updated_count,
+        "total_phones_provided": len(phone_numbers)
+    }
+
 # ======================== WHATSAPP LOGS ROUTES ========================
 
 @api_router.get("/whatsapp/logs")
