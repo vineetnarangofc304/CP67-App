@@ -5,6 +5,16 @@ A WhatsApp-based loyalty onboarding and bill-scan rewards system for CP67 Mall. 
 
 ## Recent Updates (Feb 2026)
 
+### Karix Image Sending (Feb 27, 2026)
+- **Fixed:** WhatsApp QR code image sending now works using `ATTACHMENT` type with `attachmentData` field
+- Parking entry flow sends QR image directly to customer's WhatsApp
+- Fall-back to text message if image fails
+
+### Reprocess Button (Feb 27, 2026)
+- **Fixed:** Reprocess button now visible for ALL pending bills (not just Brand-related)
+- Added Reprocess button to "All Bills" tab for pending_review/manual_review bills
+- Added "Pending Review" option to status filter dropdown
+
 ### Bill Processing Rules
 - **15-Day Limit:** Bills older than 15 days are auto-rejected with friendly message
 - **High Value Review:** Bills > ₹30,000 go to pending_review for manual verification
