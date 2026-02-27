@@ -1863,12 +1863,18 @@ async def process_new_user_registration(phone: str, profile_name: str, source_co
     # Strip 91 prefix for API calls
     mobile_10 = phone[2:] if phone.startswith("91") and len(phone) == 12 else phone
     
-    # First check if user exists in Fundle
+    # First check if user exists in Fundle API
     points_result = await tagnpay_client.get_customer_points(mobile_10)
     is_existing_fundle_user = points_result.get("success") and points_result.get("data") is not None
     balance_points = 0
     fundle_registered = False
     customer_type = "new"  # Default to new customer
+    
+    # Also check our imported Fundle customer list (from Excel)
+    imported_fundle_customer = await db.fundle_customers.find_one({"phone_10": mobile_10})
+    if imported_fundle_customer:
+        is_existing_fundle_user = True
+        logger.info(f"User {mobile_10} found in imported Fundle customer list")
     
     if is_existing_fundle_user:
         # EXISTING CUSTOMER - Already registered in Fundle before our system
