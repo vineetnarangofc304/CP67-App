@@ -87,6 +87,24 @@ Body: {
 
 # Send Interactive Buttons
 Same endpoint, content type: "INTERACTIVE" with buttons array
+
+# Send Image (ATTACHMENT type - base64)
+Body: {
+  "message": {
+    "channel": "WABA",
+    "content": {
+      "type": "ATTACHMENT",
+      "attachment": {
+        "type": "image",
+        "caption": "Caption text",
+        "mimeType": "image/png",
+        "attachmentData": "base64_encoded_image_string"
+      }
+    },
+    "recipient": { "to": "91XXXXXXXXXX" },
+    "sender": { "from": "{WHATSAPP_NUMBER}" }
+  }
+}
 ```
 
 ### Fundle/TagnPay API
