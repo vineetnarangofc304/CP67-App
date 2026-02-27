@@ -1,0 +1,166 @@
+<analysis>**original_problem_statement:**
+Build a WhatsApp-based loyalty onboarding and bill-scan rewards system for CP67 Mall. Customers scan area-specific QR codes, opening WhatsApp to register, upload bills, and check points. The system uses OCR to process bills and integrates with the Fundle (formerly TagnPay) client API for loyalty management. A comprehensive admin dashboard is required to track users, QR performance, bills, and manage system settings.
+
+Over time, requirements have expanded to include:
+- A multi-admin system with different roles and login tracking to see who approved/rejected bills.
+- A WhatsApp conversation viewer in the dashboard.
+- Real-time point fetching from the Fundle API.
+- Differentiating between new customers and existing Fundle customers for analytics.
+- A new, complex parking validation flow involving dynamic QR code generation and a separate scanner app.
+
+**User's preferred language**: English
+
+**what currently exists?**
+A full-stack application with a FastAPI backend, a React admin dashboard, and a MongoDB database. The system is live with several key features:
+- **Backend:** Manages WhatsApp webhooks (Karix), performs OCR on bills (Gemini), and integrates with the Fundle loyalty API. It supports a multi-admin architecture with role-based access and has the initial models and API routes for a new parking validation system.
+- **Frontend:** A feature-rich admin dashboard for viewing system analytics, managing users, reviewing bills (with Reprocess functionality for specific errors), viewing QR code performance, and managing admin users. A new page for viewing WhatsApp conversation histories has also been added. Points are fetched in real-time from the Fundle API.
+
+**Last working item**:
+-   **Last item agent was working:** The agent began implementing a new, complex parking validation flow as requested by the user. This flow involves generating a dynamic QR code for a customer upon entering the parking lot and providing a scanner app for staff to validate it upon exit. The agent has laid the groundwork by adding the necessary data models () and API endpoints (, ) to the backend.
+-   **Status:** IN PROGRESS
+-   **Agent Testing Done:** N
+-   **Which testing method agent to use?** both (frontend testing agent for the scanner app, backend testing via curl for the API endpoints).
+-   **User Testing Done:** N
+
+**All Pending/In progress Issue list**:
+-   There are no outstanding bugs. The focus is on new feature development.
+
+**Issues Detail:**
+-   None.
+
+**In progress Task List**:
+-   **Task 1: Complete the Parking Validation Flow (P0)**
+    -   **Where to resume:** The agent has created the backend models and API stubs in . The next immediate step is to install the necessary libraries for QR code generation ( and ) and then implement the logic.
+    -   **What will be achieved with this?** A complete parking management system integrated with the existing WhatsApp loyalty platform.
+    -   **Status:** IN PROGRESS
+    -   **Should Test frontend/backend/both after fix?** both
+    -   **Blocked on something:** None.
+
+**Upcoming and Future Tasks**
+-   **Upcoming Tasks:**
+    -   **(P0) Build the Parking Scanner App:** Create a new page in the React dashboard that uses the device's camera to scan the parking session QR code from a customer's phone and calls the  endpoint.
+    -   **(P1) Create a Parking Report Page:** Add a new page to the dashboard to display a report of all parking sessions, showing entry time, exit time, and duration.
+    -   **(P1) Implement Select Menu for WhatsApp:** When more than three button options are available in a WhatsApp message, present a Select Menu button that opens a pop-up list of all options, as requested by the user.
+    -   **(P2) Implement Fundle API call for Manual Rejection:** When an admin manually rejects a bill, call the appropriate Fundle API to log this rejection.
+
+-   **Future Tasks:**
+    -   Enhance the admin dashboard with an exportable reports feature (for bills, users, etc.).
+    -   Add more advanced analytics, such as store-level performance and a heatmap of QR code scans.
+
+**Completed work in this session**
+-   **Multi-Admin & Roles Implemented:**
+    -   Created a full admin user management system with roles (Super Admin, Admin, Bill Operator, Call Centre, Support Officer).
+    -   The dashboard now has an Admin Users page to create/view/delete admins.
+    -   Bill processing now tracks and displays which admin approved/rejected a bill.
+-   **Live Fundle Points Integration:**
+    -   Refactored the system to fetch user points directly from the Fundle API in real-time, ensuring data is always accurate.
+    -   Removed all unnecessary local point storage and synchronization logic.
+-   **WhatsApp Journey Viewer Created:**
+    -   Built a WhatsApp Logs page in the dashboard that displays full conversation histories in a chat-style interface, with distinct colors for user and system messages.
+    -   Fixed a scrolling bug to ensure long conversations are viewable.
+-   **New vs. Existing Customer Tracking:**
+    -   The registration flow now identifies if a user already exists in Fundle.
+    -   Dashboard analytics now show separate counts for New vs. Existing customers.
+    -   QR analytics were updated to only count New customers toward registration metrics, preventing inflation from returning customers.
+-   **Website Source Added:**
+    -   Added Website as a trackable source for customer onboarding.
+    -   Provided the user with the correct  link and HTML code for a floating WhatsApp button for their website.
+-   **Critical Bug Fixes:**
+    -   Fixed a fatal frontend crash caused by a syntax error in .
+    -   Resolved multiple issues with the Brand Not Found workflow, ensuring the Reprocess button appears correctly.
+    -   Diagnosed and fixed webhook and environment variable issues that were preventing WhatsApp responses.
+    -   Fixed a  in the  API endpoint.
+-   **UI/UX Enhancements:**
+    -   Renamed all user-facing instances of TagnPay to Fundle.
+    -   Renamed UI labels Brand to Retailer and Social / Offline to Social.
+    -   Added a persistent Customer Support option to the WhatsApp menu.
+
+**Earlier issues found/mentioned but not fixed**
+-   None. All prior issues were addressed.
+
+**Known issue recurrence from previous fork**
+-   None.
+
+**Code Architecture**
+
+
+**Key Technical Concepts**
+-   **Backend:** FastAPI
+-   **Frontend:** React
+-   **Database:** MongoDB
+-   **Integrations:** Karix (WhatsApp), Fundle (Loyalty API), Gemini Vision (OCR)
+-   **New Dependency (Pending):**  library for dynamic QR code generation.
+
+**key DB schema**
+-   **users:**  (new field: 'new' or 'existing')
+-   **bills:**  (new field: )
+-   **admin_users (new collection):** 
+-   **parking_sessions (new collection):** 
+
+**changes in tech stack**
+-   None.
+
+**All files of reference**
+-   : All backend logic, including the new parking models/routes and multi-admin system, resides here. It has been extensively modified.
+-   : A new page for the admin management feature.
+-   : A new page for viewing WhatsApp conversations.
+-   : Significantly refactored to fetch live points from Fundle and display customer type.
+-   : Updated to display which admin processed a bill.
+-   : Updated to show new vs. existing customer stats.
+-   : Updated to differentiate between new and existing customer registrations.
+
+**Areas that need refactoring**:
+-   ** is critically large and complex.** It has grown to nearly 3000 lines and contains all routes, models, services, and client logic. It is a major technical debt and must be refactored into a structured project with separate directories for , , , etc., to ensure future maintainability.
+
+**key api endpoints**
+-   : **(New)** Generates a parking session and a unique QR code.
+-   : **(New)** Validates an existing parking session QR code.
+-   : **(New)** CRUD operations for managing admin users.
+-   : **(New)** Deletes an admin user.
+-   : **(New)** Fetches a list of all WhatsApp conversations.
+-   : **(New)** Fetches the message history for a specific user.
+-   : Handles all incoming WhatsApp messages, including new logic for parking QR scans.
+
+**Critical Info for New Agent**
+-   Your primary task is to complete the **Parking Validation Flow**. This is a large feature with several parts: backend QR generation, updating the WhatsApp webhook, building a frontend scanner app, and creating a parking report.
+-   The  library (with ) needs to be installed in the backend to proceed.
+-   The backend code in  is extremely monolithic. While your focus is the new feature, be aware that any new logic adds to this technical debt. A refactor is urgently needed.
+-   All user points are now fetched in real-time from the Fundle API. Do not attempt to store or sync points locally.
+
+**documents and test reports created in this job**
+-    (Updated with new features)
+
+**Last 10 User Messages and any pending HUMAN messages**
+10.  - **Completed.** Agent added the Website source to all relevant dashboard pages.
+9.   - **Completed.** Agent provided the correct  link and HTML for a floating button.
+8.   - **Completed.** Agent implemented logic to track new vs. existing Fundle customers.
+7.   - **Completed.** Agent added more roles and updated the UI to show the processor's full name and role.
+6.   - **Completed.** Agent fixed the scrolling issue in the chat view.
+5.   - **Completed.** Agent refactored the system to fetch points live from Fundle.
+4.   - **Completed.** Agent diagnosed and fixed the issue by implementing real-time API calls for points.
+3.   - **Completed.** Agent built the full admin user management feature.
+2.   - **Completed.** Agent implemented a batch of UI and text changes.
+1.   - **In Progress.** This is the current, active task.
+
+**Project Health Check:**
+-   **Broken:** None. The application is functional.
+-   **Mocked:** None.
+
+**3rd Party Integrations**
+-   **Karix (WhatsApp):** Live, used for all messaging. Requires a User API Key.
+-   **Fundle/TagnPay (Loyalty):** Live, used for customer registration and points management. Requires User API Credentials.
+-   **Gemini Vision API (OCR):** Live, used for bill scanning. Uses the Emergent LLM Key.
+
+**Testing status**
+-   **Testing agent used after significant changes:** NO (Recent changes were self-tested by the agent).
+-   **Troubleshoot agent used after agent stuck in loop:** NO
+-   **Test files created:** []
+-   **Known regressions:** None.
+
+**Credentials to test flow:**
+-   **Admin Login:**  /  (Super Admin). Other admin accounts can be created via the dashboard.
+-   **Fundle API:** Credentials are in .
+-   **Karix WhatsApp Key:** Key is in .
+
+**What agent forgot to execute**
+-   Nothing was explicitly forgotten. The agent was in the middle of implementing the parking flow when the session ended.</analysis>

@@ -1,0 +1,177 @@
+{
+  "identity": {
+    "name": "E1",
+    "role": "Anti-AI Designer",
+    "principles": [
+      "Fusion over Imitation",
+      "Emotion First",
+      "Content is King",
+      "Zoom In",
+      "Negative Space",
+      "Contrast"
+    ]
+  },
+  "typography": {
+    "primary_font": "Manrope",
+    "secondary_font": "IBM Plex Sans",
+    "import_url": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700;800&display=swap",
+    "usage": {
+      "headings": "font-family: 'Manrope', sans-serif;",
+      "body": "font-family: 'IBM Plex Sans', sans-serif;"
+    },
+    "rules": [
+      "Headings (h1-h3) must use Manrope, weight 600 or 700.",
+      "Body text, tables, and inputs must use IBM Plex Sans.",
+      "Use tracking-tight (-0.02em) for headings larger than 24px.",
+      "Use tracking-wide (0.05em) for uppercase labels (e.g., table headers, badges)."
+    ]
+  },
+  "colors": {
+    "theme": "light",
+    "palette": {
+      "primary": {
+        "name": "CP67 Navy",
+        "hex": "#0F172A",
+        "tailwind": "bg-slate-900 text-white"
+      },
+      "secondary": {
+        "name": "CP67 Gold",
+        "hex": "#D4AF37",
+        "tailwind": "text-[#D4AF37] border-[#D4AF37]"
+      },
+      "fundle_accents": {
+        "red": "#FF3B30",
+        "green": "#34C759",
+        "purple": "#AF52DE",
+        "yellow": "#FFCC00",
+        "black": "#1A1A1A"
+      },
+      "backgrounds": {
+        "app_bg": "#F8FAFC",
+        "card_bg": "#FFFFFF",
+        "sidebar_bg": "#FFFFFF"
+      },
+      "text": {
+        "primary": "#0F172A",
+        "secondary": "#64748B",
+        "muted": "#94A3B8"
+      }
+    },
+    "css_variables": {
+      "--background": "210 40% 98%",
+      "--foreground": "222 47% 11%",
+      "--card": "0 0% 100%",
+      "--card-foreground": "222 47% 11%",
+      "--popover": "0 0% 100%",
+      "--popover-foreground": "222 47% 11%",
+      "--primary": "222 47% 11%",
+      "--primary-foreground": "210 40% 98%",
+      "--secondary": "210 40% 96.1%",
+      "--secondary-foreground": "222 47% 11%",
+      "--muted": "210 40% 96.1%",
+      "--muted-foreground": "215.4 16.3% 46.9%",
+      "--accent": "210 40% 96.1%",
+      "--accent-foreground": "222 47% 11%",
+      "--destructive": "0 84.2% 60.2%",
+      "--destructive-foreground": "210 40% 98%",
+      "--border": "214.3 31.8% 91.4%",
+      "--input": "214.3 31.8% 91.4%",
+      "--ring": "222 47% 11%",
+      "--radius": "0.5rem"
+    }
+  },
+  "layout": {
+    "grid_system": "Bento Grid Mode B (High Density)",
+    "spacing": {
+      "container_padding": "p-6 md:p-8 lg:p-12",
+      "element_gap": "gap-4 md:gap-6",
+      "internal_padding": "p-4 or p-6"
+    },
+    "rules": [
+      "Dashboard must use a dense grid (grid-cols-1 md:grid-cols-3 lg:grid-cols-4).",
+      "Widgets must stretch to fill height (h-full).",
+      "Sidebar must be fixed on the left (w-64) for desktop.",
+      "Main content area must have a subtle background color (#F8FAFC) to differentiate from white cards."
+    ]
+  },
+  "components": {
+    "cards": {
+      "style": "Flat, 1px border, no shadow",
+      "classes": "bg-white border border-slate-200 rounded-lg shadow-none hover:border-slate-300 transition-colors"
+    },
+    "buttons": {
+      "primary": "bg-slate-900 text-white hover:bg-slate-800 rounded-md px-4 py-2 font-medium transition-all active:scale-95",
+      "secondary": "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 rounded-md px-4 py-2 font-medium transition-all",
+      "accent": "bg-[#D4AF37] text-white hover:bg-[#C5A028] rounded-md px-4 py-2 font-medium"
+    },
+    "inputs": {
+      "style": "Minimalist, focus ring",
+      "classes": "bg-white border-slate-200 focus:ring-2 focus:ring-slate-900 focus:border-transparent rounded-md"
+    },
+    "status_badges": {
+      "pending": "bg-yellow-100 text-yellow-800 border border-yellow-200",
+      "approved": "bg-green-100 text-green-800 border border-green-200",
+      "rejected": "bg-red-100 text-red-800 border border-red-200",
+      "processing": "bg-blue-100 text-blue-800 border border-blue-200"
+    }
+  },
+  "assets": {
+    "images": {
+      "login_background": {
+        "url": "https://images.unsplash.com/photo-1761333485882-c60907725574?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMjBzaG9wcGluZyUyMG1hbGwlMjBpbnRlcmlvcnxlbnwwfHx8fDE3NjkyNDgzNzN8MA&ixlib=rb-4.1.0&q=85",
+        "alt": "Modern Mall Atrium",
+        "usage": "Full screen background for Login page with overlay"
+      },
+      "qr_illustration": {
+        "url": "https://images.pexels.com/photos/15467758/pexels-photo-15467758.jpeg",
+        "alt": "Scanning QR Code",
+        "usage": "Hero image for QR Management section or empty state"
+      },
+      "bill_processing": {
+        "url": "https://images.unsplash.com/photo-1634733988138-bf2c3a2a13fa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHwxfHxyZXRhaWwlMjByZWNlaXB0JTIwcGFwZXJ8ZW58MHx8fHwxNzY5MjQ4Mzc2fDA&ixlib=rb-4.1.0&q=85",
+        "alt": "Receipt Roll",
+        "usage": "Visual for Bill Upload/Processing section"
+      }
+    },
+    "icons": {
+      "library": "lucide-react",
+      "preferred_icons": [
+        "LayoutDashboard",
+        "QrCode",
+        "Users",
+        "Receipt",
+        "MessageCircle",
+        "BarChart3",
+        "Settings",
+        "LogOut"
+      ]
+    }
+  },
+  "visual_enhancers": {
+    "glassmorphism": "backdrop-blur-md bg-white/80 border-b border-white/20 (Use only for sticky headers)",
+    "texture": "Add a subtle noise texture to the sidebar background to reduce sterility.",
+    "animation": "Use 'framer-motion' for page transitions and list entrance animations (staggerChildren)."
+  },
+  "instructions_to_main_agent": [
+    "1. INSTALL FONTS: Add the Google Fonts import to public/index.html or src/index.css immediately.",
+    "2. SETUP THEME: Update tailwind.config.js and src/index.css with the provided CSS variables and colors.",
+    "3. LAYOUT: Create a 'DashboardLayout' component that includes the Sidebar and Topbar. Use the 'Bento Grid' philosophy for the main content area.",
+    "4. WHATSAPP SIMULATOR: Build this as a split-screen view. Left side: Chat Interface (mimic WhatsApp UI). Right side: Debug/Context panel (showing JSON data, user state).",
+    "5. BILL PROCESSING: Create a 'Queue' view. Left: List of pending bills. Right: Detail view with the bill image and OCR data fields side-by-side.",
+    "6. USE SHADCN: Use Shadcn components for all interactive elements (Forms, Dialogs, Dropdowns) but override their default styling to match the 'Flat & Clean' aesthetic defined in 'components'.",
+    "7. DATA-TESTID: Ensure every button, input, and link has a unique data-testid attribute."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) for overlays.",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms.",
+    "You MUST NOT center align the app container.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations.",
+    "NEVER use AI assistant Emoji characters for icons.",
+    "Every interaction needs micro-animations - hover states, transitions.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "Use 'sonner' for toasts."
+  ]
+}

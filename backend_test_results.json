@@ -1,0 +1,170 @@
+{
+  "timestamp": "2026-01-24T10:15:11.060577",
+  "total_tests": 22,
+  "passed_tests": 21,
+  "failed_tests": 1,
+  "success_rate": 95.45454545454545,
+  "failed_test_details": [
+    {
+      "test": "Process Bill - Approve",
+      "error": "Expected 200, got 520. Response: {'raw_response': 'Internal Server Error'}",
+      "details": "Status: 520, Response: {'raw_response': 'Internal Server Error'}"
+    }
+  ],
+  "all_test_results": [
+    {
+      "test_name": "Health Check",
+      "success": true,
+      "details": "Status: 200, Response: {'message': 'CP67 Loyalty System API', 'status': 'running'}",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:09.953884"
+    },
+    {
+      "test_name": "API Health",
+      "success": true,
+      "details": "Status: 200, Response: {'status': 'healthy', 'timestamp': '2026-01-24T10:15:09.981542+00:00'}",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:09.983258"
+    },
+    {
+      "test_name": "Admin Login - Valid Credentials",
+      "success": true,
+      "details": "Status: 200, Response: {'token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwicm9sZSI6ImFkbWluIiwiZXhwIjoxNzY5MzM2MTEwfQ.ULpdp2lX-_eEecuPzR6MgmvgP7L9K8NpqHjO7RrUjPE', 'username': 'admin'}",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.017005"
+    },
+    {
+      "test_name": "Admin Login - Invalid Credentials",
+      "success": true,
+      "details": "Status: 401, Response: {'detail': 'Invalid credentials'}",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.050340"
+    },
+    {
+      "test_name": "Get Admin Profile",
+      "success": true,
+      "details": "Status: 200, Response: {'username': 'admin', 'role': 'admin'}",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.084940"
+    },
+    {
+      "test_name": "Get QR Codes",
+      "success": true,
+      "details": "Status: 200, Response: [{'qr_code_id': 'QR0124001', 'location': 'Brands', 'source_code': 'SRC_BRANDS', 'prefilled_message': 'Hi! I want to join CP67 Loyalty Program', 'whatsapp_link': 'https://wa.me/917347576767?text=Hi!%20",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.117819"
+    },
+    {
+      "test_name": "Generate QR Image - QR0124001",
+      "success": true,
+      "details": "Status: 200, Response: {'qr_code_id': 'QR0124001', 'location': 'Brands', 'whatsapp_link': 'https://wa.me/917347576767?text=Hi!%20I%20want%20to%20join%20CP67%20Loyalty%20Program%20%7C%20SRC_BRANDS', 'image_base64': 'data:ima",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.160405"
+    },
+    {
+      "test_name": "WhatsApp Simulate - QR Scan",
+      "success": true,
+      "details": "Status: 200, Response: {'success': True, 'response': 'Hi John Doe! \ud83d\udc4b\\n\\nWhat would you like to do today?\\n\\n1\ufe0f\u20e3 Upload Bill\\n2\ufe0f\u20e3 My Points\\n\\nReply with 1 or 2', 'user_id': '389550f6-42e8-41fa-b806-2d434e4cd598', 'is_new_us",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.198414"
+    },
+    {
+      "test_name": "WhatsApp Simulate - Registration",
+      "success": true,
+      "details": "Status: 200, Response: {'success': True, 'response': 'Your total Loyalty Points are: 0\\n\\nRedeem these points directly at participating retailers \ud83d\udecd\ufe0f\\n\\n1\ufe0f\u20e3 Upload Bill', 'user_id': '389550f6-42e8-41fa-b806-2d434e4cd598', 'i",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.233956"
+    },
+    {
+      "test_name": "WhatsApp Simulate - Points Check",
+      "success": true,
+      "details": "Status: 200, Response: {'success': True, 'response': 'Your total Loyalty Points are: 0\\n\\nRedeem these points directly at participating retailers \ud83d\udecd\ufe0f\\n\\n1\ufe0f\u20e3 Upload Bill', 'user_id': '389550f6-42e8-41fa-b806-2d434e4cd598', 'i",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.269347"
+    },
+    {
+      "test_name": "WhatsApp Bill Upload",
+      "success": true,
+      "details": "Status: 200, Response: {'success': False, 'status': 'duplicate', 'response': 'Our system shows that this bill has already been processed earlier and rewards have been issued \u2705\\n\\n\ud83d\udcb3 Your Current Points Balance: 0\\n\\n\ud83d\udecd\ufe0f Keep ",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.682901"
+    },
+    {
+      "test_name": "Get Users",
+      "success": true,
+      "details": "Status: 200, Response: {'users': [{'id': '389550f6-42e8-41fa-b806-2d434e4cd598', 'phone': '919876543210', 'name': 'John Doe', 'loyalty_id': None, 'first_touch_source': 'SRC_BRANDS', 'first_touch_qr': 'QR0124001', 'first_tou",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.717422"
+    },
+    {
+      "test_name": "Get User by Phone",
+      "success": true,
+      "details": "Status: 200, Response: {'id': '389550f6-42e8-41fa-b806-2d434e4cd598', 'phone': '919876543210', 'name': 'John Doe', 'loyalty_id': None, 'first_touch_source': 'SRC_BRANDS', 'first_touch_qr': 'QR0124001', 'first_touch_message'",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.752152"
+    },
+    {
+      "test_name": "Get User Details",
+      "success": true,
+      "details": "Status: 200, Response: {'user': {'id': '389550f6-42e8-41fa-b806-2d434e4cd598', 'phone': '919876543210', 'name': 'John Doe', 'loyalty_id': None, 'first_touch_source': 'SRC_BRANDS', 'first_touch_qr': 'QR0124001', 'first_touch",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.786571"
+    },
+    {
+      "test_name": "Get Bills",
+      "success": true,
+      "details": "Status: 200, Response: {'bills': [{'id': 'b8ca7fe8-8e9c-4c23-a966-a20b3f130551', 'user_id': '389550f6-42e8-41fa-b806-2d434e4cd598', 'user_phone': '919876543210', 'store_name': None, 'bill_no': None, 'bill_date': None, 'amou",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.818294"
+    },
+    {
+      "test_name": "Get Pending Bills",
+      "success": true,
+      "details": "Status: 200, Response: [{'id': 'b8ca7fe8-8e9c-4c23-a966-a20b3f130551', 'user_id': '389550f6-42e8-41fa-b806-2d434e4cd598', 'user_phone': '919876543210', 'store_name': None, 'bill_no': None, 'bill_date': None, 'amount': None,",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.846959"
+    },
+    {
+      "test_name": "Process Bill - Approve",
+      "success": false,
+      "details": "Status: 520, Response: {'raw_response': 'Internal Server Error'}",
+      "error": "Expected 200, got 520. Response: {'raw_response': 'Internal Server Error'}",
+      "timestamp": "2026-01-24T10:15:10.878326"
+    },
+    {
+      "test_name": "Dashboard Analytics",
+      "success": true,
+      "details": "Status: 200, Response: {'users': {'total': 1, 'registered': 1, 'today': 1}, 'bills': {'total': 1, 'auto_approved': 0, 'manual_review': 1, 'approved': 0, 'rejected': 0, 'duplicate': 0, 'today': 1}, 'points': {'total_issued':",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.912404"
+    },
+    {
+      "test_name": "QR Performance",
+      "success": true,
+      "details": "Status: 200, Response: [{'qr_code_id': 'QR0124001', 'location': 'Brands', 'source_code': 'SRC_BRANDS', 'scans': 1, 'registrations': 1, 'bill_uploads': 0, 'conversion_rate': 100.0}, {'qr_code_id': 'QR0124002', 'location': 'F",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.944413"
+    },
+    {
+      "test_name": "User Funnel",
+      "success": true,
+      "details": "Status: 200, Response: {'funnel': [{'stage': 'QR Scans', 'count': 1}, {'stage': 'User Created', 'count': 1}, {'stage': 'Registered', 'count': 1}, {'stage': 'Bill Uploaded', 'count': 1}, {'stage': 'Points Earned', 'count': 0",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:10.977077"
+    },
+    {
+      "test_name": "Daily Stats",
+      "success": true,
+      "details": "Status: 200, Response: [{'date': '2026-01-18', 'users': 0, 'bills': 0}, {'date': '2026-01-19', 'users': 0, 'bills': 0}, {'date': '2026-01-20', 'users': 0, 'bills': 0}, {'date': '2026-01-21', 'users': 0, 'bills': 0}, {'date'",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:11.018249"
+    },
+    {
+      "test_name": "Get WhatsApp Logs",
+      "success": true,
+      "details": "Status: 200, Response: {'logs': [{'id': '7d890377-cf94-4c92-948d-3c09295fb81b', 'user_id': '389550f6-42e8-41fa-b806-2d434e4cd598', 'user_phone': '919876543210', 'direction': 'outbound', 'message_type': 'text', 'content': 'O",
+      "error": "",
+      "timestamp": "2026-01-24T10:15:11.059910"
+    }
+  ]
+}
