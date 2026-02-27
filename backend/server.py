@@ -1904,12 +1904,14 @@ async def send_whatsapp_image(phone: str, image_base64: str, caption: str = ""):
     """Send WhatsApp image message via Karix RCM API
     
     Based on Karix documentation:
-    - Base64-encoded images are supported in the request body
-    - Can also use hosted URL
+    - ATTACHMENT type supports base64 via 'attachmentData' field
+    - IMAGE type may require URL (link field)
     
     Flow: 
-    1. Try sending with base64 data directly
-    2. Fall back to text message if fails
+    1. Try ATTACHMENT type with base64 data (documented format)
+    2. Try IMAGE type with base64 in 'data' field
+    3. Try IMAGE type with 'link' field (for URL-based images)
+    4. Fall back to text message if all fail
     """
     if not KARIX_API_KEY:
         logger.error("Karix API key not configured")
@@ -1921,132 +1923,145 @@ async def send_whatsapp_image(phone: str, image_base64: str, caption: str = ""):
             image_base64 = image_base64.split(",")[1]
         
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Method 1: Send with base64 data in 'data' field (as per Karix docs)
-            logger.info(f"Sending image to {phone} with base64 data...")
+            # Method 1: ATTACHMENT type with attachmentData (per Karix docs)
+            logger.info(f"Sending image to {phone} using ATTACHMENT type with base64...")
+            payload_attachment = {
+                "message": {
+                    "channel": "WABA",
+                    "content": {
+                        "preview_url": False,
+                        "type": "ATTACHMENT",
+                        "attachment": {
+                            "type": "image",
+                            "caption": caption,
+                            "mimeType": "image/png",
+                            "attachmentData": image_base64
+                        }
+                    },
+                    "recipient": {
+                        "to": phone,
+                        "recipient_type": "individual",
+                        "reference": {}
+                    },
+                    "sender": {
+                        "from": WHATSAPP_NUMBER
+                    },
+                    "preferences": {
+                        "webHookDNId": "1001"
+                    }
+                },
+                "metaData": {
+                    "version": "v1.0.9"
+                }
+            }
+            logger.info(f"Karix ATTACHMENT payload: type=ATTACHMENT, attachment.type=image, base64 length={len(image_base64)}")
+            
             response = await client.post(
                 "https://rcmapi.instaalerts.zone/services/rcm/sendMessage",
                 headers={
                     "Authentication": f"Bearer {KARIX_API_KEY}",
                     "Content-Type": "application/json"
                 },
-                json={
-                    "message": {
-                        "channel": "WABA",
-                        "content": {
-                            "preview_url": False,
-                            "type": "IMAGE",
-                            "image": {
-                                "data": image_base64,
-                                "caption": caption,
-                                "mime_type": "image/png"
-                            }
-                        },
-                        "recipient": {
-                            "to": phone,
-                            "recipient_type": "individual",
-                            "reference": {}
-                        },
-                        "sender": {
-                            "from": WHATSAPP_NUMBER
-                        },
-                        "preferences": {
-                            "webHookDNId": "1001"
-                        }
-                    },
-                    "metaData": {
-                        "version": "v1.0.9"
-                    }
-                }
+                json=payload_attachment
             )
-            logger.info(f"Karix image response (method 1 - data): {response.status_code} - {response.text[:300]}")
+            logger.info(f"Karix ATTACHMENT response: {response.status_code} - {response.text[:500]}")
             
-            if response.status_code == 200:
+            if response.status_code in [200, 202]:
+                logger.info(f"Image sent successfully via ATTACHMENT type")
                 return True
             
-            # Method 2: Try with 'file' field instead
+            # Method 2: IMAGE type with base64 in 'data' field
+            logger.info(f"Trying IMAGE type with 'data' field...")
+            payload_image_data = {
+                "message": {
+                    "channel": "WABA",
+                    "content": {
+                        "preview_url": False,
+                        "type": "IMAGE",
+                        "image": {
+                            "data": image_base64,
+                            "caption": caption
+                        }
+                    },
+                    "recipient": {
+                        "to": phone,
+                        "recipient_type": "individual",
+                        "reference": {}
+                    },
+                    "sender": {
+                        "from": WHATSAPP_NUMBER
+                    },
+                    "preferences": {
+                        "webHookDNId": "1001"
+                    }
+                },
+                "metaData": {
+                    "version": "v1.0.9"
+                }
+            }
+            
             response = await client.post(
                 "https://rcmapi.instaalerts.zone/services/rcm/sendMessage",
                 headers={
                     "Authentication": f"Bearer {KARIX_API_KEY}",
                     "Content-Type": "application/json"
                 },
-                json={
-                    "message": {
-                        "channel": "WABA",
-                        "content": {
-                            "preview_url": False,
-                            "type": "IMAGE",
-                            "image": {
-                                "file": image_base64,
-                                "caption": caption
-                            }
-                        },
-                        "recipient": {
-                            "to": phone,
-                            "recipient_type": "individual",
-                            "reference": {}
-                        },
-                        "sender": {
-                            "from": WHATSAPP_NUMBER
-                        },
-                        "preferences": {
-                            "webHookDNId": "1001"
-                        }
-                    },
-                    "metaData": {
-                        "version": "v1.0.9"
-                    }
-                }
+                json=payload_image_data
             )
-            logger.info(f"Karix image response (method 2 - file): {response.status_code} - {response.text[:300]}")
+            logger.info(f"Karix IMAGE (data) response: {response.status_code} - {response.text[:500]}")
             
-            if response.status_code == 200:
+            if response.status_code in [200, 202]:
+                logger.info(f"Image sent successfully via IMAGE type with data")
                 return True
             
-            # Method 3: Try with nested structure
+            # Method 3: Try DOCUMENT type with attachmentData (as alternative)
+            logger.info(f"Trying DOCUMENT attachment type...")
+            payload_doc = {
+                "message": {
+                    "channel": "WABA",
+                    "content": {
+                        "preview_url": False,
+                        "type": "ATTACHMENT",
+                        "attachment": {
+                            "type": "document",
+                            "caption": caption,
+                            "mimeType": "image/png",
+                            "fileName": "parking_qr.png",
+                            "attachmentData": image_base64
+                        }
+                    },
+                    "recipient": {
+                        "to": phone,
+                        "recipient_type": "individual",
+                        "reference": {}
+                    },
+                    "sender": {
+                        "from": WHATSAPP_NUMBER
+                    },
+                    "preferences": {
+                        "webHookDNId": "1001"
+                    }
+                },
+                "metaData": {
+                    "version": "v1.0.9"
+                }
+            }
+            
             response = await client.post(
                 "https://rcmapi.instaalerts.zone/services/rcm/sendMessage",
                 headers={
                     "Authentication": f"Bearer {KARIX_API_KEY}",
                     "Content-Type": "application/json"
                 },
-                json={
-                    "message": {
-                        "channel": "WABA",
-                        "content": {
-                            "preview_url": False,
-                            "type": "IMAGE",
-                            "image": {
-                                "media": {
-                                    "data": image_base64,
-                                    "type": "image/png"
-                                },
-                                "caption": caption
-                            }
-                        },
-                        "recipient": {
-                            "to": phone,
-                            "recipient_type": "individual",
-                            "reference": {}
-                        },
-                        "sender": {
-                            "from": WHATSAPP_NUMBER
-                        },
-                        "preferences": {
-                            "webHookDNId": "1001"
-                        }
-                    },
-                    "metaData": {
-                        "version": "v1.0.9"
-                    }
-                }
+                json=payload_doc
             )
-            logger.info(f"Karix image response (method 3 - media): {response.status_code} - {response.text[:300]}")
+            logger.info(f"Karix DOCUMENT response: {response.status_code} - {response.text[:500]}")
             
-            if response.status_code == 200:
+            if response.status_code in [200, 202]:
+                logger.info(f"Image sent successfully via DOCUMENT type")
                 return True
             
-            # All methods failed, fall back to text message
+            # All methods failed, fall back to text message with the code
             logger.warning(f"All image send methods failed, falling back to text message")
             return await send_whatsapp_text(phone, caption)
             
