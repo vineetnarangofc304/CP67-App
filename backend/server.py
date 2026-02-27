@@ -771,6 +771,24 @@ async def get_qr_codes(category: Optional[str] = None, payload: dict = Depends(v
         qr_list.append(qr_data)
     return qr_list
 
+@api_router.get("/qr-links")
+async def get_qr_links():
+    """Get WhatsApp links for all QR codes - PUBLIC endpoint for website integration"""
+    links = []
+    for qr in QR_CODES:
+        whatsapp_link = f"https://wa.me/{WHATSAPP_NUMBER}?text={qr['prefilled_message'].replace(' ', '%20')}%20%7C%20{qr['source_code']}"
+        links.append({
+            "location": qr["location"],
+            "source_code": qr["source_code"],
+            "category": qr.get("category", "loyalty"),
+            "whatsapp_link": whatsapp_link,
+            "prefilled_message": qr["prefilled_message"]
+        })
+    return {
+        "whatsapp_number": WHATSAPP_NUMBER,
+        "links": links
+    }
+
 @api_router.get("/qr-codes/{qr_code_id}/generate")
 async def generate_qr_image(qr_code_id: str):
     """Generate QR code image"""
