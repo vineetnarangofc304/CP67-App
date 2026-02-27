@@ -358,7 +358,7 @@ const Bills = () => {
                 <Eye className="h-4 w-4 mr-2" />
                 Review & Process
               </Button>
-              {(bill.status === 'pending_review' || bill.status === 'manual_review') && bill.rejection_reason?.includes('Brand') && (
+              {(bill.status === 'pending_review' || bill.status === 'manual_review') && (
                 <Button 
                   variant="default"
                   className="bg-blue-600 hover:bg-blue-700"
