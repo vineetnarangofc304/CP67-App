@@ -132,6 +132,33 @@ const AdminUsers = () => {
     }
   };
 
+  const syncFundleCustomers = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const response = await fetch(`${API_URL}/admin/sync-fundle-customers`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSyncResult(data);
+        toast.success(`Sync complete! ${data.updated_to_existing} users updated to 'existing'`);
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Failed to sync customers');
+      }
+    } catch (error) {
+      toast.error('Failed to sync Fundle customers');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Never';
     return new Date(dateStr).toLocaleString('en-US', {
