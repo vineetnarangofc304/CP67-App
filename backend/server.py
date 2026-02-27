@@ -1848,7 +1848,7 @@ async def send_whatsapp_message(phone: str, message: str):
 async def upload_media_to_karix(image_base64: str, filename: str = "qrcode.png") -> Optional[str]:
     """Upload media (image) to Karix and get media ID for sending via WhatsApp
     
-    Tries multiple upload endpoint formats
+    Tries multiple upload methods based on Karix documentation
     Returns: media_id if successful, None if failed
     """
     if not KARIX_API_KEY:
@@ -1860,61 +1860,41 @@ async def upload_media_to_karix(image_base64: str, filename: str = "qrcode.png")
         if image_base64.startswith("data:"):
             image_base64 = image_base64.split(",")[1]
         
-        # List of possible upload endpoints to try
-        upload_endpoints = [
-            "https://rcmapi.instaalerts.zone/services/rcm/media/upload",
-            "https://rcmapi.instaalerts.zone/services/rcm/v1/media",
-            "https://rcmapi.instaalerts.zone/services/rcm/upload",
-            "https://rcmapi.instaalerts.zone/v1/media"
-        ]
-        
-        # Different payload formats to try
-        payloads = [
-            {
-                "file": image_base64,
-                "fileName": filename,
-                "fileType": "image/png",
-                "messaging_product": "whatsapp"
-            },
-            {
-                "data": image_base64,
-                "filename": filename,
-                "type": "image/png"
-            },
-            {
-                "media": {
-                    "data": image_base64,
-                    "type": "image",
-                    "filename": filename
-                }
-            }
-        ]
+        # Convert base64 to binary
+        import base64
+        image_binary = base64.b64decode(image_base64)
         
         async with httpx.AsyncClient(timeout=60.0) as client:
-            for endpoint in upload_endpoints:
-                for payload in payloads:
-                    try:
-                        response = await client.post(
-                            endpoint,
-                            headers={
-                                "Authentication": f"Bearer {KARIX_API_KEY}",
-                                "Content-Type": "application/json"
-                            },
-                            json=payload
-                        )
-                        logger.info(f"Karix media upload ({endpoint}): {response.status_code}")
-                        
-                        if response.status_code == 200:
-                            data = response.json()
-                            media_id = data.get("id") or data.get("media_id") or data.get("mediaId")
-                            if media_id:
-                                logger.info(f"Media uploaded successfully, ID: {media_id}")
-                                return media_id
-                    except Exception as e:
-                        logger.debug(f"Upload attempt failed: {e}")
-                        continue
+            # Try multipart form upload (common for media APIs)
+            files = {
+                'file': (filename, image_binary, 'image/png')
+            }
+            data = {
+                'messaging_product': 'whatsapp',
+                'type': 'image/png'
+            }
             
-            logger.warning("All media upload attempts failed")
+            response = await client.post(
+                "https://rcmapi.instaalerts.zone/services/rcm/media/upload",
+                headers={
+                    "Authentication": f"Bearer {KARIX_API_KEY}"
+                },
+                files=files,
+                data=data
+            )
+            logger.info(f"Karix media upload (multipart): {response.status_code} - {response.text[:200]}")
+            
+            if response.status_code == 200:
+                try:
+                    resp_data = response.json()
+                    media_id = resp_data.get("id") or resp_data.get("media_id") or resp_data.get("mediaId")
+                    if media_id:
+                        logger.info(f"Media uploaded successfully, ID: {media_id}")
+                        return media_id
+                except:
+                    pass
+            
+            logger.warning("Media upload failed, will try direct send")
             return None
     except Exception as e:
         logger.error(f"Karix media upload error: {e}")
