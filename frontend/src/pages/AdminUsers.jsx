@@ -162,6 +162,52 @@ const AdminUsers = () => {
     }
   };
 
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['.xlsx', '.xls', '.csv'];
+    const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    if (!validTypes.includes(fileExt)) {
+      toast.error('Please upload an Excel (.xlsx, .xls) or CSV file');
+      return;
+    }
+
+    setUploading(true);
+    setUploadResult(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/upload-fundle-excel`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUploadResult(data);
+        toast.success(`Uploaded ${data.imported} phone numbers successfully!`);
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || 'Failed to upload file');
+      }
+    } catch (error) {
+      toast.error('Failed to upload Excel file');
+    } finally {
+      setUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Never';
     return new Date(dateStr).toLocaleString('en-US', {
