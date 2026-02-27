@@ -361,12 +361,30 @@ const AdminUsers = () => {
                 </Button>
                 
                 {uploadResult && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <span className="text-green-700">
-                      Imported <strong>{uploadResult.imported?.toLocaleString()}</strong> numbers 
-                      (Total in DB: <strong>{uploadResult.total_in_database?.toLocaleString()}</strong>)
-                    </span>
+                  <div className={`flex flex-col gap-1 text-sm ${uploadResult.success ? 'text-green-700' : 'text-orange-700'}`}>
+                    <div className="flex items-center gap-2">
+                      {uploadResult.success ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4 text-orange-600" />
+                      )}
+                      <span>
+                        {uploadResult.success 
+                          ? <>Imported <strong>{uploadResult.imported?.toLocaleString()}</strong> numbers (Total: <strong>{uploadResult.total_in_database?.toLocaleString()}</strong>)</>
+                          : uploadResult.message || 'No valid phone numbers found'
+                        }
+                      </span>
+                    </div>
+                    {uploadResult.sample_values && uploadResult.sample_values.length > 0 && (
+                      <div className="text-xs text-slate-500 ml-6">
+                        Sample data found: {uploadResult.sample_values.slice(0, 3).join(', ')}...
+                      </div>
+                    )}
+                    {uploadResult.hint && (
+                      <div className="text-xs text-orange-600 ml-6">
+                        {uploadResult.hint}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
