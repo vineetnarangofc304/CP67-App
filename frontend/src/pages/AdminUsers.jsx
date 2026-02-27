@@ -251,6 +251,62 @@ const AdminUsers = () => {
           </Card>
         </div>
 
+        {/* System Tools */}
+        <Card className="border-orange-200 bg-orange-50 shadow-none">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <Database className="h-5 w-5 text-orange-600" />
+              System Tools
+            </CardTitle>
+            <CardDescription>
+              Administrative tools for managing customer data
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="flex-1">
+                <h4 className="font-medium text-slate-900">Sync Fundle Customers</h4>
+                <p className="text-sm text-slate-600 mt-1">
+                  Force update all users whose phone numbers are in the imported Fundle Excel list to be marked as "Existing" customers.
+                  This runs without any condition checks.
+                </p>
+                {syncResult && (
+                  <div className="mt-3 p-3 bg-white rounded-lg border border-green-200">
+                    <div className="flex items-center gap-2 text-green-700 mb-2">
+                      <CheckCircle className="h-4 w-4" />
+                      <span className="font-medium">Sync Complete</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>Fundle List: <span className="font-semibold">{syncResult.fundle_customers_count?.toLocaleString()}</span></div>
+                      <div>Total Users: <span className="font-semibold">{syncResult.total_users?.toLocaleString()}</span></div>
+                      <div>Updated to Existing: <span className="font-semibold text-green-600">{syncResult.updated_to_existing}</span></div>
+                      <div>Already Existing: <span className="font-semibold">{syncResult.already_existing}</span></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <Button
+                onClick={syncFundleCustomers}
+                disabled={syncing}
+                className="bg-orange-600 hover:bg-orange-700 whitespace-nowrap"
+                data-testid="sync-fundle-btn"
+              >
+                {syncing ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Sync Now
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Admin List */}
         <Card className="border-slate-200 shadow-none">
           <CardHeader className="border-b border-slate-200">
