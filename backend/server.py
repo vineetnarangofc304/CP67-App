@@ -1903,11 +1903,13 @@ async def upload_media_to_karix(image_base64: str, filename: str = "qrcode.png")
 async def send_whatsapp_image(phone: str, image_base64: str, caption: str = ""):
     """Send WhatsApp image message via Karix RCM API
     
+    Based on Karix documentation:
+    - Base64-encoded images are supported in the request body
+    - Can also use hosted URL
+    
     Flow: 
-    1. Upload image to Karix media API to get media_id
-    2. Send image using the media_id
-    3. If that fails, try sending image directly with base64
-    4. Fall back to text message if all else fails
+    1. Try sending with base64 data directly
+    2. Fall back to text message if fails
     """
     if not KARIX_API_KEY:
         logger.error("Karix API key not configured")
@@ -1918,54 +1920,9 @@ async def send_whatsapp_image(phone: str, image_base64: str, caption: str = ""):
         if image_base64.startswith("data:"):
             image_base64 = image_base64.split(",")[1]
         
-        # STEP 1: Try uploading media first to get media_id
-        media_id = await upload_media_to_karix(image_base64, f"parking_qr_{datetime.now().strftime('%Y%m%d%H%M%S')}.png")
-        
         async with httpx.AsyncClient(timeout=30.0) as client:
-            if media_id:
-                # STEP 2: Send using media_id
-                logger.info(f"Sending image with media_id: {media_id}")
-                response = await client.post(
-                    "https://rcmapi.instaalerts.zone/services/rcm/sendMessage",
-                    headers={
-                        "Authentication": f"Bearer {KARIX_API_KEY}",
-                        "Content-Type": "application/json"
-                    },
-                    json={
-                        "message": {
-                            "channel": "WABA",
-                            "content": {
-                                "preview_url": False,
-                                "type": "IMAGE",
-                                "image": {
-                                    "id": media_id,
-                                    "caption": caption
-                                }
-                            },
-                            "recipient": {
-                                "to": phone,
-                                "recipient_type": "individual",
-                                "reference": {}
-                            },
-                            "sender": {
-                                "from": WHATSAPP_NUMBER
-                            },
-                            "preferences": {
-                                "webHookDNId": "1001"
-                            }
-                        },
-                        "metaData": {
-                            "version": "v1.0.9"
-                        }
-                    }
-                )
-                logger.info(f"Karix image (with media_id) response: {response.status_code} - {response.text[:200]}")
-                
-                if response.status_code == 200:
-                    return True
-            
-            # STEP 3: Try direct base64 in 'link' field as data URI
-            logger.info("Trying direct base64 data URI method...")
+            # Method 1: Send with base64 data in 'data' field (as per Karix docs)
+            logger.info(f"Sending image to {phone} with base64 data...")
             response = await client.post(
                 "https://rcmapi.instaalerts.zone/services/rcm/sendMessage",
                 headers={
@@ -1979,7 +1936,48 @@ async def send_whatsapp_image(phone: str, image_base64: str, caption: str = ""):
                             "preview_url": False,
                             "type": "IMAGE",
                             "image": {
-                                "link": f"data:image/png;base64,{image_base64}",
+                                "data": image_base64,
+                                "caption": caption,
+                                "mime_type": "image/png"
+                            }
+                        },
+                        "recipient": {
+                            "to": phone,
+                            "recipient_type": "individual",
+                            "reference": {}
+                        },
+                        "sender": {
+                            "from": WHATSAPP_NUMBER
+                        },
+                        "preferences": {
+                            "webHookDNId": "1001"
+                        }
+                    },
+                    "metaData": {
+                        "version": "v1.0.9"
+                    }
+                }
+            )
+            logger.info(f"Karix image response (method 1 - data): {response.status_code} - {response.text[:300]}")
+            
+            if response.status_code == 200:
+                return True
+            
+            # Method 2: Try with 'file' field instead
+            response = await client.post(
+                "https://rcmapi.instaalerts.zone/services/rcm/sendMessage",
+                headers={
+                    "Authentication": f"Bearer {KARIX_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "message": {
+                        "channel": "WABA",
+                        "content": {
+                            "preview_url": False,
+                            "type": "IMAGE",
+                            "image": {
+                                "file": image_base64,
                                 "caption": caption
                             }
                         },
@@ -2000,20 +1998,62 @@ async def send_whatsapp_image(phone: str, image_base64: str, caption: str = ""):
                     }
                 }
             )
-            logger.info(f"Karix image (data URI) response: {response.status_code} - {response.text[:200]}")
+            logger.info(f"Karix image response (method 2 - file): {response.status_code} - {response.text[:300]}")
             
             if response.status_code == 200:
                 return True
             
-            # STEP 4: If image failed, fall back to sending text message with caption
-            logger.warning(f"Image send failed, falling back to text message")
+            # Method 3: Try with nested structure
+            response = await client.post(
+                "https://rcmapi.instaalerts.zone/services/rcm/sendMessage",
+                headers={
+                    "Authentication": f"Bearer {KARIX_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "message": {
+                        "channel": "WABA",
+                        "content": {
+                            "preview_url": False,
+                            "type": "IMAGE",
+                            "image": {
+                                "media": {
+                                    "data": image_base64,
+                                    "type": "image/png"
+                                },
+                                "caption": caption
+                            }
+                        },
+                        "recipient": {
+                            "to": phone,
+                            "recipient_type": "individual",
+                            "reference": {}
+                        },
+                        "sender": {
+                            "from": WHATSAPP_NUMBER
+                        },
+                        "preferences": {
+                            "webHookDNId": "1001"
+                        }
+                    },
+                    "metaData": {
+                        "version": "v1.0.9"
+                    }
+                }
+            )
+            logger.info(f"Karix image response (method 3 - media): {response.status_code} - {response.text[:300]}")
+            
+            if response.status_code == 200:
+                return True
+            
+            # All methods failed, fall back to text message
+            logger.warning(f"All image send methods failed, falling back to text message")
             return await send_whatsapp_text(phone, caption)
             
     except Exception as e:
         logger.error(f"Karix image send error: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        # Fall back to text message
         return await send_whatsapp_text(phone, caption)
 
 # ======================== WHATSAPP WEBHOOK ROUTES ========================
