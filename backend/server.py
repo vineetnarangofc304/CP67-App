@@ -1449,7 +1449,9 @@ Please ensure your next bill upload:
 
 @api_router.post("/bills/{bill_id}/reprocess")
 async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks, payload: dict = Depends(verify_jwt_token)):
-    """Reprocess a pending bill after brand has been added to Fundle"""
+    """Reprocess a pending bill after brand has been added to Fundle.
+    This will also register the customer if they are not registered in Fundle.
+    """
     
     # Get bill
     bill = await db.bills.find_one({"id": bill_id})
@@ -1467,7 +1469,34 @@ async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks, payloa
     phone = bill.get("user_phone", user.get("phone"))
     mobile_10 = phone[2:] if phone.startswith("91") and len(phone) == 12 else phone
     
-    # Extract bill details
+    # STEP 1: Check if user is registered in Fundle, if not, register them first
+    logger.info(f"Reprocess bill {bill_id}: Checking if user {mobile_10} is registered in Fundle")
+    points_result = await tagnpay_client.get_customer_points(mobile_10)
+    
+    if not points_result.get("success") or points_result.get("data") is None:
+        # User not registered in Fundle - register them first
+        logger.info(f"User {mobile_10} not registered in Fundle, registering now...")
+        reg_result = await tagnpay_client.register_customer(
+            mobile_number=mobile_10,
+            name=user.get("name", "Customer"),
+            pan_number="",
+            source="WhatsApp-Reprocess"
+        )
+        logger.info(f"Fundle registration result for {mobile_10}: {reg_result}")
+        
+        if not reg_result.get("success"):
+            # Registration failed - still try to proceed with bill processing
+            logger.warning(f"Fundle registration failed for {mobile_10}: {reg_result.get('error')}")
+        else:
+            # Update user in our DB
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$set": {"kyc_status": True, "fundle_registered": True}}
+            )
+    else:
+        logger.info(f"User {mobile_10} already registered in Fundle")
+    
+    # STEP 2: Extract bill details
     store_name = bill.get("store_name", "Unknown")
     bill_no = bill.get("bill_no", "")
     bill_date = bill.get("bill_date", "")
@@ -1479,7 +1508,7 @@ async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks, payloa
     if image_url and image_url.startswith("data:"):
         image_base64 = image_url.split(",")[1] if "," in image_url else None
     
-    # Call TagnPay earn-points API again
+    # STEP 3: Call TagnPay earn-points API
     earn_result = await tagnpay_client.earn_points(
         mobile_number=mobile_10,
         bill_amount=amount,
@@ -1540,10 +1569,31 @@ Thank you for your patience! 🛍️"""
             
             return {"success": True, "points_earned": points_earned, "message": "Bill reprocessed successfully"}
         else:
-            # Still failing
-            return {"success": False, "error": message or "Fundle returned 0 points", "points_earned": 0}
+            # Still failing - check why
+            error_msg = message or "Fundle returned 0 points"
+            
+            # Update bill with the error reason
+            await db.bills.update_one(
+                {"id": bill_id},
+                {"$set": {"rejection_reason": error_msg}}
+            )
+            
+            return {"success": False, "error": error_msg, "points_earned": 0}
     else:
-        return {"success": False, "error": earn_result.get("error", "Fundle API failed"), "points_earned": 0}
+        error_msg = earn_result.get("error", "Fundle API failed")
+        
+        # Check if it's a "brand not found" error
+        if "brand" in error_msg.lower() or "not found" in error_msg.lower():
+            # Send admin alert
+            await send_admin_sms_alert(store_name, bill_no, amount, phone)
+        
+        # Update bill with the error reason
+        await db.bills.update_one(
+            {"id": bill_id},
+            {"$set": {"rejection_reason": error_msg}}
+        )
+        
+        return {"success": False, "error": error_msg, "points_earned": 0}
 
 # Karix API Key
 KARIX_API_KEY = os.environ.get('WHATSAPP_API_KEY', '')
