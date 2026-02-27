@@ -2,81 +2,229 @@
 Build a WhatsApp-based loyalty onboarding and bill-scan rewards system for CP67 Mall. Customers scan area-specific QR codes, opening WhatsApp to register, upload bills, and check points. The system uses OCR to process bills and integrates with the Fundle (formerly TagnPay) client API for loyalty management. A comprehensive admin dashboard is required to track users, QR performance, bills, and manage system settings.
 
 Over time, requirements have expanded to include:
-- A multi-admin system with different roles and login tracking to see who approved/rejected bills.
+- A multi-admin system with different roles and login tracking.
 - A WhatsApp conversation viewer in the dashboard.
 - Real-time point fetching from the Fundle API.
-- Differentiating between new customers and existing Fundle customers for analytics.
-- A new, complex parking validation flow involving dynamic QR code generation and a separate scanner app.
+- Differentiating between new customers and a large, pre-existing Fundle customer base.
+- A new, complex parking validation flow involving dynamic QR code generation, a scanner app, and a complete WhatsApp journey for entry and exit.
+- Numerous specific business rules for bill processing (e.g., amount limits, date limits, using mobile numbers from OCR).
+- Enhanced analytics and reporting features in the dashboard.
 
 **User's preferred language**: English
 
 **what currently exists?**
-A full-stack application with a FastAPI backend, a React admin dashboard, and a MongoDB database. The system is live with several key features:
-- **Backend:** Manages WhatsApp webhooks (Karix), performs OCR on bills (Gemini), and integrates with the Fundle loyalty API. It supports a multi-admin architecture with role-based access and has the initial models and API routes for a new parking validation system.
-- **Frontend:** A feature-rich admin dashboard for viewing system analytics, managing users, reviewing bills (with Reprocess functionality for specific errors), viewing QR code performance, and managing admin users. A new page for viewing WhatsApp conversation histories has also been added. Points are fetched in real-time from the Fundle API.
+A full-stack application with a FastAPI backend, a React admin dashboard, and a MongoDB database. The system is live and features a WhatsApp loyalty program with OCR bill processing, Fundle API integration, and a multi-admin dashboard. Key additions in the last session include a complete parking validation system (QR generation, scanner app, reporting), advanced bill processing rules, enhanced dashboard analytics with new filters and insights, and a system to manage a pre-existing list of over 30,000 Fundle customers.
 
 **Last working item**:
--   **Last item agent was working:** The agent began implementing a new, complex parking validation flow as requested by the user. This flow involves generating a dynamic QR code for a customer upon entering the parking lot and providing a scanner app for staff to validate it upon exit. The agent has laid the groundwork by adding the necessary data models () and API endpoints (, ) to the backend.
+-   **Last item agent was working:** Fixing the WhatsApp QR Code image sending for the new parking flow. The previous method failed, and the user provided official documentation from the service provider, Karix. The agent was in the process of implementing and testing the correct API request format for sending base64-encoded images.
 -   **Status:** IN PROGRESS
 -   **Agent Testing Done:** N
--   **Which testing method agent to use?** both (frontend testing agent for the scanner app, backend testing via curl for the API endpoints).
+-   **Which testing method agent to use?** backend testing agent. The agent should simulate a parking entry webhook call and check the backend logs to verify if the Karix API call succeeds (HTTP 200/202).
 -   **User Testing Done:** N
 
 **All Pending/In progress Issue list**:
--   There are no outstanding bugs. The focus is on new feature development.
+-   **Issue 1: Karix WhatsApp QR Image Sending is Not Working (P0)**
+    This is the highest priority and the last active task. The parking validation flow currently sends a text-based code as a workaround, but the user requires an actual QR code image to be sent.
 
 **Issues Detail:**
--   None.
+-   **Issue 1: Karix WhatsApp QR Image Sending is Not Working**
+    -   **Attempted fixes:** The agent tried several incorrect JSON formats which resulted in API errors. A temporary workaround of sending the parking code as plain text was implemented. The agent has now updated the  function in  based on new documentation provided by the user, but this new implementation has not been fully tested and verified.
+    -   **Next debug checklist:**
+        1.  Trigger the parking entry flow, which calls the  function in .
+        2.  This function now calls the newly implemented  function.
+        3.  Check the backend logs (==> /var/log/supervisor/backend.err.log <==
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [657]
+INFO:     Started server process [884]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [884]
+INFO:     Started server process [954]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [954]
+INFO:     Started server process [1176]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1176]
+INFO:     Started server process [1281]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1281]
+INFO:     Started server process [1880]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1880]
+INFO:     Started server process [1980]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+2026-02-27 13:54:22,925 - server - INFO - WhatsApp webhook received: {'eventContent': {'message': {'from': '919876500099', 'profileName': 'QR Test User', 'messageType': 'text', 'text': {'body': 'Hi! I need parking validation | SRC_PARKING_PAY'}}}}
+2026-02-27 13:54:22,966 - server - INFO - Parking session created: PKG-135422-A0EF69 for 919876500099
+2026-02-27 13:54:23,861 - httpx - INFO - HTTP Request: POST https://rcmapi.instaalerts.zone/services/rcm/uploadMedia "HTTP/1.1 404 "
+2026-02-27 13:54:23,861 - server - INFO - Karix media upload response: 404 - 
+2026-02-27 13:54:23,880 - server - INFO - Trying direct base64 data URI method...
+2026-02-27 13:54:24,605 - httpx - INFO - HTTP Request: POST https://rcmapi.instaalerts.zone/services/rcm/sendMessage "HTTP/1.1 400 "
+2026-02-27 13:54:24,606 - server - INFO - Karix image (data URI) response: 400 - Invalid JSON input. Please check the request format.
+2026-02-27 13:54:24,606 - server - WARNING - Image send failed, falling back to text message
+2026-02-27 13:54:25,370 - httpx - INFO - HTTP Request: POST https://rcmapi.instaalerts.zone/services/rcm/sendMessage "HTTP/1.1 200 "
+2026-02-27 13:54:25,370 - server - INFO - Karix text response: 200 - {"statusCode":"200","statusDesc":"Successfully Accepted","mid":"410177060227192425236853"}
+2026-02-27 13:54:25,370 - server - INFO - Parking QR image sent successfully to 919876500099
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1980]
+INFO:     Started server process [2130]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [2130]
+INFO:     Started server process [2168]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'server.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [2168]
+INFO:     Started server process [2198]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+2026-02-27 13:56:17,033 - server - INFO - WhatsApp webhook received: {'eventContent': {'message': {'from': '919876500098', 'profileName': 'Image Test User', 'messageType': 'text', 'text': {'body': 'Hi! I need parking validation | SRC_PARKING_PAY'}}}}
+2026-02-27 13:56:17,038 - server - INFO - Parking session created: PKG-135617-D6FA7A for 919876500098
+2026-02-27 13:56:17,088 - server - INFO - Sending image to 919876500098 with base64 data...
+2026-02-27 13:56:17,841 - httpx - INFO - HTTP Request: POST https://rcmapi.instaalerts.zone/services/rcm/sendMessage "HTTP/1.1 400 "
+2026-02-27 13:56:17,841 - server - INFO - Karix image response (method 1 - data): 400 - Invalid JSON input. Please check the request format.
+2026-02-27 13:56:18,085 - httpx - INFO - HTTP Request: POST https://rcmapi.instaalerts.zone/services/rcm/sendMessage "HTTP/1.1 400 "
+2026-02-27 13:56:18,086 - server - INFO - Karix image response (method 2 - file): 400 - Invalid JSON input. Please check the request format.
+2026-02-27 13:56:18,330 - httpx - INFO - HTTP Request: POST https://rcmapi.instaalerts.zone/services/rcm/sendMessage "HTTP/1.1 400 "
+2026-02-27 13:56:18,331 - server - INFO - Karix image response (method 3 - media): 400 - Invalid JSON input. Please check the request format.
+2026-02-27 13:56:18,331 - server - WARNING - All image send methods failed, falling back to text message
+2026-02-27 13:56:19,102 - httpx - INFO - HTTP Request: POST https://rcmapi.instaalerts.zone/services/rcm/sendMessage "HTTP/1.1 200 "
+2026-02-27 13:56:19,102 - server - INFO - Karix text response: 200 - {"statusCode":"200","statusDesc":"Successfully Accepted","mid":"410177860227192618972989"}
+2026-02-27 13:56:19,103 - server - INFO - Parking QR image sent successfully to 919876500098
+INFO:     Will watch for changes in these directories: ['/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8001 (Press CTRL+C to quit)
+INFO:     Started reloader process [46] using WatchFiles
+INFO:     Started server process [90]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+
+==> /var/log/supervisor/backend.out.log <==
+INFO:     10.79.167.146:42430 - "POST /api/admin/login HTTP/1.1" 200 OK
+INFO:     10.79.167.146:42430 - "POST /api/admin/bulk-mark-existing HTTP/1.1" 200 OK
+INFO:     10.79.167.145:40620 - "POST /api/admin/bulk-mark-existing HTTP/1.1" 200 OK
+INFO:     10.79.167.146:42430 - "POST /api/admin/bulk-mark-existing HTTP/1.1" 200 OK
+INFO:     10.79.167.146:42430 - "POST /api/admin/bulk-mark-existing HTTP/1.1" 200 OK
+INFO:     10.79.167.145:40620 - "POST /api/admin/bulk-mark-existing HTTP/1.1" 200 OK
+INFO:     10.79.167.146:42430 - "POST /api/admin/bulk-mark-existing HTTP/1.1" 200 OK
+INFO:     10.79.167.145:40620 - "POST /api/admin/bulk-mark-existing HTTP/1.1" 200 OK
+INFO:     10.79.167.146:59622 - "POST /api/admin/login HTTP/1.1" 200 OK
+INFO:     10.79.167.145:42986 - "GET /api/users?limit=100 HTTP/1.1" 200 OK
+INFO:     10.79.167.145:57468 - "POST /api/admin/login HTTP/1.1" 200 OK
+INFO:     10.79.167.146:58470 - "POST /api/admin/import-fundle-customers HTTP/1.1" 200 OK
+INFO:     10.79.167.146:58470 - "POST /api/admin/import-fundle-customers HTTP/1.1" 200 OK
+INFO:     10.79.167.145:58484 - "POST /api/admin/import-fundle-customers HTTP/1.1" 200 OK
+INFO:     10.79.167.146:53620 - "POST /api/admin/import-fundle-customers HTTP/1.1" 200 OK
+INFO:     10.79.167.146:53620 - "POST /api/admin/import-fundle-customers HTTP/1.1" 200 OK
+INFO:     10.79.167.145:44664 - "POST /api/admin/import-fundle-customers HTTP/1.1" 200 OK
+INFO:     10.79.167.146:41946 - "POST /api/admin/import-fundle-customers HTTP/1.1" 200 OK
+INFO:     10.79.167.146:42982 - "POST /api/admin/login HTTP/1.1" 200 OK
+INFO:     10.79.167.145:48126 - "GET /api/admin/check-fundle-customer/9910059861 HTTP/1.1" 200 OK
+INFO:     10.79.167.146:41342 - "POST /api/admin/login HTTP/1.1" 200 OK
+INFO:     10.79.167.145:42818 - "GET /api/admin/check-fundle-customer/1234567890 HTTP/1.1" 200 OK
+INFO:     10.79.167.145:53200 - "POST /api/admin/login HTTP/1.1" 200 OK
+INFO:     10.79.167.145:53200 - "GET /api/qr-codes HTTP/1.1" 200 OK
+INFO:     10.79.167.146:37704 - "POST /api/admin/login HTTP/1.1" 200 OK
+INFO:     10.79.167.145:37970 - "GET /api/admin/me HTTP/1.1" 200 OK
+INFO:     10.79.167.146:37704 - "GET /api/analytics/dashboard HTTP/1.1" 200 OK
+INFO:     10.79.167.146:37704 - "GET /api/analytics/user-funnel HTTP/1.1" 200 OK
+INFO:     10.79.167.145:37970 - "GET /api/analytics/daily-stats?days=7 HTTP/1.1" 200 OK
+INFO:     10.79.167.145:37970 - "GET /api/analytics/dashboard HTTP/1.1" 200 OK
+INFO:     10.79.167.145:37984 - "GET /api/analytics/user-funnel HTTP/1.1" 200 OK
+INFO:     10.79.167.146:37704 - "GET /api/analytics/daily-stats?days=7 HTTP/1.1" 200 OK
+INFO:     10.79.167.146:37704 - "GET /api/qr-codes HTTP/1.1" 200 OK
+INFO:     10.79.167.146:37704 - "GET /api/qr-codes HTTP/1.1" 200 OK
+INFO:     10.79.167.145:37970 - "GET /api/users?source=SRC_SOCIAL&limit=50 HTTP/1.1" 200 OK
+INFO:     10.79.167.146:37704 - "GET /api/qr-codes/QR0124005/generate HTTP/1.1" 200 OK
+INFO:     10.79.167.146:51550 - "POST /api/admin/login HTTP/1.1" 200 OK
+INFO:     10.79.167.145:41990 - "GET /api/admin/me HTTP/1.1" 200 OK
+INFO:     10.79.167.145:41990 - "GET /api/analytics/user-funnel HTTP/1.1" 200 OK
+INFO:     10.79.167.146:51550 - "GET /api/analytics/daily-stats?days=7 HTTP/1.1" 200 OK
+INFO:     10.79.167.145:42002 - "GET /api/analytics/dashboard HTTP/1.1" 200 OK
+INFO:     10.79.167.145:41990 - "GET /api/analytics/daily-stats?days=7 HTTP/1.1" 200 OK
+INFO:     10.79.167.146:51550 - "GET /api/analytics/user-funnel HTTP/1.1" 200 OK
+INFO:     10.79.167.146:51560 - "GET /api/analytics/dashboard HTTP/1.1" 200 OK
+INFO:     10.79.167.145:41990 - "GET /api/qr-codes HTTP/1.1" 200 OK
+INFO:     10.79.167.145:41990 - "GET /api/qr-codes HTTP/1.1" 200 OK
+INFO:     10.79.167.145:41990 - "GET /api/qr-codes/QR0124006/generate HTTP/1.1" 200 OK
+INFO:     10.79.167.145:42002 - "GET /api/users?source=SRC_WEBSITE&limit=50 HTTP/1.1" 200 OK
+INFO:     10.79.167.146:47926 - "GET /api/qr-links HTTP/1.1" 200 OK
+INFO:     10.79.167.146:34258 - "POST /api/whatsapp/webhook HTTP/1.1" 200 OK
+INFO:     10.79.167.145:55516 - "POST /api/whatsapp/webhook HTTP/1.1" 200 OK) for the response from the Karix API.
+        4.  If it fails, compare the request payload in the logs with the official Karix documentation and adjust the  function accordingly.
+    -   **Why fix this issue and what will be achieved with the fix?** Completes the parking validation feature as requested, providing a more professional and user-friendly experience by sending a scannable QR image directly to the user's WhatsApp.
+    -   **Status:** IN PROGRESS
+    -   **Is recurring issue?** Y
+    -   **Should Test frontend/backend/both after fix?** backend
+    -   **Blocked on other issue:** None.
 
 **In progress Task List**:
--   **Task 1: Complete the Parking Validation Flow (P0)**
-    -   **Where to resume:** The agent has created the backend models and API stubs in . The next immediate step is to install the necessary libraries for QR code generation ( and ) and then implement the logic.
-    -   **What will be achieved with this?** A complete parking management system integrated with the existing WhatsApp loyalty platform.
-    -   **Status:** IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?** both
-    -   **Blocked on something:** None.
+-   None.
 
 **Upcoming and Future Tasks**
 -   **Upcoming Tasks:**
-    -   **(P0) Build the Parking Scanner App:** Create a new page in the React dashboard that uses the device's camera to scan the parking session QR code from a customer's phone and calls the  endpoint.
-    -   **(P1) Create a Parking Report Page:** Add a new page to the dashboard to display a report of all parking sessions, showing entry time, exit time, and duration.
-    -   **(P1) Implement Select Menu for WhatsApp:** When more than three button options are available in a WhatsApp message, present a Select Menu button that opens a pop-up list of all options, as requested by the user.
-    -   **(P2) Implement Fundle API call for Manual Rejection:** When an admin manually rejects a bill, call the appropriate Fundle API to log this rejection.
+    -   **(P1) Implement Fundle API call for Manual Rejection:** When an admin manually rejects a bill in the dashboard, call the appropriate Fundle API to log this rejection.
 
 -   **Future Tasks:**
     -   Enhance the admin dashboard with an exportable reports feature (for bills, users, etc.).
     -   Add more advanced analytics, such as store-level performance and a heatmap of QR code scans.
+    -   Add an SMS fallback for critical notifications if WhatsApp fails.
 
 **Completed work in this session**
--   **Multi-Admin & Roles Implemented:**
-    -   Created a full admin user management system with roles (Super Admin, Admin, Bill Operator, Call Centre, Support Officer).
-    -   The dashboard now has an Admin Users page to create/view/delete admins.
-    -   Bill processing now tracks and displays which admin approved/rejected a bill.
--   **Live Fundle Points Integration:**
-    -   Refactored the system to fetch user points directly from the Fundle API in real-time, ensuring data is always accurate.
-    -   Removed all unnecessary local point storage and synchronization logic.
--   **WhatsApp Journey Viewer Created:**
-    -   Built a WhatsApp Logs page in the dashboard that displays full conversation histories in a chat-style interface, with distinct colors for user and system messages.
-    -   Fixed a scrolling bug to ensure long conversations are viewable.
--   **New vs. Existing Customer Tracking:**
-    -   The registration flow now identifies if a user already exists in Fundle.
-    -   Dashboard analytics now show separate counts for New vs. Existing customers.
-    -   QR analytics were updated to only count New customers toward registration metrics, preventing inflation from returning customers.
--   **Website Source Added:**
-    -   Added Website as a trackable source for customer onboarding.
-    -   Provided the user with the correct  link and HTML code for a floating WhatsApp button for their website.
--   **Critical Bug Fixes:**
-    -   Fixed a fatal frontend crash caused by a syntax error in .
-    -   Resolved multiple issues with the Brand Not Found workflow, ensuring the Reprocess button appears correctly.
-    -   Diagnosed and fixed webhook and environment variable issues that were preventing WhatsApp responses.
-    -   Fixed a  in the  API endpoint.
--   **UI/UX Enhancements:**
-    -   Renamed all user-facing instances of TagnPay to Fundle.
-    -   Renamed UI labels Brand to Retailer and Social / Offline to Social.
-    -   Added a persistent Customer Support option to the WhatsApp menu.
+-   **Complete Parking Validation Flow:** Implemented the entire feature, including a backend API, a frontend scanner page, a parking report page, and full integration with the WhatsApp webhook for user entry/exit messages.
+-   **Bulk Fundle Customer Import:** Imported a list of 30,741 existing customers from an Excel file. The registration flow now correctly identifies these users as existing.
+-   **Advanced Bill Processing Rules:**
+    -   Bills over ₹30,000 are automatically flagged for pending review.
+    -   Bills older than 15 days are automatically rejected.
+    -   Points are now credited to the mobile number found on the bill via OCR, overriding the sender's WhatsApp number if present.
+-   **Dashboard & Analytics Enhancements:**
+    -   Added date range and customer type (New/Existing) filters to the Users page.
+    -   Added dynamic text insights above the bar graphs on the Analytics page.
+    -   Enabled viewing a detailed list of bills by clicking the Bill Uploads count in the QR details modal.
+    -   Added the company logo to the dashboard sidebar.
+-   **Improved Reprocess Workflow:** The Reprocess function now automatically registers a user with Fundle if they don't exist before attempting to process their bill.
+-   **WhatsApp Usability Improvements:**
+    -   Implemented a Select Menu that automatically appears when more than three button options are available.
+    -   Added shareable  links for each QR source directly in the dashboard UI.
+-   **API Stability:** Added a retry mechanism to the Fundle API client to handle temporary network failures.
 
 **Earlier issues found/mentioned but not fixed**
--   None. All prior issues were addressed.
+-   None.
 
 **Known issue recurrence from previous fork**
 -   None.
@@ -89,61 +237,65 @@ A full-stack application with a FastAPI backend, a React admin dashboard, and a 
 -   **Frontend:** React
 -   **Database:** MongoDB
 -   **Integrations:** Karix (WhatsApp), Fundle (Loyalty API), Gemini Vision (OCR)
--   **New Dependency (Pending):**  library for dynamic QR code generation.
+-   **Key Libraries:** , , 
 
 **key DB schema**
--   **users:**  (new field: 'new' or 'existing')
--   **bills:**  (new field: )
--   **admin_users (new collection):** 
--   **parking_sessions (new collection):** 
+-   **users:**  (values: 'new' or 'existing')
+-   **bills:** 
+-   **admin_users:** 
+-   **parking_sessions:** 
+-   **fundle_customers (new collection):**  (A set-like collection for fast lookups of pre-existing customers)
 
 **changes in tech stack**
 -   None.
 
 **All files of reference**
--   : All backend logic, including the new parking models/routes and multi-admin system, resides here. It has been extensively modified.
--   : A new page for the admin management feature.
--   : A new page for viewing WhatsApp conversations.
--   : Significantly refactored to fetch live points from Fundle and display customer type.
--   : Updated to display which admin processed a bill.
--   : Updated to show new vs. existing customer stats.
--   : Updated to differentiate between new and existing customer registrations.
+-   : Heavily modified with logic for parking, new bill rules, customer import, API filters, and the new Karix image sending flow.
+-   : New page for the scanner app.
+-   : New page for parking session reports.
+-   : Updated with new date and customer type filters.
+-   : Updated with date filters and dynamic insights.
+-   : Updated to show parking stats, a modal with bill lists, and shareable WhatsApp links.
+-   : Updated to include the company logo.
+-   : Updated with routes for the new parking pages.
+-   : A new document created with JSON samples to help the user communicate with Karix support.
 
 **Areas that need refactoring**:
--   ** is critically large and complex.** It has grown to nearly 3000 lines and contains all routes, models, services, and client logic. It is a major technical debt and must be refactored into a structured project with separate directories for , , , etc., to ensure future maintainability.
+-   ** is critically monolithic at nearly 4000 lines.** This is a major source of technical debt, increasing complexity and the risk of bugs. It is imperative to refactor this file into a proper project structure with separate directories for , , , and . This should be proposed to the user as a high-priority task after the current issue is resolved.
 
 **key api endpoints**
--   : **(New)** Generates a parking session and a unique QR code.
--   : **(New)** Validates an existing parking session QR code.
--   : **(New)** CRUD operations for managing admin users.
--   : **(New)** Deletes an admin user.
--   : **(New)** Fetches a list of all WhatsApp conversations.
--   : **(New)** Fetches the message history for a specific user.
--   : Handles all incoming WhatsApp messages, including new logic for parking QR scans.
+-   : **(Updated)** Now sends a Thank You message on success.
+-   : **(Updated)** Supports , , and  query parameters.
+-   : **(Updated)** Now registers the user if they don't exist before reprocessing.
+-   : **(Updated)** Handles parking entry scans and triggers QR image sending.
+-   : **(New)** Fetches bills associated with a specific QR code.
+-   : **(New)** Public endpoint that returns all shareable WhatsApp links.
+-   : **(New)** Endpoint to import the list of existing customers into the database.
 
 **Critical Info for New Agent**
--   Your primary task is to complete the **Parking Validation Flow**. This is a large feature with several parts: backend QR generation, updating the WhatsApp webhook, building a frontend scanner app, and creating a parking report.
--   The  library (with ) needs to be installed in the backend to proceed.
--   The backend code in  is extremely monolithic. While your focus is the new feature, be aware that any new logic adds to this technical debt. A refactor is urgently needed.
--   All user points are now fetched in real-time from the Fundle API. Do not attempt to store or sync points locally.
+-   Your immediate and primary task is to fix the **Karix QR image sending** for the parking flow. The user has provided the correct documentation. The implementation is already in  in the  function; it just needs to be tested and debugged until it works.
+-   The system now distinguishes between new and existing customers based on a pre-imported list of ~30k phone numbers. This logic is critical for analytics and should not be altered.
+-   The backend  file is dangerously large. After fixing the image sending, you should strongly recommend a refactoring task to the user to ensure the project's long-term stability and maintainability.
 
 **documents and test reports created in this job**
--    (Updated with new features)
+-    (Updated)
+-   
+-   
 
 **Last 10 User Messages and any pending HUMAN messages**
-10.  - **Completed.** Agent added the Website source to all relevant dashboard pages.
-9.   - **Completed.** Agent provided the correct  link and HTML for a floating button.
-8.   - **Completed.** Agent implemented logic to track new vs. existing Fundle customers.
-7.   - **Completed.** Agent added more roles and updated the UI to show the processor's full name and role.
-6.   - **Completed.** Agent fixed the scrolling issue in the chat view.
-5.   - **Completed.** Agent refactored the system to fetch points live from Fundle.
-4.   - **Completed.** Agent diagnosed and fixed the issue by implementing real-time API calls for points.
-3.   - **Completed.** Agent built the full admin user management feature.
-2.   - **Completed.** Agent implemented a batch of UI and text changes.
-1.   - **In Progress.** This is the current, active task.
+10.  - **Completed.** Agent fixed the reprocess flow and added WhatsApp links to the dashboard.
+9.   - **Completed.** Agent implemented a system to import and use an Excel file of 30k+ existing customers.
+8.   - **Completed.** Agent implemented a migration script and updated the registration logic to correctly flag users based on their presence in the Fundle system.
+7.   - **Completed.** Agent implemented all five UI/feature requests.
+6.   - **Completed.** Agent diagnosed a likely transient Fundle API error and improved the system by adding a retry mechanism and better error logging.
+5.   - **Completed.** Agent displayed the content of the Karix request file directly in the chat.
+4.   - **Completed.** Agent implemented the Select Menu for WhatsApp when there are more than 3 buttons.
+3.   - **Completed.** Agent implemented all seven requests in a single batch.
+2.   - **Completed.** Agent confirmed that a redeploy was needed and provided instructions.
+1.   - **In Progress.** This led to the discovery of the Karix image sending issue, which is the current active task.
 
 **Project Health Check:**
--   **Broken:** None. The application is functional.
+-   **Broken:** The WhatsApp QR image sending for the parking flow. The rest of the application is functional.
 -   **Mocked:** None.
 
 **3rd Party Integrations**
@@ -152,15 +304,15 @@ A full-stack application with a FastAPI backend, a React admin dashboard, and a 
 -   **Gemini Vision API (OCR):** Live, used for bill scanning. Uses the Emergent LLM Key.
 
 **Testing status**
--   **Testing agent used after significant changes:** NO (Recent changes were self-tested by the agent).
+-   **Testing agent used after significant changes:** YES (used to test the initial parking flow implementation).
 -   **Troubleshoot agent used after agent stuck in loop:** NO
 -   **Test files created:** []
 -   **Known regressions:** None.
 
 **Credentials to test flow:**
--   **Admin Login:**  /  (Super Admin). Other admin accounts can be created via the dashboard.
+-   **Admin Login:**  /  (Super Admin).
 -   **Fundle API:** Credentials are in .
 -   **Karix WhatsApp Key:** Key is in .
 
 **What agent forgot to execute**
--   Nothing was explicitly forgotten. The agent was in the middle of implementing the parking flow when the session ended.</analysis>
+-   The only pending task from previous plans is to implement the Fundle API call when an admin manually rejects a bill. All other user requests and identified issues have been addressed or are currently being worked on.</analysis>
