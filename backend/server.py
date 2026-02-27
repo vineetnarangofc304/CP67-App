@@ -1113,59 +1113,120 @@ async def upload_fundle_excel(
     payload: dict = Depends(verify_jwt_token)
 ):
     """Upload Excel file with Fundle customer phone numbers.
-    The Excel file should have phone numbers in the first column.
+    Scans ALL columns for phone numbers (10-digit or 12-digit starting with 91).
     Accepts .xlsx, .xls, or .csv files.
     """
     import openpyxl
     import csv
     
-    logger.info(f"Uploading Fundle customer Excel: {file.filename}")
+    logger.info(f"Uploading Fundle customer Excel: {file.filename}, size: {file.size if hasattr(file, 'size') else 'unknown'}")
     
     # Read file content
     content = await file.read()
+    logger.info(f"Read {len(content)} bytes from file")
     
     phone_numbers = []
+    sample_values = []  # For debugging
+    
+    def extract_phone(value):
+        """Extract phone number from any value"""
+        if value is None:
+            return None
+        
+        # Convert to string
+        val_str = str(value).strip()
+        
+        # Handle scientific notation (e.g., 9.65005e+09)
+        if 'e+' in val_str.lower() or 'e-' in val_str.lower():
+            try:
+                val_str = str(int(float(val_str)))
+            except:
+                pass
+        
+        # Remove common prefixes/suffixes
+        val_str = val_str.replace('+91', '').replace('+', '').replace('-', '').replace(' ', '').replace('.0', '')
+        
+        # Extract digits only
+        clean_phone = ''.join(filter(str.isdigit, val_str))
+        
+        # Check valid phone formats
+        if len(clean_phone) == 10 and clean_phone[0] in '6789':
+            return clean_phone
+        elif len(clean_phone) == 12 and clean_phone.startswith('91') and clean_phone[2] in '6789':
+            return clean_phone[2:]
+        elif len(clean_phone) == 11 and clean_phone.startswith('0') and clean_phone[1] in '6789':
+            return clean_phone[1:]
+        
+        return None
     
     try:
-        if file.filename.endswith('.xlsx') or file.filename.endswith('.xls'):
+        if file.filename.lower().endswith('.xlsx') or file.filename.lower().endswith('.xls'):
             # Excel file
-            workbook = openpyxl.load_workbook(io.BytesIO(content), read_only=True)
+            logger.info("Processing as Excel file...")
+            workbook = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
             sheet = workbook.active
             
+            row_count = 0
             for row in sheet.iter_rows(values_only=True):
-                if row and row[0]:
-                    # Get first column value
-                    phone = str(row[0]).strip()
-                    # Extract digits only
-                    clean_phone = ''.join(filter(str.isdigit, phone))
-                    if len(clean_phone) == 10:
-                        phone_numbers.append(clean_phone)
-                    elif len(clean_phone) == 12 and clean_phone.startswith('91'):
-                        phone_numbers.append(clean_phone[2:])
+                row_count += 1
+                if row:
+                    # Check ALL columns in the row
+                    for cell_value in row:
+                        if cell_value is not None:
+                            # Store sample for debugging (first 10)
+                            if len(sample_values) < 10:
+                                sample_values.append(str(cell_value)[:30])
+                            
+                            phone = extract_phone(cell_value)
+                            if phone:
+                                phone_numbers.append(phone)
             
             workbook.close()
+            logger.info(f"Processed {row_count} rows from Excel")
         
-        elif file.filename.endswith('.csv'):
+        elif file.filename.lower().endswith('.csv'):
             # CSV file
-            content_str = content.decode('utf-8')
+            logger.info("Processing as CSV file...")
+            try:
+                content_str = content.decode('utf-8')
+            except:
+                content_str = content.decode('latin-1')
+            
             reader = csv.reader(io.StringIO(content_str))
             
+            row_count = 0
             for row in reader:
-                if row and row[0]:
-                    phone = str(row[0]).strip()
-                    clean_phone = ''.join(filter(str.isdigit, phone))
-                    if len(clean_phone) == 10:
-                        phone_numbers.append(clean_phone)
-                    elif len(clean_phone) == 12 and clean_phone.startswith('91'):
-                        phone_numbers.append(clean_phone[2:])
+                row_count += 1
+                for cell_value in row:
+                    if cell_value:
+                        if len(sample_values) < 10:
+                            sample_values.append(str(cell_value)[:30])
+                        
+                        phone = extract_phone(cell_value)
+                        if phone:
+                            phone_numbers.append(phone)
+            
+            logger.info(f"Processed {row_count} rows from CSV")
         else:
             raise HTTPException(status_code=400, detail="Unsupported file format. Use .xlsx, .xls, or .csv")
         
+        logger.info(f"Sample values from file: {sample_values}")
         logger.info(f"Extracted {len(phone_numbers)} phone numbers from file")
         
         # Remove duplicates
         phone_numbers = list(set(phone_numbers))
         logger.info(f"Unique phone numbers: {len(phone_numbers)}")
+        
+        if len(phone_numbers) == 0:
+            return {
+                "success": False,
+                "message": "No valid phone numbers found in the file",
+                "phones_in_file": 0,
+                "imported": 0,
+                "total_in_database": await db.fundle_customers.count_documents({}),
+                "sample_values": sample_values,
+                "hint": "Make sure phone numbers are 10 digits (starting with 6,7,8,9) or 12 digits starting with 91"
+            }
         
         # Insert into database
         inserted_count = 0
@@ -1188,7 +1249,8 @@ async def upload_fundle_excel(
             "message": f"Successfully imported {inserted_count} phone numbers",
             "phones_in_file": len(phone_numbers),
             "imported": inserted_count,
-            "total_in_database": total_in_db
+            "total_in_database": total_in_db,
+            "sample_phones": phone_numbers[:5] if phone_numbers else []
         }
         
     except Exception as e:
