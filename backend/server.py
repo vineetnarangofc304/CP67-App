@@ -1107,6 +1107,96 @@ async def import_fundle_customers(
         "total_provided": len(phone_numbers)
     }
 
+@api_router.post("/admin/upload-fundle-excel")
+async def upload_fundle_excel(
+    file: UploadFile = File(...),
+    payload: dict = Depends(verify_jwt_token)
+):
+    """Upload Excel file with Fundle customer phone numbers.
+    The Excel file should have phone numbers in the first column.
+    Accepts .xlsx, .xls, or .csv files.
+    """
+    import openpyxl
+    import csv
+    
+    logger.info(f"Uploading Fundle customer Excel: {file.filename}")
+    
+    # Read file content
+    content = await file.read()
+    
+    phone_numbers = []
+    
+    try:
+        if file.filename.endswith('.xlsx') or file.filename.endswith('.xls'):
+            # Excel file
+            workbook = openpyxl.load_workbook(io.BytesIO(content), read_only=True)
+            sheet = workbook.active
+            
+            for row in sheet.iter_rows(values_only=True):
+                if row and row[0]:
+                    # Get first column value
+                    phone = str(row[0]).strip()
+                    # Extract digits only
+                    clean_phone = ''.join(filter(str.isdigit, phone))
+                    if len(clean_phone) == 10:
+                        phone_numbers.append(clean_phone)
+                    elif len(clean_phone) == 12 and clean_phone.startswith('91'):
+                        phone_numbers.append(clean_phone[2:])
+            
+            workbook.close()
+        
+        elif file.filename.endswith('.csv'):
+            # CSV file
+            content_str = content.decode('utf-8')
+            reader = csv.reader(io.StringIO(content_str))
+            
+            for row in reader:
+                if row and row[0]:
+                    phone = str(row[0]).strip()
+                    clean_phone = ''.join(filter(str.isdigit, phone))
+                    if len(clean_phone) == 10:
+                        phone_numbers.append(clean_phone)
+                    elif len(clean_phone) == 12 and clean_phone.startswith('91'):
+                        phone_numbers.append(clean_phone[2:])
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file format. Use .xlsx, .xls, or .csv")
+        
+        logger.info(f"Extracted {len(phone_numbers)} phone numbers from file")
+        
+        # Remove duplicates
+        phone_numbers = list(set(phone_numbers))
+        logger.info(f"Unique phone numbers: {len(phone_numbers)}")
+        
+        # Insert into database
+        inserted_count = 0
+        for phone in phone_numbers:
+            try:
+                await db.fundle_customers.update_one(
+                    {"phone_10": phone},
+                    {"$set": {"phone_10": phone, "imported_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True
+                )
+                inserted_count += 1
+            except Exception as e:
+                logger.error(f"Error inserting phone {phone}: {e}")
+        
+        # Get total count in collection
+        total_in_db = await db.fundle_customers.count_documents({})
+        
+        return {
+            "success": True,
+            "message": f"Successfully imported {inserted_count} phone numbers",
+            "phones_in_file": len(phone_numbers),
+            "imported": inserted_count,
+            "total_in_database": total_in_db
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing Excel file: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
 @api_router.get("/admin/check-fundle-customer/{phone}")
 async def check_fundle_customer(phone: str, payload: dict = Depends(verify_jwt_token)):
     """Check if a phone number is in the imported Fundle customer list"""
