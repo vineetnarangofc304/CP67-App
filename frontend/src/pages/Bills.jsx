@@ -500,11 +500,24 @@ const Bills = () => {
                         </div>
 
                         {/* Actions */}
-                        {bill.status === 'manual_review' && (
-                          <Button variant="outline" size="sm" onClick={() => openReviewDialog(bill)}>
-                            Review
-                          </Button>
-                        )}
+                        <div className="flex gap-2">
+                          {(bill.status === 'manual_review' || bill.status === 'pending_review') && (
+                            <>
+                              <Button variant="outline" size="sm" onClick={() => openReviewDialog(bill)}>
+                                Review
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                className="bg-blue-600 hover:bg-blue-700"
+                                onClick={() => reprocessBill(bill.id)}
+                                data-testid={`reprocess-all-${bill.id}`}
+                              >
+                                <RefreshCw className="h-3 w-3 mr-1" />
+                                Reprocess
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
