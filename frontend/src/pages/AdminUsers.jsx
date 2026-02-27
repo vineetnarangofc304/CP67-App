@@ -191,13 +191,15 @@ const AdminUsers = () => {
         body: formData
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setUploadResult(data);
+      const data = await response.json();
+      setUploadResult(data);
+      
+      if (response.ok && data.success) {
         toast.success(`Uploaded ${data.imported} phone numbers successfully!`);
+      } else if (data.phones_in_file === 0) {
+        toast.error('No valid phone numbers found in the file. Check the format.');
       } else {
-        const error = await response.json();
-        toast.error(error.detail || 'Failed to upload file');
+        toast.error(data.detail || data.message || 'Failed to upload file');
       }
     } catch (error) {
       toast.error('Failed to upload Excel file');
