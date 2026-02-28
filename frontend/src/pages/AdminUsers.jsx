@@ -47,6 +47,8 @@ const AdminUsers = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
   const [uploadProgress, setUploadProgress] = useState('');
+  const [showPasteModal, setShowPasteModal] = useState(false);
+  const [pasteText, setPasteText] = useState('');
   const fileInputRef = React.useRef(null);
   
   // Form state
