@@ -249,8 +249,9 @@ const AdminUsers = () => {
 
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error(`Upload failed: ${error.message}`, { id: toastId });
-      setUploadResult({ success: false, message: error.message });
+      const errorMsg = error.message || 'Unknown error';
+      toast.error(`Upload failed: ${errorMsg}`, { id: toastId });
+      setUploadResult({ success: false, message: errorMsg });
     } finally {
       setUploading(false);
       setUploadProgress('');
