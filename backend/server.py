@@ -1269,6 +1269,70 @@ async def check_fundle_customer(phone: str, payload: dict = Depends(verify_jwt_t
     existing = await db.fundle_customers.find_one({"phone_10": clean_phone})
     return {"phone": phone, "is_fundle_customer": existing is not None}
 
+@api_router.post("/admin/upload-fundle-chunk")
+async def upload_fundle_chunk(
+    data: dict,
+    payload: dict = Depends(verify_jwt_token)
+):
+    """Upload a chunk of phone numbers (for large file uploads).
+    Accepts JSON with phone_numbers array.
+    """
+    phone_numbers = data.get("phone_numbers", [])
+    
+    if not phone_numbers:
+        return {"success": False, "imported": 0, "message": "No phone numbers provided"}
+    
+    logger.info(f"Uploading chunk of {len(phone_numbers)} phone numbers...")
+    
+    # Bulk insert using unordered bulk write for speed
+    from pymongo import UpdateOne
+    
+    operations = []
+    for phone in phone_numbers:
+        clean_phone = ''.join(filter(str.isdigit, str(phone)))
+        if len(clean_phone) == 10 and clean_phone[0] in '6789':
+            operations.append(
+                UpdateOne(
+                    {"phone_10": clean_phone},
+                    {"$set": {"phone_10": clean_phone, "imported_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True
+                )
+            )
+        elif len(clean_phone) == 12 and clean_phone.startswith('91') and clean_phone[2] in '6789':
+            operations.append(
+                UpdateOne(
+                    {"phone_10": clean_phone[2:]},
+                    {"$set": {"phone_10": clean_phone[2:], "imported_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True
+                )
+            )
+    
+    imported = 0
+    if operations:
+        try:
+            result = await db.fundle_customers.bulk_write(operations, ordered=False)
+            imported = result.upserted_count + result.modified_count
+        except Exception as e:
+            logger.error(f"Bulk write error: {e}")
+            # Fallback to individual inserts
+            for op in operations:
+                try:
+                    await db.fundle_customers.update_one(
+                        op._filter, op._doc, upsert=True
+                    )
+                    imported += 1
+                except:
+                    pass
+    
+    logger.info(f"Chunk imported: {imported} numbers")
+    return {"success": True, "imported": imported}
+
+@api_router.get("/admin/fundle-count")
+async def get_fundle_count(payload: dict = Depends(verify_jwt_token)):
+    """Get total count of phone numbers in fundle_customers collection"""
+    count = await db.fundle_customers.count_documents({})
+    return {"count": count}
+
 @api_router.post("/admin/sync-fundle-customers")
 async def sync_fundle_customers(payload: dict = Depends(verify_jwt_token)):
     """Force sync ALL users with fundle_customers list.
