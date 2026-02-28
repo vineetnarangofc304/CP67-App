@@ -431,10 +431,10 @@ const AdminUsers = () => {
                   <span className="text-orange-600 font-bold text-sm">1</span>
                 </div>
                 <div className="flex-1">
-                  <h4 className="font-medium text-slate-900">Upload Excel with Phone Numbers</h4>
+                  <h4 className="font-medium text-slate-900">Upload CSV with Phone Numbers</h4>
                   <p className="text-sm text-slate-600 mt-1">
-                    Upload an Excel (.xlsx) or CSV file with Fundle customer phone numbers in the first column.
-                    These numbers will be stored and used to identify existing customers.
+                    Upload a CSV file with Fundle customer phone numbers. For large files (30k+ rows), CSV format is recommended.
+                    Phone numbers can be in any column - the system will find all valid 10-digit Indian mobile numbers.
                   </p>
                 </div>
               </div>
