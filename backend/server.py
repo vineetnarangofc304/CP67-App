@@ -1315,12 +1315,18 @@ async def upload_fundle_chunk(
         except Exception as e:
             logger.error(f"Bulk write error: {e}")
             # Fallback to individual inserts
-            for op in operations:
+            for phone in phone_numbers:
                 try:
-                    await db.fundle_customers.update_one(
-                        op._filter, op._doc, upsert=True
-                    )
-                    imported += 1
+                    clean_phone = ''.join(filter(str.isdigit, str(phone)))
+                    if len(clean_phone) == 12 and clean_phone.startswith('91'):
+                        clean_phone = clean_phone[2:]
+                    if len(clean_phone) == 10 and clean_phone[0] in '6789':
+                        await db.fundle_customers.update_one(
+                            {"phone_10": clean_phone},
+                            {"$set": {"phone_10": clean_phone, "imported_at": datetime.now(timezone.utc).isoformat()}},
+                            upsert=True
+                        )
+                        imported += 1
                 except:
                     pass
     
