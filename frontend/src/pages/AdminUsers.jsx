@@ -281,50 +281,7 @@ const AdminUsers = () => {
       reader.onload = (e) => {
         try {
           const content = e.target.result;
-          const phoneNumbers = [];
-          const phoneSet = new Set();
-
-          // Helper to extract valid phone
-          const extractPhone = (value) => {
-            if (!value) return null;
-            let str = String(value).trim();
-            
-            // Handle scientific notation
-            if (str.toLowerCase().includes('e+') || str.toLowerCase().includes('e-')) {
-              try { str = String(parseInt(parseFloat(str))); } catch {}
-            }
-            
-            // Clean the string
-            str = str.replace(/[+\-\s.]/g, '');
-            
-            // Remove leading 91 for Indian numbers
-            if (str.startsWith('91') && str.length === 12) {
-              str = str.substring(2);
-            }
-            
-            const digits = str.replace(/\D/g, '');
-            
-            // Validate Indian mobile (10 digits starting with 6-9)
-            if (digits.length === 10 && '6789'.includes(digits[0])) {
-              return digits;
-            }
-            return null;
-          };
-
-          // Parse CSV or text file
-          const lines = content.split(/\r?\n/);
-          for (const line of lines) {
-            // Split by common delimiters
-            const cells = line.split(/[,\t;|]/);
-            for (const cell of cells) {
-              const phone = extractPhone(cell);
-              if (phone && !phoneSet.has(phone)) {
-                phoneSet.add(phone);
-                phoneNumbers.push(phone);
-              }
-            }
-          }
-
+          const phoneNumbers = extractPhonesFromText(content);
           resolve(phoneNumbers);
         } catch (err) {
           reject(err);
@@ -334,6 +291,146 @@ const AdminUsers = () => {
       reader.onerror = () => reject(new Error('Failed to read file'));
       reader.readAsText(file);
     });
+  };
+
+  // Extract phones from any text
+  const extractPhonesFromText = (text) => {
+    const phoneNumbers = [];
+    const phoneSet = new Set();
+
+    const extractPhone = (value) => {
+      if (!value) return null;
+      let str = String(value).trim();
+      
+      // Handle scientific notation
+      if (str.toLowerCase().includes('e+') || str.toLowerCase().includes('e-')) {
+        try { str = String(parseInt(parseFloat(str))); } catch {}
+      }
+      
+      // Clean the string
+      str = str.replace(/[+\-\s.]/g, '');
+      
+      // Remove leading 91 for Indian numbers
+      if (str.startsWith('91') && str.length === 12) {
+        str = str.substring(2);
+      }
+      
+      const digits = str.replace(/\D/g, '');
+      
+      // Validate Indian mobile (10 digits starting with 6-9)
+      if (digits.length === 10 && '6789'.includes(digits[0])) {
+        return digits;
+      }
+      return null;
+    };
+
+    // Parse text - split by common delimiters
+    const lines = text.split(/\r?\n/);
+    for (const line of lines) {
+      const cells = line.split(/[,\t;|]/);
+      for (const cell of cells) {
+        const phone = extractPhone(cell);
+        if (phone && !phoneSet.has(phone)) {
+          phoneSet.add(phone);
+          phoneNumbers.push(phone);
+        }
+      }
+    }
+
+    return phoneNumbers;
+  };
+
+  // Upload phone numbers (used by both file and paste)
+  const uploadPhoneNumbers = async (phoneNumbers) => {
+    if (phoneNumbers.length === 0) {
+      toast.error('No valid phone numbers found');
+      setUploadResult({ success: false, message: 'No valid phone numbers found' });
+      return;
+    }
+
+    setUploading(true);
+    setUploadResult(null);
+    const toastId = toast.loading(`Uploading ${phoneNumbers.length.toLocaleString()} numbers...`);
+
+    try {
+      // Upload in chunks of 2000
+      const chunkSize = 2000;
+      let totalImported = 0;
+      const totalChunks = Math.ceil(phoneNumbers.length / chunkSize);
+
+      for (let i = 0; i < phoneNumbers.length; i += chunkSize) {
+        const chunk = phoneNumbers.slice(i, i + chunkSize);
+        const chunkNum = Math.floor(i / chunkSize) + 1;
+        
+        toast.loading(`Chunk ${chunkNum}/${totalChunks}...`, { id: toastId });
+        setUploadProgress(`${chunkNum}/${totalChunks} (${totalImported.toLocaleString()} done)`);
+
+        try {
+          const response = await fetch(`${API_URL}/admin/upload-fundle-chunk`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ phone_numbers: chunk })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            totalImported += data.imported;
+          } else {
+            console.error(`Chunk ${chunkNum} failed:`, response.status);
+          }
+        } catch (chunkError) {
+          console.error(`Chunk ${chunkNum} error:`, chunkError);
+        }
+        
+        await new Promise(r => setTimeout(r, 200));
+      }
+
+      // Get final count
+      try {
+        const finalResponse = await fetch(`${API_URL}/admin/fundle-count`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const finalData = await finalResponse.json();
+        
+        setUploadResult({
+          success: true,
+          imported: totalImported,
+          total_in_database: finalData.count,
+          phones_in_file: phoneNumbers.length
+        });
+        toast.success(`Done! Imported ${totalImported.toLocaleString()} numbers`, { id: toastId });
+      } catch {
+        setUploadResult({
+          success: true,
+          imported: totalImported,
+          phones_in_file: phoneNumbers.length
+        });
+        toast.success(`Imported ${totalImported.toLocaleString()} numbers`, { id: toastId });
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error(`Upload failed: ${error.message}`, { id: toastId });
+      setUploadResult({ success: false, message: error.message });
+    } finally {
+      setUploading(false);
+      setUploadProgress('');
+    }
+  };
+
+  // Handle paste submit
+  const handlePasteSubmit = async () => {
+    if (!pasteText.trim()) {
+      toast.error('Please paste some phone numbers');
+      return;
+    }
+
+    const phoneNumbers = extractPhonesFromText(pasteText);
+    setShowPasteModal(false);
+    setPasteText('');
+    await uploadPhoneNumbers(phoneNumbers);
   };
 
   const formatDate = (dateStr) => {
