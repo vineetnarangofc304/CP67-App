@@ -179,6 +179,7 @@ const AdminUsers = () => {
 
     setUploading(true);
     setUploadResult(null);
+    setUploadProgress('Reading file...');
     
     const toastId = toast.loading(`Reading ${file.name}...`);
 
