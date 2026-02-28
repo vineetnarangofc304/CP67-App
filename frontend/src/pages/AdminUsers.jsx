@@ -250,6 +250,7 @@ const AdminUsers = () => {
       setUploadResult({ success: false, message: error.message });
     } finally {
       setUploading(false);
+      setUploadProgress('');
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
