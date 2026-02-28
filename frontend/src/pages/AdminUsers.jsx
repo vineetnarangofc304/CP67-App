@@ -207,6 +207,7 @@ const AdminUsers = () => {
         const chunkNum = Math.floor(i / chunkSize) + 1;
         
         toast.loading(`Uploading chunk ${chunkNum}/${totalChunks}...`, { id: toastId });
+        setUploadProgress(`Uploading ${chunkNum}/${totalChunks} (${totalImported.toLocaleString()} imported)`);
 
         const response = await fetch(`${API_URL}/admin/upload-fundle-chunk`, {
           method: 'POST',
