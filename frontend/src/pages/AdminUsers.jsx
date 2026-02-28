@@ -222,7 +222,10 @@ const AdminUsers = () => {
           const data = await response.json();
           totalImported += data.imported;
         } else {
-          console.error(`Chunk ${chunkNum} failed:`, await response.text());
+          const errorText = await response.text();
+          console.error(`Chunk ${chunkNum} failed (${response.status}):`, errorText);
+          // Don't throw, continue with next chunk
+          toast.error(`Chunk ${chunkNum} failed: ${response.status}`, { id: toastId });
         }
         
         // Small delay between chunks to avoid overwhelming the server
