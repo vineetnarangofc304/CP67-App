@@ -195,6 +195,7 @@ const AdminUsers = () => {
       }
 
       toast.loading(`Found ${phoneNumbers.length.toLocaleString()} numbers. Uploading...`, { id: toastId });
+      setUploadProgress(`Found ${phoneNumbers.length.toLocaleString()} numbers`);
 
       // Upload in chunks of 5000
       const chunkSize = 5000;
