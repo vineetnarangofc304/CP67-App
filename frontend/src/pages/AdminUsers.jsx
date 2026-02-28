@@ -458,12 +458,12 @@ const AdminUsers = () => {
                   {uploading ? (
                     <>
                       <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Uploading...
+                      {uploadProgress || 'Processing...'}
                     </>
                   ) : (
                     <>
                       <Upload className="h-4 w-4 mr-2" />
-                      Upload Excel File
+                      Upload CSV File
                     </>
                   )}
                 </Button>
