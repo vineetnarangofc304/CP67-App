@@ -31,7 +31,8 @@ import {
   Database,
   CheckCircle,
   Upload,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ClipboardPaste
 } from 'lucide-react';
 
 const AdminUsers = () => {
