@@ -209,23 +209,32 @@ const AdminUsers = () => {
         toast.loading(`Uploading chunk ${chunkNum}/${totalChunks}...`, { id: toastId });
         setUploadProgress(`Uploading ${chunkNum}/${totalChunks} (${totalImported.toLocaleString()} imported)`);
 
-        const response = await fetch(`${API_URL}/admin/upload-fundle-chunk`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ phone_numbers: chunk })
-        });
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout per chunk
+          
+          const response = await fetch(`${API_URL}/admin/upload-fundle-chunk`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ phone_numbers: chunk }),
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
 
-        if (response.ok) {
-          const data = await response.json();
-          totalImported += data.imported;
-        } else {
-          const errorText = await response.text();
-          console.error(`Chunk ${chunkNum} failed (${response.status}):`, errorText);
-          // Don't throw, continue with next chunk
-          toast.error(`Chunk ${chunkNum} failed: ${response.status}`, { id: toastId });
+          if (response.ok) {
+            const data = await response.json();
+            totalImported += data.imported;
+          } else {
+            const errorText = await response.text();
+            console.error(`Chunk ${chunkNum} failed (${response.status}):`, errorText);
+          }
+        } catch (chunkError) {
+          console.error(`Chunk ${chunkNum} error:`, chunkError);
+          // Continue with next chunk even if this one fails
         }
         
         // Small delay between chunks to avoid overwhelming the server
