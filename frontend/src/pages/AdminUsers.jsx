@@ -499,9 +499,20 @@ const AdminUsers = () => {
                   ) : (
                     <>
                       <Upload className="h-4 w-4 mr-2" />
-                      Upload CSV File
+                      Upload CSV
                     </>
                   )}
+                </Button>
+                
+                <Button
+                  onClick={() => setShowPasteModal(true)}
+                  disabled={uploading}
+                  variant="outline"
+                  className="border-blue-300 hover:bg-blue-100"
+                  data-testid="paste-numbers-btn"
+                >
+                  <ClipboardPaste className="h-4 w-4 mr-2" />
+                  Paste Numbers
                 </Button>
                 
                 {uploadResult && (
