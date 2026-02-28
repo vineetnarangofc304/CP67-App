@@ -176,58 +176,152 @@ const AdminUsers = () => {
       return;
     }
 
-    // Check file size (max 50MB)
-    if (file.size > 50 * 1024 * 1024) {
-      toast.error('File too large. Maximum size is 50MB');
-      return;
-    }
-
     setUploading(true);
     setUploadResult(null);
-    toast.info(`Uploading ${file.name} (${(file.size / 1024).toFixed(1)} KB)...`);
-
-    const formData = new FormData();
-    formData.append('file', file);
+    toast.info(`Processing ${file.name}...`);
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 min timeout
-
-      const response = await fetch(`${API_URL}/admin/upload-fundle-excel`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      const data = await response.json();
-      setUploadResult(data);
+      // Read file and extract phone numbers client-side
+      const phoneNumbers = await extractPhoneNumbersFromFile(file);
       
-      if (response.ok && data.success) {
-        toast.success(`Uploaded ${data.imported} phone numbers successfully!`);
-      } else if (data.phones_in_file === 0) {
-        toast.error('No valid phone numbers found in the file. Check the format.');
-      } else {
-        toast.error(data.detail || data.message || 'Failed to upload file');
+      if (phoneNumbers.length === 0) {
+        toast.error('No valid phone numbers found in file');
+        setUploadResult({ success: false, message: 'No valid phone numbers found' });
+        setUploading(false);
+        return;
       }
+
+      toast.info(`Found ${phoneNumbers.length.toLocaleString()} phone numbers. Uploading in chunks...`);
+
+      // Upload in chunks of 5000
+      const chunkSize = 5000;
+      let totalImported = 0;
+      const totalChunks = Math.ceil(phoneNumbers.length / chunkSize);
+
+      for (let i = 0; i < phoneNumbers.length; i += chunkSize) {
+        const chunk = phoneNumbers.slice(i, i + chunkSize);
+        const chunkNum = Math.floor(i / chunkSize) + 1;
+        
+        const response = await fetch(`${API_URL}/admin/upload-fundle-chunk`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ phone_numbers: chunk })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          totalImported += data.imported;
+          toast.info(`Chunk ${chunkNum}/${totalChunks} uploaded (${totalImported.toLocaleString()} total)`);
+        } else {
+          throw new Error(`Chunk ${chunkNum} failed`);
+        }
+      }
+
+      // Get final count
+      const finalResponse = await fetch(`${API_URL}/admin/fundle-count`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const finalData = await finalResponse.json();
+
+      setUploadResult({
+        success: true,
+        imported: totalImported,
+        total_in_database: finalData.count,
+        phones_in_file: phoneNumbers.length
+      });
+      toast.success(`Successfully imported ${totalImported.toLocaleString()} phone numbers!`);
+
     } catch (error) {
       console.error('Upload error:', error);
-      if (error.name === 'AbortError') {
-        toast.error('Upload timed out. Try a smaller file or CSV format.');
-      } else {
-        toast.error(`Upload failed: ${error.message || 'Network error'}`);
-      }
+      toast.error(`Upload failed: ${error.message}`);
+      setUploadResult({ success: false, message: error.message });
     } finally {
       setUploading(false);
-      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
     }
+  };
+
+  // Extract phone numbers from file client-side
+  const extractPhoneNumbersFromFile = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        try {
+          const content = e.target.result;
+          const phoneNumbers = [];
+          const phoneSet = new Set();
+
+          // Helper to extract valid phone
+          const extractPhone = (value) => {
+            if (!value) return null;
+            let str = String(value).trim();
+            
+            // Handle scientific notation
+            if (str.toLowerCase().includes('e+') || str.toLowerCase().includes('e-')) {
+              try { str = String(parseInt(parseFloat(str))); } catch {}
+            }
+            
+            // Clean the string
+            str = str.replace(/[+\-\s.]/g, '').replace(/^91/, '');
+            const digits = str.replace(/\D/g, '');
+            
+            // Validate Indian mobile (10 digits starting with 6-9)
+            if (digits.length === 10 && '6789'.includes(digits[0])) {
+              return digits;
+            }
+            if (digits.length === 12 && digits.startsWith('91') && '6789'.includes(digits[2])) {
+              return digits.substring(2);
+            }
+            return null;
+          };
+
+          // Parse based on file type
+          if (file.name.toLowerCase().endsWith('.csv')) {
+            // Parse CSV
+            const lines = content.split(/\r?\n/);
+            for (const line of lines) {
+              const cells = line.split(/[,\t;]/);
+              for (const cell of cells) {
+                const phone = extractPhone(cell);
+                if (phone && !phoneSet.has(phone)) {
+                  phoneSet.add(phone);
+                  phoneNumbers.push(phone);
+                }
+              }
+            }
+          } else {
+            // For Excel, we need to send to backend for parsing
+            // But first try to parse as text in case it's readable
+            const lines = content.split(/\r?\n/);
+            for (const line of lines) {
+              const cells = line.split(/[,\t;]/);
+              for (const cell of cells) {
+                const phone = extractPhone(cell);
+                if (phone && !phoneSet.has(phone)) {
+                  phoneSet.add(phone);
+                  phoneNumbers.push(phone);
+                }
+              }
+            }
+          }
+
+          resolve(phoneNumbers);
+        } catch (err) {
+          reject(err);
+        }
+      };
+
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      
+      // Read as text for CSV, or try text first for Excel
+      reader.readAsText(file);
+    });
   };
 
   const formatDate = (dateStr) => {
