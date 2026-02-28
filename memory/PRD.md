@@ -15,6 +15,13 @@ A WhatsApp-based loyalty onboarding and bill-scan rewards system for CP67 Mall. 
 - Added Reprocess button to "All Bills" tab for pending_review/manual_review bills
 - Added "Pending Review" option to status filter dropdown
 
+### Chunked CSV Upload (Feb 28, 2026)
+- **Implemented:** Large file upload with chunking for 30k+ phone numbers
+- Client-side CSV parsing to extract phone numbers
+- Uploads in chunks of 5,000 numbers at a time
+- Progress indicator showing chunk progress (e.g., "Uploading 3/6")
+- Supports CSV format (recommended for large files)
+
 ### Bill Processing Rules
 - **15-Day Limit:** Bills older than 15 days are auto-rejected with friendly message
 - **High Value Review:** Bills > ₹30,000 go to pending_review for manual verification
