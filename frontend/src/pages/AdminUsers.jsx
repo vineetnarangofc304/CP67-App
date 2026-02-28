@@ -46,6 +46,7 @@ const AdminUsers = () => {
   const [syncResult, setSyncResult] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState('');
   const fileInputRef = React.useRef(null);
   
   // Form state
