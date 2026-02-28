@@ -842,6 +842,45 @@ const AdminUsers = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Paste Phone Numbers Modal */}
+      <Dialog open={showPasteModal} onOpenChange={setShowPasteModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Paste Phone Numbers</DialogTitle>
+            <DialogDescription>
+              Paste phone numbers below (one per line, or comma/tab separated). 
+              The system will extract all valid 10-digit Indian mobile numbers.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <textarea
+              className="w-full h-64 p-3 border rounded-lg font-mono text-sm"
+              placeholder="9876543210
+8765432109
+7654321098
+...or paste from Excel"
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+            />
+            <p className="text-sm text-slate-500 mt-2">
+              {pasteText ? `${extractPhonesFromText(pasteText).length.toLocaleString()} valid numbers found` : 'Paste your phone numbers above'}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPasteModal(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handlePasteSubmit}
+              disabled={!pasteText.trim()}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Upload Numbers
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
