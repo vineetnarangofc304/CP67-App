@@ -173,103 +173,26 @@ const AdminUsers = () => {
     if (!file) return;
 
     // Validate file type
-    const validTypes = ['.xlsx', '.xls', '.csv'];
+    const validTypes = ['.xlsx', '.xls', '.csv', '.txt'];
     const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
     if (!validTypes.includes(fileExt)) {
-      toast.error('Please upload an Excel (.xlsx, .xls) or CSV file');
+      toast.error('Please upload a CSV or TXT file');
       return;
     }
 
     setUploading(true);
-    setUploadResult(null);
-    setUploadProgress('Reading file...');
-    
-    const toastId = toast.loading(`Reading ${file.name}...`);
+    toast.loading('Reading file...');
 
     try {
-      // Read file and extract phone numbers client-side
       const phoneNumbers = await extractPhoneNumbersFromFile(file);
-      
-      if (phoneNumbers.length === 0) {
-        toast.error('No valid phone numbers found in file', { id: toastId });
-        setUploadResult({ success: false, message: 'No valid phone numbers found' });
-        setUploading(false);
-        return;
-      }
-
-      toast.loading(`Found ${phoneNumbers.length.toLocaleString()} numbers. Uploading...`, { id: toastId });
-      setUploadProgress(`Found ${phoneNumbers.length.toLocaleString()} numbers`);
-
-      // Upload in chunks of 2000 (smaller chunks for reliability)
-      const chunkSize = 2000;
-      let totalImported = 0;
-      const totalChunks = Math.ceil(phoneNumbers.length / chunkSize);
-
-      for (let i = 0; i < phoneNumbers.length; i += chunkSize) {
-        const chunk = phoneNumbers.slice(i, i + chunkSize);
-        const chunkNum = Math.floor(i / chunkSize) + 1;
-        
-        toast.loading(`Uploading chunk ${chunkNum}/${totalChunks}...`, { id: toastId });
-        setUploadProgress(`Uploading ${chunkNum}/${totalChunks} (${totalImported.toLocaleString()} imported)`);
-
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout per chunk
-          
-          const response = await fetch(`${API_URL}/admin/upload-fundle-chunk`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ phone_numbers: chunk }),
-            signal: controller.signal
-          });
-          
-          clearTimeout(timeoutId);
-
-          if (response.ok) {
-            const data = await response.json();
-            totalImported += data.imported;
-          } else {
-            const errorText = await response.text();
-            console.error(`Chunk ${chunkNum} failed (${response.status}):`, errorText);
-          }
-        } catch (chunkError) {
-          console.error(`Chunk ${chunkNum} error:`, chunkError);
-          // Continue with next chunk even if this one fails
-        }
-        
-        // Small delay between chunks to avoid overwhelming the server
-        await new Promise(r => setTimeout(r, 100));
-      }
-
-      // Get final count
-      const finalResponse = await fetch(`${API_URL}/admin/fundle-count`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const finalData = await finalResponse.json();
-
-      setUploadResult({
-        success: true,
-        imported: totalImported,
-        total_in_database: finalData.count,
-        phones_in_file: phoneNumbers.length
-      });
-      
-      toast.success(`Imported ${totalImported.toLocaleString()} numbers! Total: ${finalData.count.toLocaleString()}`, { id: toastId });
-
+      await uploadPhoneNumbers(phoneNumbers);
     } catch (error) {
-      console.error('Upload error:', error);
-      const errorMsg = error.message || 'Unknown error';
-      toast.error(`Upload failed: ${errorMsg}`, { id: toastId });
-      setUploadResult({ success: false, message: errorMsg });
-    } finally {
+      toast.error(`Failed to read file: ${error.message}`);
       setUploading(false);
-      setUploadProgress('');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
