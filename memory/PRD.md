@@ -30,6 +30,17 @@ A WhatsApp-based loyalty onboarding and bill-scan rewards system for CP67 Mall. 
 - Stats: Total brands, Average ATV, Highest ATV
 - API endpoints: `/admin/brands`, `/admin/brands/import`, `/admin/brands/{id}`
 
+### Fundle API Rejection Logging (Mar 11, 2026)
+- **Implemented:** When admin manually rejects a bill, it's logged to TagnPay/Fundle API
+- Added `log_rejected_bill` method to TagnPayClient
+- Logs: mobile_number, bill_number, bill_amount, bill_date, store_name, rejection_reason
+
+### Export Reports Feature (Mar 11, 2026)
+- **Implemented:** New "Export Reports" page with CSV export functionality
+- Export endpoints: `/export/bills`, `/export/users`, `/export/brands`, `/export/parking`
+- Filters: Date range, status, customer type
+- Downloads as CSV files
+
 ### Bill Processing Rules
 - **15-Day Limit:** Bills older than 15 days are auto-rejected with friendly message
 - **High Value Review:** Bills > ₹30,000 go to pending_review for manual verification

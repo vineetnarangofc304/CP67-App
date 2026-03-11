@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import asyncio
+import csv
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
@@ -440,6 +441,42 @@ class TagnPayClient:
                 return {"success": True, "data": result}
         except Exception as e:
             logger.error(f"TagnPay earn points error: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def log_rejected_bill(self, mobile_number: str, bill_number: str, bill_amount: float,
+                                 bill_date: str, store_name: str, rejection_reason: str) -> Dict:
+        """Log a rejected bill to TagnPay for tracking purposes"""
+        token = await self.get_token(mobile_number)
+        if not token:
+            return {"success": False, "error": "Failed to get token"}
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                payload = {
+                    "mobile_number": mobile_number,
+                    "bill_number": bill_number or "N/A",
+                    "bill_amount": str(bill_amount or 0),
+                    "bill_date": bill_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                    "store_name": store_name or "Unknown",
+                    "status": "rejected",
+                    "rejection_reason": rejection_reason or "Bill could not be verified"
+                }
+                logger.info(f"TagnPay log-rejected-bill request: {payload}")
+                response = await client.post(
+                    f"{self.base_url}/api/log-rejected-bill/",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Content-Type": "application/json"
+                    },
+                    json=payload
+                )
+                logger.info(f"TagnPay log-rejected-bill response: {response.status_code} - {response.text[:300]}")
+                
+                if response.status_code in [200, 201]:
+                    return {"success": True, "data": response.json()}
+                return {"success": False, "error": response.text}
+        except Exception as e:
+            logger.error(f"TagnPay log rejected bill error: {e}")
             return {"success": False, "error": str(e)}
 
 tagnpay_client = TagnPayClient()
@@ -1812,6 +1849,25 @@ async def process_bill(bill_id: str, request: BillProcessRequest, background_tas
         update_data["status"] = "rejected"
         update_data["system_rejection_reason"] = system_reason
         update_data["admin_rejection_reason"] = admin_reason
+        
+        # Log rejection to Fundle/TagnPay API
+        try:
+            bill_amount = bill.get("amount") or 0
+            store_name = bill.get("store_name") or "Unknown"
+            bill_no = bill.get("bill_no") or "N/A"
+            bill_date = bill.get("bill_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            
+            reject_result = await tagnpay_client.log_rejected_bill(
+                mobile_number=mobile_10,
+                bill_number=bill_no,
+                bill_amount=bill_amount,
+                bill_date=bill_date,
+                store_name=store_name,
+                rejection_reason=admin_reason
+            )
+            logger.info(f"TagnPay rejection log for bill {bill_id}: {reject_result}")
+        except Exception as e:
+            logger.error(f"Failed to log rejection to TagnPay: {e}")
         
         # Get current balance for message
         points_result = await tagnpay_client.get_customer_points(mobile_10)
@@ -3771,6 +3827,166 @@ We will verify it within 24–48 hours ✅
         "response": response_message,
         "ocr_data": bill_data.ocr_raw_data
     }
+
+# ======================== EXPORT ROUTES ========================
+
+@api_router.get("/export/bills")
+async def export_bills(
+    status: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    payload: dict = Depends(verify_jwt_token)
+):
+    """Export bills as CSV"""
+    query = {}
+    if status and status != "all":
+        query["status"] = status
+    if start_date:
+        query["created_at"] = {"$gte": start_date}
+    if end_date:
+        if "created_at" in query:
+            query["created_at"]["$lte"] = end_date
+        else:
+            query["created_at"] = {"$lte": end_date}
+    
+    bills = await db.bills.find(query, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    
+    if not bills:
+        return Response(content="No bills found", media_type="text/plain")
+    
+    # Create CSV
+    output = io.StringIO()
+    fieldnames = ["id", "user_phone", "store_name", "bill_no", "bill_date", "amount", "status", "points_issued", "rejection_reason", "processed_by", "created_at", "processed_at"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+    writer.writeheader()
+    
+    for bill in bills:
+        writer.writerow(bill)
+    
+    csv_content = output.getvalue()
+    output.close()
+    
+    filename = f"bills_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@api_router.get("/export/users")
+async def export_users(
+    customer_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    payload: dict = Depends(verify_jwt_token)
+):
+    """Export users as CSV"""
+    query = {}
+    if customer_type and customer_type != "all":
+        query["customer_type"] = customer_type
+    if start_date:
+        query["created_at"] = {"$gte": start_date}
+    if end_date:
+        if "created_at" in query:
+            query["created_at"]["$lte"] = end_date
+        else:
+            query["created_at"] = {"$lte": end_date}
+    
+    users = await db.users.find(query, {"_id": 0}).sort("created_at", -1).to_list(50000)
+    
+    if not users:
+        return Response(content="No users found", media_type="text/plain")
+    
+    # Create CSV
+    output = io.StringIO()
+    fieldnames = ["id", "phone", "name", "loyalty_id", "customer_type", "balance_points", "total_earned_points", "first_touch_source", "first_touch_qr", "kyc_status", "created_at"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+    writer.writeheader()
+    
+    for user in users:
+        writer.writerow(user)
+    
+    csv_content = output.getvalue()
+    output.close()
+    
+    filename = f"users_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@api_router.get("/export/brands")
+async def export_brands(payload: dict = Depends(verify_jwt_token)):
+    """Export brands as CSV"""
+    brands = await db.brands.find({}, {"_id": 0}).sort("brand_name", 1).to_list(1000)
+    
+    if not brands:
+        return Response(content="No brands found", media_type="text/plain")
+    
+    output = io.StringIO()
+    fieldnames = ["id", "brand_name", "atv", "category", "is_active", "created_at", "updated_at"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+    writer.writeheader()
+    
+    for brand in brands:
+        writer.writerow(brand)
+    
+    csv_content = output.getvalue()
+    output.close()
+    
+    filename = f"brands_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@api_router.get("/export/parking")
+async def export_parking(
+    status: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    payload: dict = Depends(verify_jwt_token)
+):
+    """Export parking sessions as CSV"""
+    query = {}
+    if status and status != "all":
+        query["status"] = status
+    if start_date:
+        query["entry_time"] = {"$gte": start_date}
+    if end_date:
+        if "entry_time" in query:
+            query["entry_time"]["$lte"] = end_date
+        else:
+            query["entry_time"] = {"$lte": end_date}
+    
+    sessions = await db.parking_sessions.find(query, {"_id": 0}).sort("entry_time", -1).to_list(10000)
+    
+    if not sessions:
+        return Response(content="No parking sessions found", media_type="text/plain")
+    
+    output = io.StringIO()
+    fieldnames = ["id", "session_code", "user_phone", "user_name", "entry_time", "exit_time", "duration_minutes", "status", "scanned_by"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+    writer.writeheader()
+    
+    for session in sessions:
+        writer.writerow(session)
+    
+    csv_content = output.getvalue()
+    output.close()
+    
+    filename = f"parking_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 # ======================== ANALYTICS ROUTES ========================
 

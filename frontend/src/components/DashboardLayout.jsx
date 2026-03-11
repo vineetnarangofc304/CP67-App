@@ -15,7 +15,8 @@ import {
   ShieldCheck,
   Car,
   ScanLine,
-  Store
+  Store,
+  Download
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -25,6 +26,7 @@ const navItems = [
   { path: '/users', label: 'Users', icon: Users },
   { path: '/bills', label: 'Bills', icon: Receipt },
   { path: '/brands', label: 'Brands & ATV', icon: Store },
+  { path: '/reports', label: 'Export Reports', icon: Download },
   { path: '/parking-scanner', label: 'Parking Scanner', icon: ScanLine },
   { path: '/parking-report', label: 'Parking Report', icon: Car },
   { path: '/whatsapp-logs', label: 'WhatsApp Logs', icon: MessageCircle },
