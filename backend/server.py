@@ -128,6 +128,17 @@ class ParkingSession(BaseModel):
     scanned_by: Optional[str] = None  # Counter staff who scanned
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+class BrandConfig(BaseModel):
+    """Brand configuration with ATV (Average Transaction Value)"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    brand_name: str
+    atv: float = 0.0  # Average Transaction Value
+    category: Optional[str] = None  # e.g., "Food", "Fashion", "Electronics"
+    is_active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: Optional[str] = None
+
 class WhatsAppLog(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -1338,6 +1349,122 @@ async def get_fundle_count(payload: dict = Depends(verify_jwt_token)):
     """Get total count of phone numbers in fundle_customers collection"""
     count = await db.fundle_customers.count_documents({})
     return {"count": count}
+
+# ============ BRAND MANAGEMENT ============
+
+@api_router.get("/admin/brands")
+async def get_brands(payload: dict = Depends(verify_jwt_token)):
+    """Get all brands with their ATV configuration"""
+    brands = await db.brands.find({}, {"_id": 0}).sort("brand_name", 1).to_list(500)
+    return {"brands": brands, "total": len(brands)}
+
+@api_router.post("/admin/brands")
+async def create_brand(data: dict, payload: dict = Depends(verify_jwt_token)):
+    """Create a new brand with ATV"""
+    brand_name = data.get("brand_name", "").strip()
+    atv = float(data.get("atv", 0))
+    category = data.get("category", "").strip() or None
+    
+    if not brand_name:
+        raise HTTPException(status_code=400, detail="Brand name is required")
+    
+    # Check if brand already exists
+    existing = await db.brands.find_one({"brand_name": {"$regex": f"^{brand_name}$", "$options": "i"}})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Brand '{brand_name}' already exists")
+    
+    brand = BrandConfig(
+        brand_name=brand_name,
+        atv=atv,
+        category=category
+    )
+    
+    await db.brands.insert_one(brand.model_dump())
+    logger.info(f"Created brand: {brand_name} with ATV: {atv}")
+    
+    return {"success": True, "brand": brand.model_dump()}
+
+@api_router.put("/admin/brands/{brand_id}")
+async def update_brand(brand_id: str, data: dict, payload: dict = Depends(verify_jwt_token)):
+    """Update brand ATV and other details"""
+    update_data = {
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if "atv" in data:
+        update_data["atv"] = float(data["atv"])
+    if "category" in data:
+        update_data["category"] = data["category"]
+    if "is_active" in data:
+        update_data["is_active"] = data["is_active"]
+    if "brand_name" in data:
+        update_data["brand_name"] = data["brand_name"].strip()
+    
+    result = await db.brands.update_one(
+        {"id": brand_id},
+        {"$set": update_data}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Brand not found")
+    
+    return {"success": True, "message": "Brand updated"}
+
+@api_router.delete("/admin/brands/{brand_id}")
+async def delete_brand(brand_id: str, payload: dict = Depends(verify_jwt_token)):
+    """Delete a brand"""
+    result = await db.brands.delete_one({"id": brand_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Brand not found")
+    return {"success": True, "message": "Brand deleted"}
+
+@api_router.post("/admin/brands/import")
+async def import_brands(data: dict, payload: dict = Depends(verify_jwt_token)):
+    """Import brands with ATV from a list"""
+    brands_data = data.get("brands", [])
+    
+    if not brands_data:
+        raise HTTPException(status_code=400, detail="No brands provided")
+    
+    imported = 0
+    updated = 0
+    
+    for item in brands_data:
+        brand_name = str(item.get("brand_name", "")).strip()
+        atv = float(item.get("atv", 0))
+        
+        if not brand_name or brand_name.lower() in ["", "nan", "none"]:
+            continue
+        
+        # Check if brand exists
+        existing = await db.brands.find_one({"brand_name": {"$regex": f"^{brand_name}$", "$options": "i"}})
+        
+        if existing:
+            # Update ATV
+            await db.brands.update_one(
+                {"id": existing["id"]},
+                {"$set": {"atv": atv, "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            updated += 1
+        else:
+            # Create new brand
+            brand = BrandConfig(brand_name=brand_name, atv=atv)
+            await db.brands.insert_one(brand.model_dump())
+            imported += 1
+    
+    logger.info(f"Brand import complete: {imported} new, {updated} updated")
+    return {"success": True, "imported": imported, "updated": updated}
+
+@api_router.get("/admin/brands/lookup/{store_name}")
+async def lookup_brand_atv(store_name: str, payload: dict = Depends(verify_jwt_token)):
+    """Lookup brand ATV by store name"""
+    brand = await db.brands.find_one(
+        {"brand_name": {"$regex": f"^{store_name}$", "$options": "i"}},
+        {"_id": 0}
+    )
+    if brand:
+        return {"found": True, "brand": brand}
+    return {"found": False, "brand": None}
 
 @api_router.post("/admin/sync-fundle-customers")
 async def sync_fundle_customers(payload: dict = Depends(verify_jwt_token)):

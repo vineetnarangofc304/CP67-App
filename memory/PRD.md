@@ -18,9 +18,17 @@ A WhatsApp-based loyalty onboarding and bill-scan rewards system for CP67 Mall. 
 ### Chunked CSV Upload (Feb 28, 2026)
 - **Implemented:** Large file upload with chunking for 30k+ phone numbers
 - Client-side CSV parsing to extract phone numbers
-- Uploads in chunks of 5,000 numbers at a time
-- Progress indicator showing chunk progress (e.g., "Uploading 3/6")
-- Supports CSV format (recommended for large files)
+- Uploads in chunks of 2,000 numbers at a time
+- Progress indicator showing chunk progress
+- Added "Paste Numbers" option as alternative to file upload
+
+### Brand Configuration with ATV (Mar 11, 2026)
+- **Implemented:** Brand management page with Average Transaction Value (ATV)
+- Imported 102 brands from Excel with ATV values
+- Features: Add, Edit, Delete brands
+- Search functionality
+- Stats: Total brands, Average ATV, Highest ATV
+- API endpoints: `/admin/brands`, `/admin/brands/import`, `/admin/brands/{id}`
 
 ### Bill Processing Rules
 - **15-Day Limit:** Bills older than 15 days are auto-rejected with friendly message

@@ -12,6 +12,7 @@ import Analytics from './pages/Analytics';
 import AdminUsers from './pages/AdminUsers';
 import ParkingScanner from './pages/ParkingScanner';
 import ParkingReport from './pages/ParkingReport';
+import Brands from './pages/Brands';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -113,6 +114,7 @@ function App() {
           <Route path="/whatsapp-logs" element={<ProtectedRoute><WhatsAppLogs /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
           <Route path="/admin-users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
+          <Route path="/brands" element={<ProtectedRoute><Brands /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
