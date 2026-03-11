@@ -1492,6 +1492,164 @@ async def import_brands(data: dict, payload: dict = Depends(verify_jwt_token)):
     logger.info(f"Brand import complete: {imported} new, {updated} updated")
     return {"success": True, "imported": imported, "updated": updated}
 
+@api_router.post("/admin/brands/upload-excel")
+async def upload_brands_excel(
+    file: UploadFile = File(...),
+    payload: dict = Depends(verify_jwt_token)
+):
+    """Upload Excel/CSV file with brand names and ATV values.
+    Expected columns: Brand Name, ATV (can be in any order)
+    """
+    import openpyxl
+    
+    logger.info(f"Uploading brands Excel: {file.filename}")
+    
+    content = await file.read()
+    brands_data = []
+    
+    try:
+        if file.filename.lower().endswith('.csv'):
+            # Parse CSV
+            content_str = content.decode('utf-8', errors='ignore')
+            lines = content_str.strip().split('\n')
+            
+            # Find header row
+            header = None
+            brand_col = -1
+            atv_col = -1
+            
+            for i, line in enumerate(lines):
+                cols = [c.strip().lower() for c in line.split(',')]
+                for j, col in enumerate(cols):
+                    if 'brand' in col or 'name' in col:
+                        brand_col = j
+                    if 'atv' in col or 'average' in col or 'value' in col:
+                        atv_col = j
+                if brand_col >= 0:
+                    header = i
+                    break
+            
+            if brand_col < 0:
+                brand_col = 0  # Default to first column
+            if atv_col < 0:
+                atv_col = 1  # Default to second column
+            
+            # Parse data rows
+            for line in lines[header+1 if header is not None else 1:]:
+                cols = line.split(',')
+                if len(cols) > max(brand_col, atv_col):
+                    brand_name = cols[brand_col].strip().strip('"')
+                    try:
+                        atv = float(cols[atv_col].strip().strip('"').replace(',', ''))
+                    except:
+                        atv = 0
+                    if brand_name and brand_name.lower() not in ['', 'nan', 'none', 'brand', 'brand name']:
+                        brands_data.append({"brand_name": brand_name, "atv": atv})
+        
+        else:
+            # Parse Excel
+            workbook = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+            sheet = workbook.active
+            
+            # Find header row and columns
+            header_row = None
+            brand_col = -1
+            atv_col = -1
+            
+            for row_idx, row in enumerate(sheet.iter_rows(values_only=True), 1):
+                if row:
+                    for col_idx, cell in enumerate(row):
+                        if cell:
+                            cell_str = str(cell).lower()
+                            if 'brand' in cell_str or 'name' in cell_str:
+                                brand_col = col_idx
+                                header_row = row_idx
+                            if 'atv' in cell_str or 'average' in cell_str:
+                                atv_col = col_idx
+                if header_row:
+                    break
+            
+            if brand_col < 0:
+                brand_col = 0
+            if atv_col < 0:
+                atv_col = 1
+            
+            # Parse data rows
+            for row_idx, row in enumerate(sheet.iter_rows(values_only=True), 1):
+                if header_row and row_idx <= header_row:
+                    continue
+                if row and len(row) > max(brand_col, atv_col):
+                    brand_name = str(row[brand_col] or '').strip()
+                    try:
+                        atv = float(row[atv_col] or 0)
+                    except:
+                        atv = 0
+                    if brand_name and brand_name.lower() not in ['', 'nan', 'none', 'brand', 'brand name']:
+                        brands_data.append({"brand_name": brand_name, "atv": atv})
+            
+            workbook.close()
+        
+        logger.info(f"Parsed {len(brands_data)} brands from file")
+        
+        if not brands_data:
+            return {"success": False, "message": "No valid brands found in file", "imported": 0, "updated": 0}
+        
+        # Import brands
+        imported = 0
+        updated = 0
+        
+        for item in brands_data:
+            brand_name = item["brand_name"]
+            atv = item["atv"]
+            
+            existing = await db.brands.find_one({"brand_name": {"$regex": f"^{brand_name}$", "$options": "i"}})
+            
+            if existing:
+                await db.brands.update_one(
+                    {"id": existing["id"]},
+                    {"$set": {"atv": atv, "updated_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                updated += 1
+            else:
+                brand = BrandConfig(brand_name=brand_name, atv=atv)
+                await db.brands.insert_one(brand.model_dump())
+                imported += 1
+        
+        # Log upload history
+        upload_record = {
+            "id": str(uuid.uuid4()),
+            "filename": file.filename,
+            "uploaded_by": payload.get("username", "unknown"),
+            "uploaded_at": datetime.now(timezone.utc).isoformat(),
+            "brands_in_file": len(brands_data),
+            "imported": imported,
+            "updated": updated
+        }
+        await db.brand_upload_history.insert_one(upload_record)
+        
+        total_brands = await db.brands.count_documents({})
+        
+        return {
+            "success": True,
+            "message": f"Imported {imported} new brands, updated {updated} existing",
+            "imported": imported,
+            "updated": updated,
+            "brands_in_file": len(brands_data),
+            "total_brands": total_brands
+        }
+        
+    except Exception as e:
+        logger.error(f"Error processing brands Excel: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+@api_router.get("/admin/brands/upload-history")
+async def get_brand_upload_history(payload: dict = Depends(verify_jwt_token)):
+    """Get history of brand file uploads"""
+    history = await db.brand_upload_history.find({}, {"_id": 0}).sort("uploaded_at", -1).limit(20).to_list(20)
+    return {"history": history}
+
 @api_router.get("/admin/brands/lookup/{store_name}")
 async def lookup_brand_atv(store_name: str, payload: dict = Depends(verify_jwt_token)):
     """Lookup brand ATV by store name"""

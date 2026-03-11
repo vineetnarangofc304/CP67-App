@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../App';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -30,7 +30,11 @@ import {
   Trash2, 
   Search,
   IndianRupee,
-  TrendingUp
+  TrendingUp,
+  Upload,
+  History,
+  FileSpreadsheet,
+  RefreshCw
 } from 'lucide-react';
 
 const Brands = () => {
@@ -40,8 +44,12 @@ const Brands = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [formData, setFormData] = useState({ brand_name: '', atv: '', category: '' });
+  const [uploading, setUploading] = useState(false);
+  const [uploadHistory, setUploadHistory] = useState([]);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     fetchBrands();
@@ -159,6 +167,66 @@ const Brands = () => {
     setShowEditDialog(true);
   };
 
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const validTypes = ['.xlsx', '.xls', '.csv'];
+    const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+    if (!validTypes.includes(fileExt)) {
+      toast.error('Please upload an Excel (.xlsx) or CSV file');
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/brands/upload-excel`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        toast.success(`Imported ${data.imported} new, updated ${data.updated} existing brands`);
+        fetchBrands();
+        fetchUploadHistory();
+      } else {
+        toast.error(data.message || data.detail || 'Upload failed');
+      }
+    } catch (error) {
+      toast.error('Failed to upload file');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const fetchUploadHistory = async () => {
+    try {
+      const response = await fetch(`${API_URL}/admin/brands/upload-history`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUploadHistory(data.history || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch upload history');
+    }
+  };
+
+  const openHistoryDialog = () => {
+    fetchUploadHistory();
+    setShowHistoryDialog(true);
+  };
+
   const filteredBrands = brands.filter(brand =>
     brand.brand_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -175,10 +243,34 @@ const Brands = () => {
             <h1 className="text-2xl font-bold text-slate-900">Brand Configuration</h1>
             <p className="text-slate-500">Manage brands and their Average Transaction Value (ATV)</p>
           </div>
-          <Button onClick={() => setShowAddDialog(true)} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Brand
-          </Button>
+          <div className="flex gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Button 
+              variant="outline" 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <><RefreshCw className="h-4 w-4 mr-2 animate-spin" />Uploading...</>
+              ) : (
+                <><Upload className="h-4 w-4 mr-2" />Upload Excel</>
+              )}
+            </Button>
+            <Button variant="outline" onClick={openHistoryDialog}>
+              <History className="h-4 w-4 mr-2" />
+              History
+            </Button>
+            <Button onClick={() => setShowAddDialog(true)} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Brand
+            </Button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -387,6 +479,49 @@ const Brands = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
             <Button onClick={handleEdit}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload History Dialog */}
+      <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Upload History
+            </DialogTitle>
+            <DialogDescription>
+              Recent brand file uploads
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {uploadHistory.length === 0 ? (
+              <p className="text-center text-slate-500 py-8">No upload history found</p>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {uploadHistory.map((record) => (
+                  <div key={record.id} className="p-3 border rounded-lg bg-slate-50">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileSpreadsheet className="h-4 w-4 text-green-600" />
+                        <span className="font-medium">{record.filename}</span>
+                      </div>
+                      <Badge variant="outline">{record.brands_in_file} brands</Badge>
+                    </div>
+                    <div className="mt-2 text-sm text-slate-600 grid grid-cols-2 gap-2">
+                      <div>New: <span className="font-semibold text-green-600">{record.imported}</span></div>
+                      <div>Updated: <span className="font-semibold text-blue-600">{record.updated}</span></div>
+                      <div>By: {record.uploaded_by}</div>
+                      <div>{new Date(record.uploaded_at).toLocaleString()}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowHistoryDialog(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
