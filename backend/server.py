@@ -3174,6 +3174,71 @@ Please review in the admin dashboard."""
             await send_whatsapp_buttons(phone, high_amount_msg, buttons)
             return
         
+        # CHECK: Bill amount exceeds Brand ATV - Send to pending for review
+        brand_atv = None
+        brand_config = await db.brands.find_one(
+            {"brand_name": {"$regex": f"^{store_name}$", "$options": "i"}},
+            {"_id": 0, "atv": 1, "brand_name": 1}
+        )
+        if brand_config and brand_config.get("atv", 0) > 0:
+            brand_atv = brand_config["atv"]
+            if amount > brand_atv:
+                atv_exceed_msg = f"""📋 *Bill Received - Under Review*
+
+Thank you for shopping at *{store_name}*!
+
+🧾 *Bill No:* {bill_no}
+📅 *Date:* {bill_date}
+💰 *Amount:* ₹{amount:,.0f}
+
+⏳ This bill amount exceeds our verification threshold for this store and requires manual review.
+
+Your bill will be reviewed within 24-48 hours and points will be credited once approved ✅
+
+Thank you for your patience! 🛍️"""
+                
+                # Save as pending_review
+                bill_data = BillData(
+                    user_id=user["id"],
+                    user_phone=phone,
+                    store_name=store_name,
+                    bill_no=bill_no,
+                    bill_date=bill_date,
+                    amount=amount,
+                    status="pending_review",
+                    rejection_reason=f"Bill amount (₹{amount:,.0f}) exceeds brand ATV (₹{brand_atv:,.0f})",
+                    image_url=f"data:image/jpeg;base64,{image_base64}",
+                    image_hash=image_hash,
+                    ocr_confidence=confidence,
+                    ocr_raw_data=ocr_data,
+                    points_mobile=points_mobile,
+                    points_mobile_source=points_mobile_source
+                )
+                await db.bills.insert_one(bill_data.model_dump())
+                
+                # Send admin notification
+                admin_alert_msg = f"""🔔 *ATV Exceeded Alert*
+
+A bill exceeding brand ATV has been submitted.
+
+🏬 Store: {store_name}
+🧾 Bill No: {bill_no}
+💰 Amount: ₹{amount:,.0f}
+📊 Brand ATV: ₹{brand_atv:,.0f}
+📱 User: {phone}
+
+Please review in the admin dashboard."""
+                
+                background_tasks.add_task(send_whatsapp_text, ADMIN_PHONE, admin_alert_msg)
+                logger.info(f"Bill {bill_no} flagged: Amount ₹{amount} exceeds {store_name} ATV ₹{brand_atv}")
+                
+                buttons = [
+                    {"id": "upload_bill", "title": "Upload Another Bill"},
+                    {"id": "my_points", "title": "Check Points"}
+                ]
+                await send_whatsapp_buttons(phone, atv_exceed_msg, buttons)
+                return
+        
         # Call TagnPay earn-points API with appropriate mobile number
         earn_result = await tagnpay_client.earn_points(
             mobile_number=points_mobile,  # Use mobile from bill if available
