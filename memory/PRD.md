@@ -3,7 +3,15 @@
 ## Project Overview
 A WhatsApp-based loyalty onboarding and bill-scan rewards system for CP67 Mall. Customers scan area-specific QR codes, which opens WhatsApp with a pre-filled, source-tracked message. The system handles user registration, bill uploads via image, point calculation, and balance viewing.
 
-## Recent Updates (Feb 2026)
+## Recent Updates (Mar 2026)
+
+### ATV Data Leak Fix (Mar 17, 2026)
+- **Fixed (P0):** Removed confidential Brand ATV information from customer-facing WhatsApp messages
+- Customer now receives a generic "Your bill is under review for validation" message
+- Admin still receives full ATV details in their notification for internal review
+- Stored `rejection_reason` in DB still contains ATV for admin dashboard reference
+
+## Previous Updates (Feb 2026)
 
 ### Karix Image Sending (Feb 27, 2026)
 - **Fixed:** WhatsApp QR code image sending now works using `ATTACHMENT` type with `attachmentData` field

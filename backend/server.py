@@ -2536,7 +2536,7 @@ async def send_whatsapp_image(phone: str, image_base64: str, caption: str = ""):
         parking_code = code_match.group(1)
         
         # Get backend URL from environment
-        backend_url = os.environ.get('BACKEND_PUBLIC_URL', 'https://qr-bill-rewards.preview.emergentagent.com')
+        backend_url = os.environ.get('BACKEND_PUBLIC_URL', 'https://fundle-loyalty-cp67.preview.emergentagent.com')
         
         # Use our own hosted QR image endpoint
         qr_url = f"{backend_url}/api/parking/qr-image/{parking_code}"
@@ -3199,7 +3199,7 @@ Thank you for shopping at *{store_name}*!
 📅 *Date:* {bill_date}
 💰 *Amount:* ₹{amount:,.0f}
 
-⏳ This bill amount exceeds our verification threshold for this store and requires manual review.
+⏳ Your bill is under review for validation by our team.
 
 Your bill will be reviewed within 24-48 hours and points will be credited once approved ✅
 
