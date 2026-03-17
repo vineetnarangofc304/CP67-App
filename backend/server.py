@@ -4929,10 +4929,14 @@ async def health_check():
 app.include_router(api_router)
 
 # Consumer App Routes
-from routes.consumer import consumer_router, init_consumer_routes
+from routes.consumer import consumer_router, init_consumer_routes, auto_seed_if_empty
 BACKEND_PUBLIC_URL = os.environ.get('BACKEND_PUBLIC_URL', '')
 init_consumer_routes(db, tagnpay_client, JWT_SECRET, JWT_ALGORITHM, EMERGENT_LLM_KEY, BACKEND_PUBLIC_URL)
 app.include_router(consumer_router)
+
+@app.on_event("startup")
+async def startup_seed():
+    await auto_seed_if_empty()
 
 # Static file serving for uploads
 from fastapi.staticfiles import StaticFiles

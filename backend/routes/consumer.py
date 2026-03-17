@@ -33,6 +33,20 @@ def init_consumer_routes(db, tagnpay_client, jwt_secret, jwt_algorithm, emergent
     _backend_url = backend_url
 
 
+async def auto_seed_if_empty():
+    """Auto-seed consumer data on startup if stores collection is empty"""
+    if _db is None:
+        return
+    try:
+        count = await _db.stores.count_documents({})
+        if count == 0:
+            logger.info("No stores found - auto-seeding consumer data...")
+            await _run_seed()
+            logger.info("Auto-seed complete")
+    except Exception as e:
+        logger.error(f"Auto-seed error: {e}")
+
+
 # ==================== MODELS ====================
 
 class SendOTPRequest(BaseModel):
@@ -252,6 +266,20 @@ async def get_home(current_user=Depends(get_current_consumer)):
     async for s in _db.stores.find({"is_active": True, "is_featured": True}, {"_id": 0}).limit(8):
         featured_stores.append(s)
 
+    # Fallback: if no featured stores in stores collection, pull from brands
+    if not featured_stores:
+        async for s in _db.stores.find({"is_active": True}, {"_id": 0}).limit(8):
+            featured_stores.append(s)
+    if not featured_stores:
+        async for b in _db.brands.find({"is_active": {"$ne": False}, "description": {"$exists": True, "$ne": ""}}, {"_id": 0}).limit(8):
+            featured_stores.append({
+                "id": b.get("id"),
+                "name": b.get("brand_name"),
+                "category": b.get("category") or "General",
+                "cover_image": b.get("cover_image_url") or "",
+                "is_featured": True
+            })
+
     # Trending offers
     offers = []
     now = datetime.now(timezone.utc).isoformat()
@@ -296,10 +324,31 @@ async def list_stores(category: str = None, search: str = None, floor: str = Non
     async for s in _db.stores.find(query, {"_id": 0}).sort("name", 1):
         stores.append(s)
 
+    # Fallback: if stores empty, pull from brands collection
+    if not stores and not category and not search and not floor:
+        brand_query = {"is_active": {"$ne": False}}
+        async for b in _db.brands.find(brand_query, {"_id": 0}).sort("brand_name", 1):
+            stores.append({
+                "id": b.get("id"),
+                "name": b.get("brand_name"),
+                "category": b.get("category") or "General",
+                "floor": b.get("floor") or "",
+                "unit_no": b.get("unit_no") or "",
+                "description": b.get("description") or "",
+                "cover_image": b.get("cover_image_url") or "",
+                "logo_url": b.get("logo_url") or "",
+                "timing": b.get("timing") or "11:00 AM - 9:00 PM",
+                "tags": b.get("tags") or [],
+                "is_featured": b.get("is_featured", False),
+                "is_active": True
+            })
+
     categories = await _db.stores.distinct("category", {"is_active": True})
+    if not categories:
+        categories = await _db.brands.distinct("category", {"is_active": {"$ne": False}})
     floors = await _db.stores.distinct("floor", {"is_active": True})
 
-    return {"stores": stores, "categories": sorted(categories), "floors": floors}
+    return {"stores": stores, "categories": sorted([c for c in categories if c]), "floors": floors}
 
 
 @consumer_router.get("/stores/{store_id}")
@@ -696,6 +745,11 @@ async def mark_all_read(current_user=Depends(get_current_consumer)):
 @consumer_router.post("/seed")
 async def seed_consumer_data():
     """Seed initial data for the consumer app"""
+    return await _run_seed()
+
+
+async def _run_seed():
+    """Internal seed function - called by API and auto-seed"""
 
     # Check if already seeded
     store_count = await _db.stores.count_documents({})
