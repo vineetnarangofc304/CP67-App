@@ -2,8 +2,8 @@
 
 ## Project Overview
 A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, Mohali. The system consists of:
-1. **Consumer Mobile PWA** - Premium mobile-first app for shoppers
-2. **Admin Dashboard** - Mall management backend
+1. **Consumer Mobile PWA** - Premium mobile-first app for shoppers (at `/app/*`)
+2. **Admin Dashboard** - Mall management backend (at `/`)
 3. **WhatsApp Integration** - Bill upload and loyalty via WhatsApp
 4. **Fundle/TagnPay Integration** - Points and loyalty engine
 
@@ -11,132 +11,112 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 ```
 /app/
 ├── backend/
-│   ├── server.py           # Admin + WhatsApp APIs (monolithic, 4800+ lines)
+│   ├── server.py              # Admin + WhatsApp APIs
 │   ├── routes/
 │   │   ├── __init__.py
-│   │   └── consumer.py     # Consumer app APIs (modular, ~600 lines)
+│   │   └── consumer.py        # Consumer app APIs
+│   ├── uploads/
+│   │   └── brands/            # Brand logos & cover images
 │   ├── tests/
 │   │   ├── test_cp67_loyalty.py
-│   │   └── test_consumer_app.py
+│   │   ├── test_consumer_app.py
+│   │   └── test_brand_management.py
 │   └── .env
 ├── frontend/
 │   ├── src/
 │   │   ├── consumer/           # Consumer PWA
-│   │   │   ├── ConsumerApp.jsx # Shell with auth context + routing
-│   │   │   ├── consumer.css    # Premium mobile-first styles
-│   │   │   ├── components/
-│   │   │   │   └── BottomNav.jsx
-│   │   │   └── pages/
-│   │   │       ├── Welcome.jsx
-│   │   │       ├── Login.jsx (OTP)
-│   │   │       ├── Onboarding.jsx
-│   │   │       ├── Home.jsx
-│   │   │       ├── Stores.jsx
-│   │   │       ├── StoreDetail.jsx
-│   │   │       ├── Wallet.jsx
-│   │   │       ├── BillUpload.jsx
-│   │   │       ├── Events.jsx
-│   │   │       ├── Offers.jsx
-│   │   │       ├── Profile.jsx
-│   │   │       └── Notifications.jsx
-│   │   ├── pages/              # Admin dashboard pages
-│   │   ├── components/         # Admin components
-│   │   └── App.js              # Main router
+│   │   │   ├── ConsumerApp.jsx
+│   │   │   ├── consumer.css
+│   │   │   ├── components/BottomNav.jsx
+│   │   │   └── pages/ (12 screens)
+│   │   ├── pages/              # Admin dashboard
+│   │   │   ├── Brands.jsx      # Enhanced with store management
+│   │   │   └── ...
+│   │   └── App.js
 │   └── package.json
-└── memory/
-    └── PRD.md
+└── memory/PRD.md
 ```
 
-## Consumer App Routes (/app/*)
-- `/app/welcome` - Splash/onboarding screen
-- `/app/login` - Phone + OTP login
-- `/app/onboarding` - Profile setup (name, gender, interests)
-- `/app/home` - Main home (banners, points, offers, stores, events)
-- `/app/stores` - Store directory with search + category filters
-- `/app/stores/:id` - Store detail with offers
-- `/app/wallet` - Points balance, tier progress, transaction history
-- `/app/upload` - Bill upload with camera/gallery
-- `/app/events` - Events listing + registration
-- `/app/offers` - Offers and deals
-- `/app/profile` - User profile + settings
-- `/app/notifications` - In-app notifications
+## What's Implemented
 
-## Consumer API Endpoints (/api/consumer/*)
-- `POST /auth/send-otp` - Send OTP via TagnPay
-- `POST /auth/verify-otp` - Verify OTP, return JWT (dev: 1234)
-- `GET /profile` - Get user profile with points
-- `PUT /profile` - Update profile
-- `GET /home` - Aggregated home screen data
-- `GET /stores` - Store directory
-- `GET /stores/{id}` - Store detail with offers
-- `GET /offers` - Active offers
-- `GET /events` - Events listing
-- `POST /events/{id}/register` - Event registration
-- `GET /wallet` - Points balance + tier + transactions
-- `POST /bills/upload` - Upload bill (OCR processing)
-- `GET /bills` - User's bill history
-- `GET /notifications` - User notifications
-- `PUT /notifications/{id}/read` - Mark notification read
-- `POST /seed` - Seed initial data
+### Phase 1 Complete (Mar 17, 2026)
+
+**Consumer Mobile PWA (12 screens)**
+- OTP login via TagnPay (dev OTP: 1234)
+- Onboarding (name, gender, interests)
+- Home screen (points card, banners, offers, featured stores, events)
+- Store directory (16+ stores, search, category filters)
+- Store detail with offers
+- Loyalty wallet (Fundle-powered, tier system)
+- Bill upload with camera/gallery + Gemini OCR
+- Events listing + registration
+- Offers page
+- Profile management
+- Notifications
+- Bottom navigation with center scan button
+
+**Brand & Store Management (Admin)**
+- 102 brands loaded from ATV sheet
+- Full store management with tabbed edit (Basic Info, Store Details, Images)
+- Image upload: logo + cover (stored in /uploads/brands/)
+- Auto-sync brands → consumer stores collection
+- App-Ready status tracking in table
+- Bulk sync to app button
+
+**Consumer Entry Points**
+- App Download QR code (GET /api/app-download-qr)
+- WhatsApp messages include app download link
+- QR codes for mall entrances, parking, in-store
+
+**ATV Data Leak Fix (P0)**
+- Customer WhatsApp messages no longer expose brand ATV
+
+### Previously Implemented
+- WhatsApp bill upload + OCR
+- Fundle customer sync
+- Parking validation flow
+- Export reports
+- Multi-admin system
+- Bill approval workflow
+- Brand ATV rules
+
+## Key API Endpoints
+
+### Consumer App (/api/consumer/*)
+- `POST /auth/send-otp`, `POST /auth/verify-otp`
+- `GET /profile`, `PUT /profile`
+- `GET /home`, `GET /stores`, `GET /stores/{id}`
+- `GET /offers`, `GET /events`, `POST /events/{id}/register`
+- `GET /wallet`, `POST /bills/upload`, `GET /bills`
+- `GET /notifications`, `PUT /notifications/{id}/read`
+
+### Admin (/api/admin/*)
+- `GET/POST /brands`, `PUT /brands/{id}`, `DELETE /brands/{id}`
+- `POST /brands/{id}/upload-image` (logo/cover)
+- `POST /brands/sync-to-stores`
+- `GET /app-download-qr`
 
 ## Database Collections
-- `users` - All users (WhatsApp + App, extended with app fields)
-- `bills` - Bill uploads and OCR results
-- `brands` - Brand/ATV configuration
-- `stores` - Consumer-facing store directory (16 stores seeded)
-- `offers` - Active offers (8 seeded)
-- `events` - Mall events (4 seeded)
-- `banners` - Homepage banners (4 seeded)
-- `notifications` - User notifications
-- `event_registrations` - Event sign-ups
-- `fundle_customers` - Imported Fundle customer list
-
-## Key Technical Details
-- **Auth:** JWT tokens with `type: "consumer"` vs `type: "admin"`
-- **OTP:** TagnPay API for real OTP, dev bypass with OTP=1234
-- **Points:** Fundle/TagnPay API (balance, earn, registration)
-- **OCR:** Gemini Vision API via Emergent LLM Key
-- **Tiers:** Bronze (0-1999), Silver (2000-4999), Gold (5000-9999), Platinum (10000+)
-- **Design:** Premium mobile-first, gold/amber accents, glassmorphism, 480px max-width
-
-## What's Implemented (Phase 1) - Mar 17, 2026
-- Full consumer app with 12 screens
-- OTP authentication flow
-- Personalized home screen with dynamic data
-- Store directory with 16 stores, search, category filters
-- Loyalty wallet with Fundle integration
-- Bill upload with camera/gallery + Gemini OCR
-- Events with registration
-- Offers listing
-- Profile management with onboarding
-- In-app notifications system
-- Premium bottom navigation
-- 100% test pass rate (34 tests)
+- `users`, `bills`, `brands`, `stores`, `offers`, `events`, `banners`
+- `notifications`, `event_registrations`, `fundle_customers`
+- `brand_upload_history`, `admin_users`, `qr_analytics`
 
 ## Upcoming Tasks (Phase 2)
-- Loyalty engine: Earn/burn rules, campaign multipliers, referral rewards
+- Loyalty engine: earn/burn rules, campaigns, multipliers, referral
 - Campaign builder: 2X/3X points, first visit, highest spender
-- Points expiry logic
-- Voucher redemptions
-- AI mall concierge for recommendations
+- Points expiry, voucher redemptions
+- AI mall concierge
 
 ## Future Tasks (Phase 3-4)
 - Brand/store dashboard with analytics
 - CMS for banners, offers, events
-- Mall admin CRM and segmentation
 - Push notifications
-- RFM analysis, cohort analytics, CLV
+- RFM analysis, CLV, cohort analytics
 - Sponsored placements, media inventory
-- Advanced fraud detection
-- SMS fallback notifications
-- Refactor server.py into modular routers
-
-## 3rd Party Integrations
-- **Fundle/TagnPay** - Loyalty API (live)
-- **Karix** - WhatsApp messaging (live)
-- **Gemini Vision** - OCR (via Emergent LLM Key)
+- Mall admin CRM + segmentation
 
 ## Credentials
 - Admin: admin / CP67Admin@2025
-- Dev OTP: 1234
-- Test phone: 9876543210
+- Dev OTP: 1234 (phone: 9876543210)
+- Consumer app: /app/welcome
+- Admin dashboard: /
