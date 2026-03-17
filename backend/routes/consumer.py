@@ -34,13 +34,13 @@ def init_consumer_routes(db, tagnpay_client, jwt_secret, jwt_algorithm, emergent
 
 
 async def auto_seed_if_empty():
-    """Auto-seed consumer data on startup if stores collection is empty"""
+    """Auto-seed consumer data on startup if banners collection is empty"""
     if _db is None:
         return
     try:
-        count = await _db.stores.count_documents({})
+        count = await _db.banners.count_documents({})
         if count == 0:
-            logger.info("No stores found - auto-seeding consumer data...")
+            logger.info("No banners found - auto-seeding consumer data...")
             await _run_seed()
             logger.info("Auto-seed complete")
     except Exception as e:
@@ -744,106 +744,20 @@ async def mark_all_read(current_user=Depends(get_current_consumer)):
 
 @consumer_router.post("/seed")
 async def seed_consumer_data():
-    """Seed initial data for the consumer app"""
+    """Seed initial mall content (banners, events) for the consumer app"""
     return await _run_seed()
 
 
 async def _run_seed():
-    """Internal seed function - called by API and auto-seed"""
+    """Internal seed function - seeds banners and events only. Stores come from brands master list."""
 
-    # Check if already seeded
-    store_count = await _db.stores.count_documents({})
-    if store_count > 0:
-        return {"message": "Data already seeded", "stores": store_count}
+    # Check if banners already seeded
+    banner_count = await _db.banners.count_documents({})
+    if banner_count > 0:
+        brand_count = await _db.brands.count_documents({})
+        return {"message": "Data already seeded", "brands_as_stores": brand_count, "banners": banner_count}
 
-    # Stores
-    stores = [
-        {"name": "Lifestyle", "category": "Fashion", "floor": "Ground Floor", "unit": "G-01", "timing": "11:00 AM - 9:30 PM",
-         "description": "India's leading fashion destination with the latest trends in clothing, accessories, and beauty.",
-         "tags": ["fashion", "clothing", "accessories", "beauty"], "is_featured": True,
-         "cover_image": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600"},
-        {"name": "GANT", "category": "Fashion", "floor": "First Floor", "unit": "F1-12", "timing": "11:00 AM - 9:00 PM",
-         "description": "Premium American sportswear brand known for quality and effortless style.",
-         "tags": ["fashion", "premium", "menswear", "casual"], "is_featured": True,
-         "cover_image": "https://images.unsplash.com/photo-1490114538077-0a7f8cb49891?w=600"},
-        {"name": "ONLY", "category": "Fashion", "floor": "First Floor", "unit": "F1-08", "timing": "11:00 AM - 9:00 PM",
-         "description": "Trendy women's fashion brand with the latest collections.",
-         "tags": ["fashion", "women", "trendy", "casual"], "is_featured": False,
-         "cover_image": "https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=600"},
-        {"name": "KAZO", "category": "Fashion", "floor": "First Floor", "unit": "F1-15", "timing": "11:00 AM - 9:00 PM",
-         "description": "Contemporary women's fashion brand offering chic and sophisticated designs.",
-         "tags": ["fashion", "women", "contemporary", "chic"], "is_featured": True,
-         "cover_image": "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=600"},
-        {"name": "Marks & Spencer", "category": "Fashion", "floor": "Ground Floor", "unit": "G-05", "timing": "11:00 AM - 9:30 PM",
-         "description": "British multinational retailer known for quality clothing, food, and home products.",
-         "tags": ["fashion", "food", "home", "british", "premium"], "is_featured": True,
-         "cover_image": "https://images.unsplash.com/photo-1567401893414-76b7b1e5a7a5?w=600"},
-        {"name": "Sephora", "category": "Beauty", "floor": "Ground Floor", "unit": "G-08", "timing": "11:00 AM - 9:30 PM",
-         "description": "World's leading beauty retailer with premium cosmetics, skincare, and fragrances.",
-         "tags": ["beauty", "cosmetics", "skincare", "premium"], "is_featured": True,
-         "cover_image": "https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=600"},
-        {"name": "Bath & Body Works", "category": "Beauty", "floor": "Ground Floor", "unit": "G-10", "timing": "11:00 AM - 9:00 PM",
-         "description": "Body care, hand soaps, candles and home fragrances.",
-         "tags": ["beauty", "body care", "fragrances", "candles"], "is_featured": False,
-         "cover_image": "https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=600"},
-        {"name": "Starbucks", "category": "Food & Beverage", "floor": "Ground Floor", "unit": "G-15", "timing": "10:00 AM - 10:00 PM",
-         "description": "World's favorite coffeehouse with premium coffee, teas, and snacks.",
-         "tags": ["coffee", "beverages", "cafe", "snacks"], "is_featured": True,
-         "cover_image": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=600"},
-        {"name": "Nando's", "category": "Food & Beverage", "floor": "First Floor", "unit": "F1-22", "timing": "12:00 PM - 10:30 PM",
-         "description": "Flame-grilled PERi-PERi chicken restaurant with Portuguese-African flavors.",
-         "tags": ["restaurant", "chicken", "dining", "casual"], "is_featured": False,
-         "cover_image": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600"},
-        {"name": "PVR INOX", "category": "Entertainment", "floor": "Third Floor", "unit": "F3-01", "timing": "9:00 AM - 12:00 AM",
-         "description": "Premium multiplex cinema with the latest movies, IMAX, and 4DX experience.",
-         "tags": ["cinema", "movies", "entertainment", "imax"], "is_featured": True,
-         "cover_image": "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600"},
-        {"name": "Nike", "category": "Sports", "floor": "First Floor", "unit": "F1-05", "timing": "11:00 AM - 9:00 PM",
-         "description": "World's leading athletic brand for shoes, clothing, and equipment.",
-         "tags": ["sports", "shoes", "athletic", "fitness"], "is_featured": True,
-         "cover_image": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600"},
-        {"name": "Samsung", "category": "Electronics", "floor": "Ground Floor", "unit": "G-20", "timing": "11:00 AM - 9:00 PM",
-         "description": "Experience zone with the latest Samsung smartphones, tablets, and wearables.",
-         "tags": ["electronics", "phones", "gadgets", "tech"], "is_featured": False,
-         "cover_image": "https://images.unsplash.com/photo-1610945415295-d9bbf067e59c?w=600"},
-        {"name": "Titan", "category": "Accessories", "floor": "Ground Floor", "unit": "G-12", "timing": "11:00 AM - 9:00 PM",
-         "description": "India's most trusted watch brand with a premium collection.",
-         "tags": ["watches", "accessories", "luxury", "gifting"], "is_featured": False,
-         "cover_image": "https://images.unsplash.com/photo-1524592094714-0f0654e20314?w=600"},
-        {"name": "Forest Essentials", "category": "Beauty", "floor": "First Floor", "unit": "F1-18", "timing": "11:00 AM - 9:00 PM",
-         "description": "Luxury Ayurvedic beauty brand with handcrafted, natural products.",
-         "tags": ["beauty", "ayurvedic", "luxury", "natural"], "is_featured": False,
-         "cover_image": "https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=600"},
-        {"name": "Hamleys", "category": "Kids", "floor": "Second Floor", "unit": "F2-01", "timing": "11:00 AM - 9:00 PM",
-         "description": "World's oldest and largest toy shop with the finest toys from around the world.",
-         "tags": ["toys", "kids", "games", "gifting"], "is_featured": True,
-         "cover_image": "https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=600"},
-        {"name": "Foodhall", "category": "Food & Beverage", "floor": "Ground Floor", "unit": "G-25", "timing": "10:00 AM - 10:00 PM",
-         "description": "Premium gourmet food destination with artisan products from around the world.",
-         "tags": ["gourmet", "food", "premium", "artisan"], "is_featured": False,
-         "cover_image": "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600"},
-    ]
-
-    store_docs = []
-    for s in stores:
-        store_docs.append({
-            "id": str(uuid.uuid4()),
-            "name": s["name"],
-            "category": s["category"],
-            "floor": s["floor"],
-            "unit_no": s["unit"],
-            "description": s["description"],
-            "cover_image": s["cover_image"],
-            "timing": s["timing"],
-            "tags": s["tags"],
-            "is_featured": s["is_featured"],
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        })
-
-    await _db.stores.insert_many(store_docs)
-
-    # Banners
+    # Banners (mall-level promotional content)
     banners = [
         {"title": "2X Reward Points", "subtitle": "This weekend only! Earn double on every purchase.", "image": "https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?w=800", "position": 1},
         {"title": "Summer Fashion Fest", "subtitle": "Up to 50% off at top fashion brands.", "image": "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=800", "position": 2},
@@ -867,45 +781,7 @@ async def _run_seed():
 
     await _db.banners.insert_many(banner_docs)
 
-    # Offers
-    offer_templates = [
-        {"store": "Lifestyle", "title": "Flat 40% Off on All Ethnicwear", "desc": "Get amazing discounts on the latest ethnic collection. Valid on MRP only.", "type": "percentage", "value": "40%"},
-        {"store": "KAZO", "title": "Buy 2 Get 1 Free", "desc": "On select women's western wear. Limited period offer.", "type": "bogo", "value": "Buy 2 Get 1"},
-        {"store": "Sephora", "title": "Free Makeover + 20% Off", "desc": "Get a complimentary makeover and 20% off on beauty purchases above Rs.3000.", "type": "percentage", "value": "20%"},
-        {"store": "Starbucks", "title": "Happy Hour - BOGO", "desc": "Buy one get one free on all handcrafted beverages from 2-5 PM.", "type": "bogo", "value": "BOGO"},
-        {"store": "Nike", "title": "End of Season Sale - Up to 50% Off", "desc": "Huge discounts on shoes, apparel, and accessories.", "type": "percentage", "value": "50%"},
-        {"store": "PVR INOX", "title": "Movie Monday - Flat Rs.150", "desc": "Watch any movie for just Rs.150 every Monday.", "type": "flat", "value": "Rs.150"},
-        {"store": "Marks & Spencer", "title": "3 for 2 on All Shirts", "desc": "Buy 3 shirts and pay for only 2. Mix and match!", "type": "bogo", "value": "3 for 2"},
-        {"store": "GANT", "title": "Flat 30% Off New Collection", "desc": "Fresh arrivals at irresistible prices. Limited time only.", "type": "percentage", "value": "30%"},
-    ]
-
-    offer_docs = []
-    for o in offer_templates:
-        # Find store
-        store_doc = next((s for s in store_docs if s["name"] == o["store"]), None)
-        if store_doc:
-            offer_docs.append({
-                "id": str(uuid.uuid4()),
-                "store_id": store_doc["id"],
-                "store_name": o["store"],
-                "category": store_doc["category"],
-                "title": o["title"],
-                "description": o["desc"],
-                "offer_type": o["type"],
-                "discount_value": o["value"],
-                "image_url": store_doc["cover_image"],
-                "valid_from": datetime.now(timezone.utc).isoformat(),
-                "valid_until": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
-                "terms": "T&C apply. Not valid on already discounted items.",
-                "is_featured": True,
-                "is_active": True,
-                "created_at": datetime.now(timezone.utc).isoformat()
-            })
-
-    if offer_docs:
-        await _db.offers.insert_many(offer_docs)
-
-    # Events
+    # Events (mall-level)
     event_docs = [
         {
             "id": str(uuid.uuid4()),
@@ -946,7 +822,7 @@ async def _run_seed():
             "image_url": "https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=600",
             "date": (datetime.now(timezone.utc) + timedelta(days=5)).strftime("%Y-%m-%d"),
             "time": "11:00 AM - 1:00 PM",
-            "venue": "Hamleys, Second Floor",
+            "venue": "Second Floor",
             "category": "Kids",
             "is_featured": False,
             "registration_required": True,
@@ -976,18 +852,15 @@ async def _run_seed():
     await _db.events.insert_many(event_docs)
 
     # Create indexes
-    await _db.stores.create_index("category")
-    await _db.stores.create_index("is_featured")
-    await _db.offers.create_index("store_id")
-    await _db.offers.create_index("is_active")
     await _db.notifications.create_index([("user_id", 1), ("created_at", -1)])
 
+    brand_count = await _db.brands.count_documents({})
     return {
         "success": True,
         "seeded": {
-            "stores": len(store_docs),
+            "brands_as_stores": brand_count,
             "banners": len(banner_docs),
-            "offers": len(offer_docs),
             "events": len(event_docs)
-        }
+        },
+        "note": "Stores come directly from the brands master list. Manage via Admin > Brands."
     }

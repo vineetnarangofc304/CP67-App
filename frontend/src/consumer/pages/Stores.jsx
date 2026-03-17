@@ -76,8 +76,14 @@ export default function Stores() {
               data-testid={`store-${s.id}`}
             >
               <div className="store-grid-img">
-                <img src={s.cover_image} alt={s.name} loading="lazy" />
-                <span className="store-floor-tag"><MapPin size={12} /> {s.floor}</span>
+                {s.cover_image ? (
+                  <img src={s.cover_image} alt={s.name} loading="lazy" />
+                ) : (
+                  <div className="store-grid-placeholder">
+                    <span>{s.name[0]}</span>
+                  </div>
+                )}
+                {s.floor && <span className="store-floor-tag"><MapPin size={12} /> {s.floor}</span>}
               </div>
               <div className="store-grid-info">
                 <h3>{s.name}</h3>

@@ -127,7 +127,7 @@ export default function Home() {
             {data.featured_stores.map(s => (
               <div key={s.id} className="home-store-card" onClick={() => navigate(`/app/stores/${s.id}`)} data-testid={`store-card-${s.id}`}>
                 <div className="store-card-img">
-                  <img src={s.cover_image} alt={s.name} loading="lazy" />
+                  {s.cover_image ? <img src={s.cover_image} alt={s.name} loading="lazy" /> : <div className="store-grid-placeholder"><span>{s.name[0]}</span></div>}
                 </div>
                 <div className="store-card-info">
                   <h4>{s.name}</h4>
