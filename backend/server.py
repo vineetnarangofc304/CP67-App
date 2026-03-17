@@ -2517,86 +2517,44 @@ async def upload_media_to_karix(image_base64: str, filename: str = "qrcode.png")
 async def send_whatsapp_image(phone: str, image_base64: str, caption: str = ""):
     """Send WhatsApp image message via Karix RCM API
     
-    Uses MEDIA type with external URL (most reliable method).
-    Falls back to ATTACHMENT type with base64 if URL generation fails.
+    Per Karix: Image must be hosted on a public URL.
+    Uses our backend endpoint to serve QR images.
     """
     if not KARIX_API_KEY:
         logger.error("Karix API key not configured")
         return False
     
     try:
-        # Extract base64 data if it has data URL prefix
-        if image_base64.startswith("data:"):
-            image_base64 = image_base64.split(",")[1]
+        # Extract parking code from caption
+        import re
+        code_match = re.search(r'(PKG-[A-Z0-9-]+)', caption)
+        
+        if not code_match:
+            logger.warning("No parking code found in caption, cannot send image")
+            return False
+        
+        parking_code = code_match.group(1)
+        
+        # Get backend URL from environment
+        backend_url = os.environ.get('BACKEND_PUBLIC_URL', 'https://qr-bill-rewards.preview.emergentagent.com')
+        
+        # Use our own hosted QR image endpoint
+        qr_url = f"{backend_url}/api/parking/qr-image/{parking_code}"
+        
+        logger.info(f"Sending QR image to {phone}")
+        logger.info(f"QR URL: {qr_url}")
         
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Method 1: Use external QR code generator service (most reliable)
-            # Extract the data from the QR image to regenerate via URL
-            # For parking codes, we can use the code directly
-            
-            # Try to extract parking code from caption
-            import re
-            code_match = re.search(r'(PKG-[A-Z0-9-]+)', caption)
-            if code_match:
-                parking_code = code_match.group(1)
-                qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={parking_code}"
-                
-                logger.info(f"Sending QR image via MEDIA type with URL to {phone}...")
-                payload_media = {
-                    "message": {
-                        "channel": "WABA",
-                        "content": {
-                            "type": "MEDIA",
-                            "media": {
-                                "url": qr_url,
-                                "caption": caption,
-                                "type": "image"
-                            }
-                        },
-                        "recipient": {
-                            "to": phone,
-                            "recipient_type": "individual",
-                            "reference": {}
-                        },
-                        "sender": {
-                            "from": WHATSAPP_NUMBER
-                        },
-                        "preferences": {
-                            "webHookDNId": "1001"
-                        }
-                    },
-                    "metaData": {
-                        "version": "v1.0.9"
-                    }
-                }
-                
-                response = await client.post(
-                    "https://rcmapi.instaalerts.zone/services/rcm/sendMessage",
-                    headers={
-                        "Authentication": f"Bearer {KARIX_API_KEY}",
-                        "Content-Type": "application/json"
-                    },
-                    json=payload_media
-                )
-                logger.info(f"Karix MEDIA response: {response.status_code} - {response.text[:300]}")
-                
-                if response.status_code in [200, 202]:
-                    logger.info(f"Image sent successfully via MEDIA type with URL")
-                    return True
-            
-            # Method 2: Fallback to ATTACHMENT type with base64
-            logger.info(f"Trying ATTACHMENT type with base64...")
-            payload_attachment = {
+            # Send image using IMAGE type with link (as per Karix documentation)
+            payload = {
                 "message": {
                     "channel": "WABA",
                     "content": {
                         "preview_url": False,
-                        "type": "ATTACHMENT",
-                        "attachment": {
-                            "type": "image",
-                            "caption": caption,
-                            "mimeType": "image/png",
-                            "attachmentData": image_base64
+                        "type": "IMAGE",
+                        "image": {
+                            "link": qr_url,
+                            "caption": caption
                         }
                     },
                     "recipient": {
@@ -2622,15 +2580,65 @@ async def send_whatsapp_image(phone: str, image_base64: str, caption: str = ""):
                     "Authentication": f"Bearer {KARIX_API_KEY}",
                     "Content-Type": "application/json"
                 },
-                json=payload_attachment
+                json=payload
             )
-            logger.info(f"Karix ATTACHMENT response: {response.status_code} - {response.text[:300]}")
+            logger.info(f"Karix IMAGE response: {response.status_code} - {response.text[:300]}")
             
             if response.status_code in [200, 202]:
-                logger.info(f"Image sent successfully via ATTACHMENT type")
+                # Check if message was actually accepted (not just HTTP 200)
+                try:
+                    resp_data = response.json()
+                    if resp_data.get("statusCode") == "200":
+                        logger.info(f"QR Image sent successfully to {phone}")
+                        return True
+                except:
+                    pass
+            
+            # Try MEDIA type as fallback
+            logger.info("Trying MEDIA type...")
+            payload_media = {
+                "message": {
+                    "channel": "WABA",
+                    "content": {
+                        "type": "MEDIA",
+                        "media": {
+                            "url": qr_url,
+                            "caption": caption,
+                            "type": "image"
+                        }
+                    },
+                    "recipient": {
+                        "to": phone,
+                        "recipient_type": "individual",
+                        "reference": {}
+                    },
+                    "sender": {
+                        "from": WHATSAPP_NUMBER
+                    },
+                    "preferences": {
+                        "webHookDNId": "1001"
+                    }
+                },
+                "metaData": {
+                    "version": "v1.0.9"
+                }
+            }
+            
+            response = await client.post(
+                "https://rcmapi.instaalerts.zone/services/rcm/sendMessage",
+                headers={
+                    "Authentication": f"Bearer {KARIX_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json=payload_media
+            )
+            logger.info(f"Karix MEDIA response: {response.status_code} - {response.text[:300]}")
+            
+            if response.status_code in [200, 202]:
+                logger.info(f"QR Image sent via MEDIA type to {phone}")
                 return True
             
-            # All methods failed, fall back to text message with the code
+            # All methods failed
             logger.warning(f"All image send methods failed, falling back to text message")
             return await send_whatsapp_text(phone, caption)
             
@@ -4165,6 +4173,47 @@ async def export_parking(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
+
+# ======================== PARKING QR IMAGE ENDPOINT ========================
+
+@api_router.get("/parking/qr-image/{code}")
+async def get_parking_qr_image(code: str):
+    """Public endpoint to serve parking QR code images.
+    This URL can be shared via WhatsApp.
+    """
+    import qrcode
+    from PIL import Image
+    
+    try:
+        # Generate QR code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(code)
+        qr.make(fit=True)
+        
+        # Create image
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Convert to bytes
+        img_buffer = io.BytesIO()
+        qr_img.save(img_buffer, format='PNG')
+        img_buffer.seek(0)
+        
+        return Response(
+            content=img_buffer.getvalue(),
+            media_type="image/png",
+            headers={
+                "Content-Disposition": f"inline; filename=parking_qr_{code}.png",
+                "Cache-Control": "public, max-age=3600"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error generating QR image: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate QR code")
 
 # ======================== ANALYTICS ROUTES ========================
 
