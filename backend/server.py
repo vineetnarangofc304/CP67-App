@@ -1423,19 +1423,22 @@ async def create_brand(data: dict, payload: dict = Depends(verify_jwt_token)):
 
 @api_router.put("/admin/brands/{brand_id}")
 async def update_brand(brand_id: str, data: dict, payload: dict = Depends(verify_jwt_token)):
-    """Update brand ATV and other details"""
+    """Update brand ATV, store details, and other info"""
     update_data = {
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
     
-    if "atv" in data:
-        update_data["atv"] = float(data["atv"])
-    if "category" in data:
-        update_data["category"] = data["category"]
-    if "is_active" in data:
-        update_data["is_active"] = data["is_active"]
-    if "brand_name" in data:
-        update_data["brand_name"] = data["brand_name"].strip()
+    # Core fields
+    for field in ["atv", "category", "is_active", "brand_name", "description",
+                  "floor", "timing", "unit_no", "tags", "is_featured", "contact_phone",
+                  "contact_email", "website"]:
+        if field in data:
+            if field == "atv":
+                update_data[field] = float(data[field])
+            elif field == "brand_name":
+                update_data[field] = data[field].strip()
+            else:
+                update_data[field] = data[field]
     
     result = await db.brands.update_one(
         {"id": brand_id},
@@ -1445,7 +1448,112 @@ async def update_brand(brand_id: str, data: dict, payload: dict = Depends(verify
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Brand not found")
     
+    # Auto-sync to stores collection
+    brand = await db.brands.find_one({"id": brand_id}, {"_id": 0})
+    if brand and brand.get("description"):
+        await _sync_brand_to_store(brand)
+    
     return {"success": True, "message": "Brand updated"}
+
+
+async def _sync_brand_to_store(brand: dict):
+    """Sync a brand to the consumer stores collection"""
+    store_data = {
+        "name": brand.get("brand_name"),
+        "category": brand.get("category") or "General",
+        "floor": brand.get("floor") or "",
+        "unit_no": brand.get("unit_no") or "",
+        "description": brand.get("description") or "",
+        "cover_image": brand.get("cover_image_url") or "",
+        "logo_url": brand.get("logo_url") or "",
+        "timing": brand.get("timing") or "11:00 AM - 9:00 PM",
+        "tags": brand.get("tags") or [],
+        "is_featured": brand.get("is_featured", False),
+        "is_active": brand.get("is_active", True),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    existing = await db.stores.find_one({"name": {"$regex": f'^{re.escape(brand["brand_name"])}$', "$options": "i"}})
+    if existing:
+        await db.stores.update_one({"_id": existing["_id"]}, {"$set": store_data})
+    else:
+        store_data["id"] = brand.get("id", str(uuid.uuid4()))
+        store_data["created_at"] = datetime.now(timezone.utc).isoformat()
+        await db.stores.insert_one(store_data)
+
+
+@api_router.post("/admin/brands/{brand_id}/upload-image")
+async def upload_brand_image(
+    brand_id: str,
+    image_type: str = Form(...),
+    file: UploadFile = File(...),
+    payload: dict = Depends(verify_jwt_token)
+):
+    """Upload logo or cover image for a brand"""
+    if image_type not in ("logo", "cover"):
+        raise HTTPException(status_code=400, detail="image_type must be 'logo' or 'cover'")
+    
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image too large. Max 5MB.")
+    
+    ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
+    if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
+        ext = "jpg"
+    
+    filename = f"{brand_id}_{image_type}.{ext}"
+    filepath = os.path.join("uploads", "brands", filename)
+    
+    with open(filepath, "wb") as f:
+        f.write(contents)
+    
+    backend_url = os.environ.get("BACKEND_PUBLIC_URL", "")
+    image_url = f"{backend_url}/api/uploads/brands/{filename}"
+    
+    field = "logo_url" if image_type == "logo" else "cover_image_url"
+    await db.brands.update_one({"id": brand_id}, {"$set": {field: image_url, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    
+    # Auto-sync to stores
+    brand = await db.brands.find_one({"id": brand_id}, {"_id": 0})
+    if brand and brand.get("description"):
+        await _sync_brand_to_store(brand)
+    
+    return {"success": True, "image_url": image_url, "field": field}
+
+
+@api_router.post("/admin/brands/sync-to-stores")
+async def sync_brands_to_stores(payload: dict = Depends(verify_jwt_token)):
+    """Sync all brands with descriptions to the consumer stores collection"""
+    brands = await db.brands.find({"description": {"$exists": True, "$ne": ""}}, {"_id": 0}).to_list(500)
+    synced = 0
+    for brand in brands:
+        await _sync_brand_to_store(brand)
+        synced += 1
+    return {"success": True, "synced": synced}
+
+
+@api_router.get("/app-download-qr")
+async def get_app_download_qr():
+    """Generate QR code for CP67 App download"""
+    import qrcode
+    import io
+    backend_url = os.environ.get("BACKEND_PUBLIC_URL", "")
+    app_url = f"{backend_url}/app/welcome"
+    
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=2)
+    qr.add_data(app_url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#1a1a2e", back_color="white")
+    
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(buf, media_type="image/png", headers={
+        "Content-Disposition": "inline; filename=cp67-app-qr.png",
+        "Cache-Control": "public, max-age=86400"
+    })
+
 
 @api_router.delete("/admin/brands/{brand_id}")
 async def delete_brand(brand_id: str, payload: dict = Depends(verify_jwt_token)):
@@ -3406,6 +3514,9 @@ Thank you for shopping at CP67 Mall! 🛍️"""
 ✨ Points Earned: {points_earned}
 💳 Total Balance: {total_balance}
 
+📱 Download the CP67 App for a better experience:
+{os.environ.get('BACKEND_PUBLIC_URL', '')}/app/welcome
+
 🛍️ Keep shopping at CP67 Mall to earn more rewards & unlock exclusive benefits 🌟"""
         
         buttons = [{"id": "upload_bill", "title": "Upload Bill"}]
@@ -4822,6 +4933,11 @@ from routes.consumer import consumer_router, init_consumer_routes
 BACKEND_PUBLIC_URL = os.environ.get('BACKEND_PUBLIC_URL', '')
 init_consumer_routes(db, tagnpay_client, JWT_SECRET, JWT_ALGORITHM, EMERGENT_LLM_KEY, BACKEND_PUBLIC_URL)
 app.include_router(consumer_router)
+
+# Static file serving for uploads
+from fastapi.staticfiles import StaticFiles
+os.makedirs("uploads/brands", exist_ok=True)
+app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # CORS
 app.add_middleware(
