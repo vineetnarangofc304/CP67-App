@@ -4817,6 +4817,12 @@ async def health_check():
 # Include router
 app.include_router(api_router)
 
+# Consumer App Routes
+from routes.consumer import consumer_router, init_consumer_routes
+BACKEND_PUBLIC_URL = os.environ.get('BACKEND_PUBLIC_URL', '')
+init_consumer_routes(db, tagnpay_client, JWT_SECRET, JWT_ALGORITHM, EMERGENT_LLM_KEY, BACKEND_PUBLIC_URL)
+app.include_router(consumer_router)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
