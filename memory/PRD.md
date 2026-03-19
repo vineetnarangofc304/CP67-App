@@ -71,6 +71,15 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 **ATV Data Leak Fix (P0)**
 - Customer WhatsApp messages no longer expose brand ATV
 
+### Bug Fix (Mar 19, 2026)
+
+**Camera Fix on Bill Upload Page (P0)**
+- Fixed: "Start camera is getting stuck and not opening the camera"
+- Root cause: Used unreliable `<input type="file" capture="environment">` which doesn't work in many PWA contexts
+- Fix: Replaced with `navigator.mediaDevices.getUserMedia()` API for direct camera access
+- New features: Live camera viewfinder, capture button, front/back camera switch, proper error handling
+- Tested: 11/11 test cases passed (100% frontend success rate)
+
 ### Previously Implemented
 - WhatsApp bill upload + OCR
 - Fundle customer sync
@@ -101,6 +110,9 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - `notifications`, `event_registrations`, `fundle_customers`
 - `brand_upload_history`, `admin_users`, `qr_analytics`
 
+## Known Issues
+- **Karix WhatsApp Image Delivery (BLOCKED):** Code is correct but images not delivered. External Karix platform issue - needs escalation to Karix support with message IDs.
+
 ## Upcoming Tasks (Phase 2)
 - Loyalty engine: earn/burn rules, campaigns, multipliers, referral
 - Campaign builder: 2X/3X points, first visit, highest spender
@@ -114,6 +126,9 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - RFM analysis, CLV, cohort analytics
 - Sponsored placements, media inventory
 - Mall admin CRM + segmentation
+
+## Technical Debt
+- **server.py refactoring** - Monolithic file needs to be broken into routes, services, models
 
 ## Credentials
 - Admin: admin / CP67Admin@2025
