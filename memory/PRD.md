@@ -80,6 +80,13 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - New features: Live camera viewfinder, capture button, front/back camera switch, proper error handling
 - Tested: 11/11 test cases passed (100% frontend success rate)
 
+**Parking Scanner Camera Fix (P0) — Mar 19, 2026**
+- Fixed: Camera on Parking Scanner admin page showing black screen despite "Camera Active" status
+- Root cause: Custom `getUserMedia` + video element had no `muted` attribute (required for iOS autoplay) and no QR decoding library
+- Fix: Replaced with `html5-qrcode` library which handles camera access, video rendering, and QR code scanning
+- Now auto-detects and validates parking QR codes when scanned
+- Removed misleading "Camera scanning requires manual code entry" message
+
 ### Previously Implemented
 - WhatsApp bill upload + OCR
 - Fundle customer sync
