@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Camera, ImagePlus, Loader2, CheckCircle, AlertCircle, Upload } from 'lucide-react';
+import { ArrowLeft, Camera, ImagePlus, Loader2, CheckCircle, AlertCircle, Upload, X, SwitchCamera, Zap } from 'lucide-react';
 import { useConsumerAuth, API } from '../ConsumerApp';
 
 export default function BillUpload() {
@@ -9,16 +9,127 @@ export default function BillUpload() {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState(null);
+  const [facingMode, setFacingMode] = useState('environment');
   const fileRef = useRef();
-  const cameraRef = useRef();
+  const videoRef = useRef();
+  const canvasRef = useRef();
+  const streamRef = useRef(null);
   const navigate = useNavigate();
   const { token } = useConsumerAuth();
+
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraActive(false);
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const startCamera = async () => {
+    setCameraError(null);
+    try {
+      // Stop any existing stream first
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+
+      const constraints = {
+        video: {
+          facingMode: facingMode,
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        },
+        audio: false
+      };
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+      setCameraActive(true);
+    } catch (err) {
+      console.error('Camera error:', err);
+      if (err.name === 'NotAllowedError') {
+        setCameraError('Camera access denied. Please allow camera permission in your browser settings.');
+      } else if (err.name === 'NotFoundError') {
+        setCameraError('No camera found on this device.');
+      } else if (err.name === 'NotReadableError') {
+        setCameraError('Camera is in use by another application.');
+      } else {
+        setCameraError('Could not access camera. Try uploading from gallery instead.');
+      }
+    }
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0);
+
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const capturedFile = new File([blob], `bill_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        setFile(capturedFile);
+        setPreview(canvas.toDataURL('image/jpeg', 0.9));
+        stopCamera();
+      }
+    }, 'image/jpeg', 0.9);
+  };
+
+  const switchCamera = async () => {
+    const newMode = facingMode === 'environment' ? 'user' : 'environment';
+    setFacingMode(newMode);
+    if (cameraActive) {
+      stopCamera();
+      // Small delay to ensure previous stream is fully released
+      setTimeout(async () => {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: newMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+            audio: false
+          });
+          streamRef.current = stream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            await videoRef.current.play();
+          }
+          setCameraActive(true);
+        } catch (err) {
+          setCameraError('Could not switch camera.');
+        }
+      }, 300);
+    }
+  };
 
   const handleFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
     setResult(null);
+    setCameraError(null);
     const reader = new FileReader();
     reader.onload = () => setPreview(reader.result);
     reader.readAsDataURL(f);
@@ -52,6 +163,8 @@ export default function BillUpload() {
     setFile(null);
     setPreview(null);
     setResult(null);
+    setCameraError(null);
+    stopCamera();
   };
 
   return (
@@ -62,14 +175,48 @@ export default function BillUpload() {
       data-testid="bill-upload-screen"
     >
       <div className="bill-upload-header">
-        <button className="bill-back" onClick={() => navigate(-1)} data-testid="bill-back-btn">
+        <button className="bill-back" onClick={() => { stopCamera(); navigate(-1); }} data-testid="bill-back-btn">
           <ArrowLeft size={22} />
         </button>
         <h1>Upload Bill</h1>
       </div>
 
+      {/* Hidden canvas for photo capture */}
+      <canvas ref={canvasRef} style={{ display: 'none' }} />
+
       <AnimatePresence mode="wait">
-        {!preview && !result && (
+        {/* Camera viewfinder */}
+        {cameraActive && !preview && !result && (
+          <motion.div className="bill-camera-view" key="camera" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="camera-viewfinder" data-testid="camera-viewfinder">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                data-testid="camera-video"
+                className="camera-video"
+              />
+              <div className="camera-overlay">
+                <div className="camera-frame" />
+              </div>
+            </div>
+            <div className="camera-controls">
+              <button className="camera-control-btn" onClick={stopCamera} data-testid="close-camera-btn">
+                <X size={24} />
+              </button>
+              <button className="camera-capture-btn" onClick={capturePhoto} data-testid="capture-btn">
+                <div className="capture-ring" />
+              </button>
+              <button className="camera-control-btn" onClick={switchCamera} data-testid="switch-camera-btn">
+                <SwitchCamera size={24} />
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* Initial state - choose camera or gallery */}
+        {!cameraActive && !preview && !result && (
           <motion.div className="bill-upload-area" key="capture" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
             <div className="bill-capture-zone" data-testid="bill-capture-zone">
               <div className="capture-icon">
@@ -78,16 +225,22 @@ export default function BillUpload() {
               <h2>Scan your bill</h2>
               <p>Take a photo or select from gallery</p>
 
+              {cameraError && (
+                <div className="camera-error" data-testid="camera-error">
+                  <AlertCircle size={16} />
+                  <span>{cameraError}</span>
+                </div>
+              )}
+
               <div className="capture-buttons">
-                <button className="capture-btn primary" onClick={() => cameraRef.current?.click()} data-testid="take-photo-btn">
-                  <Camera size={20} /> Take Photo
+                <button className="capture-btn primary" onClick={startCamera} data-testid="start-camera-btn">
+                  <Camera size={20} /> Open Camera
                 </button>
                 <button className="capture-btn secondary" onClick={() => fileRef.current?.click()} data-testid="gallery-btn">
                   <ImagePlus size={20} /> Gallery
                 </button>
               </div>
 
-              <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFile} hidden />
               <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} hidden />
             </div>
 
@@ -103,6 +256,7 @@ export default function BillUpload() {
           </motion.div>
         )}
 
+        {/* Preview state */}
         {preview && !result && (
           <motion.div className="bill-preview" key="preview" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
             <div className="bill-preview-img">
@@ -117,6 +271,7 @@ export default function BillUpload() {
           </motion.div>
         )}
 
+        {/* Result state */}
         {result && (
           <motion.div className="bill-result" key="result" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             <div className={`bill-result-icon ${result.success ? 'success' : 'error'}`}>
