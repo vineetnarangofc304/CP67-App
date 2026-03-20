@@ -6,82 +6,134 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { toast } from 'sonner';
-import { Camera, CheckCircle2, XCircle, Clock, Car, QrCode, RefreshCw, StopCircle } from 'lucide-react';
+import { Camera, CheckCircle2, XCircle, Clock, Car, QrCode, RefreshCw, StopCircle, Loader2 } from 'lucide-react';
+
+const SCANNER_CONTAINER_ID = 'parking-qr-reader';
 
 const ParkingScanner = () => {
   const { API_URL, token } = useAuth();
-  const [scanning, setScanning] = useState(false);
+  const [scannerState, setScannerState] = useState('idle'); // idle | starting | active | error
   const [manualCode, setManualCode] = useState('');
   const [validationResult, setValidationResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [cameraError, setCameraError] = useState(null);
   const scannerRef = useRef(null);
-  const scannerContainerId = 'parking-qr-reader';
+  const mountedRef = useRef(true);
 
-  const stopCamera = useCallback(() => {
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (scannerRef.current) {
+        try { scannerRef.current.stop().catch(() => {}); } catch (e) {}
+        try { scannerRef.current.clear(); } catch (e) {}
+        scannerRef.current = null;
+      }
+    };
+  }, []);
+
+  // When scannerState becomes 'starting', the container is now visible in DOM.
+  // We use this effect to actually initialize the scanner AFTER React renders the visible container.
+  useEffect(() => {
+    if (scannerState !== 'starting') return;
+
+    let cancelled = false;
+
+    const initScanner = async () => {
+      try {
+        const { Html5Qrcode } = await import('html5-qrcode');
+
+        // Ensure container exists in DOM
+        const container = document.getElementById(SCANNER_CONTAINER_ID);
+        if (!container) {
+          throw new Error('Scanner container not found in DOM');
+        }
+
+        if (cancelled) return;
+
+        const scanner = new Html5Qrcode(SCANNER_CONTAINER_ID);
+        scannerRef.current = scanner;
+
+        const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const size = Math.floor(minEdge * 0.7);
+          return { width: size, height: size };
+        };
+
+        await scanner.start(
+          { facingMode: 'environment' },
+          {
+            fps: 10,
+            qrbox: qrboxFunction,
+            rememberLastUsedCamera: true,
+            showTorchButtonIfSupported: true
+          },
+          (decodedText) => {
+            if (!mountedRef.current) return;
+            const code = extractParkingCode(decodedText);
+            if (code) {
+              toast.success(`QR Code scanned: ${code}`);
+              doStopCamera();
+              validateCode(code);
+            }
+          },
+          () => {} // ignore per-frame scan miss
+        );
+
+        if (!cancelled && mountedRef.current) {
+          setScannerState('active');
+          toast.success('Camera ready! Point at a parking QR code.');
+        }
+      } catch (err) {
+        console.error('Camera init error:', err);
+        if (cancelled || !mountedRef.current) return;
+
+        const errStr = String(err);
+        let msg = 'Could not access camera. Please use manual entry below.';
+        if (errStr.includes('NotAllowed') || errStr.includes('Permission')) {
+          msg = 'Camera access denied. Please allow camera permission in your browser settings and reload.';
+        } else if (errStr.includes('NotFound') || errStr.includes('Requested device not found')) {
+          msg = 'No camera found on this device.';
+        } else if (errStr.includes('NotReadable') || errStr.includes('Could not start video source')) {
+          msg = 'Camera is in use by another app. Close other apps using the camera and try again.';
+        }
+
+        setCameraError(msg);
+        setScannerState('error');
+        toast.error('Could not access camera');
+      }
+    };
+
+    // Small delay ensures React has committed the DOM with the visible container
+    const timer = setTimeout(initScanner, 150);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [scannerState]);
+
+  const doStopCamera = useCallback(() => {
     if (scannerRef.current) {
       scannerRef.current.stop().then(() => {
-        scannerRef.current.clear();
+        try { scannerRef.current?.clear(); } catch (e) {}
         scannerRef.current = null;
       }).catch(() => {
         scannerRef.current = null;
       });
     }
-    setScanning(false);
+    setScannerState('idle');
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {});
-      }
-    };
-  }, []);
-
-  const startCamera = async () => {
+  const startCamera = () => {
     setCameraError(null);
-    try {
-      const { Html5Qrcode } = await import('html5-qrcode');
-      const scanner = new Html5Qrcode(scannerContainerId);
-      scannerRef.current = scanner;
-
-      await scanner.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 },
-        (decodedText) => {
-          // QR code detected - extract parking code
-          const code = extractParkingCode(decodedText);
-          if (code) {
-            toast.success(`QR Code scanned: ${code}`);
-            stopCamera();
-            validateCode(code);
-          }
-        },
-        () => {} // ignore scan failures (no QR found in frame)
-      );
-      setScanning(true);
-      toast.success('Camera started! Point at a parking QR code.');
-    } catch (err) {
-      console.error('Camera error:', err);
-      if (String(err).includes('NotAllowed') || String(err).includes('Permission')) {
-        setCameraError('Camera access denied. Please allow camera permission and try again.');
-      } else if (String(err).includes('NotFound')) {
-        setCameraError('No camera found on this device.');
-      } else {
-        setCameraError('Could not access camera. Please use manual entry below.');
-      }
-      toast.error('Could not access camera');
-    }
+    // Set to 'starting' — this makes the container div visible in DOM.
+    // The useEffect above will then init the scanner after React renders.
+    setScannerState('starting');
   };
 
   const extractParkingCode = (text) => {
-    // Try to extract PKG-XXXXXX-XXXXXX pattern
     const match = text.match(/PKG-[\w]+-[\w]+/i);
     if (match) return match[0].toUpperCase();
-    // If the text itself looks like a parking code or URL with code
     const urlMatch = text.match(/code=(PKG-[\w]+-[\w]+)/i);
     if (urlMatch) return urlMatch[1].toUpperCase();
-    // Return the full text if it could be a code
     if (text.startsWith('PKG')) return text.toUpperCase();
     return text;
   };
@@ -124,6 +176,8 @@ const ParkingScanner = () => {
     setManualCode('');
   };
 
+  const isCameraVisible = scannerState === 'starting' || scannerState === 'active';
+
   return (
     <DashboardLayout title="Parking Scanner">
       <div className="max-w-2xl mx-auto space-y-6">
@@ -141,7 +195,7 @@ const ParkingScanner = () => {
                 </div>
               </div>
               <Badge variant="outline" className="border-white/30 text-white" data-testid="scanner-status">
-                {scanning ? 'Camera Active' : 'Ready'}
+                {scannerState === 'active' ? 'Camera Active' : scannerState === 'starting' ? 'Starting...' : 'Ready'}
               </Badge>
             </div>
           </CardContent>
@@ -188,8 +242,8 @@ const ParkingScanner = () => {
                       </div>
                     </div>
                   )}
-                  <Button 
-                    onClick={resetScanner} 
+                  <Button
+                    onClick={resetScanner}
                     className="mt-4 w-full"
                     variant={validationResult.valid ? "default" : "destructive"}
                     data-testid="scan-next-btn"
@@ -224,18 +278,32 @@ const ParkingScanner = () => {
                   </div>
                 )}
 
-                {/* QR Scanner container - html5-qrcode renders here */}
-                <div
-                  id={scannerContainerId}
-                  data-testid="qr-scanner-container"
-                  className={scanning ? 'rounded-lg overflow-hidden' : 'hidden'}
-                />
+                {/* 
+                  QR Scanner container — MUST be visible in DOM before html5-qrcode starts.
+                  We show it when scannerState is 'starting' or 'active'.
+                  When idle, it's not rendered at all.
+                */}
+                {isCameraVisible && (
+                  <div
+                    id={SCANNER_CONTAINER_ID}
+                    data-testid="qr-scanner-container"
+                    style={{ width: '100%', minHeight: '300px' }}
+                    className="rounded-lg overflow-hidden bg-black"
+                  />
+                )}
 
-                {scanning ? (
+                {scannerState === 'starting' && (
+                  <div className="flex items-center justify-center gap-2 mt-4 text-sm text-slate-500">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Starting camera...
+                  </div>
+                )}
+
+                {isCameraVisible ? (
                   <Button
                     variant="destructive"
                     className="mt-4 w-full"
-                    onClick={stopCamera}
+                    onClick={doStopCamera}
                     data-testid="stop-camera-btn"
                   >
                     <StopCircle className="h-4 w-4 mr-2" />
