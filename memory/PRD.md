@@ -109,6 +109,20 @@ Per "Homeland Advantage App Requirements Document Version 1.1":
 - Enhanced Profile — DOB, gender, address, tier display, edit form with save
 
 **Testing:** 32/32 backend tests passed, all frontend UI verified (100% pass rate)
+
+### WhatsApp Bot List Reply Fix + Additional Features (Mar 21, 2026)
+**Critical Bug Fix:**
+- WhatsApp bot was not responding to menu selections (list message replies)
+- Root cause: Webhook only parsed `button_reply.id`, not `list_reply.id` from Karix interactive messages
+- Fix: Added `list_reply` parsing + TITLE_TO_ACTION fallback mapping for text messages matching known titles
+- All 5 menu actions tested and verified: upload_bill, my_points, redeem_points, customer_support, know_more
+
+**Additional Features Built:**
+- Store Favorites — heart toggle on each store card + Favorites filter tab
+- Notification Preferences — 6 category toggles (Offers, Points, Events, Bills, Rewards, Promotions)
+- Link from Profile → Notification Settings
+- Backend: `/api/consumer/favorites`, `/favorites/toggle`, `/notification-preferences`
+- Testing: 25/25 backend + all frontend UI tests passed (100%)
 Per user-provided document "Revised WhatsApp Bot Journey_18.03.2026":
 - **Menu structure:** Changed from 3 buttons to 5-option list message (Upload Bill, Redeem Points, My Points, Help/Support, Know More)
 - **My Points:** Separate flow showing Total Earned, Redeemed, Available Balance
