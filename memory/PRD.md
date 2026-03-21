@@ -14,10 +14,11 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 │   ├── server.py              # Admin + WhatsApp APIs
 │   ├── routes/
 │   │   ├── __init__.py
-│   │   └── consumer.py        # Consumer app APIs
+│   │   └── consumer.py        # Consumer app APIs (Map, Amenities, Referral, Wallet, etc.)
 │   ├── uploads/
 │   │   └── brands/            # Brand logos & cover images
 │   ├── tests/
+│   │   ├── test_new_features.py
 │   │   ├── test_cp67_loyalty.py
 │   │   ├── test_consumer_app.py
 │   │   └── test_brand_management.py
@@ -27,11 +28,22 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 │   │   ├── consumer/           # Consumer PWA
 │   │   │   ├── ConsumerApp.jsx
 │   │   │   ├── consumer.css
-│   │   │   ├── components/BottomNav.jsx
-│   │   │   └── pages/ (12 screens)
+│   │   │   ├── components/
+│   │   │   │   ├── BottomNav.jsx
+│   │   │   │   └── SideDrawer.jsx (9 menu items)
+│   │   │   └── pages/ (18 screens)
+│   │   │       ├── Home.jsx, Login.jsx, Welcome.jsx, Onboarding.jsx
+│   │   │       ├── Stores.jsx, StoreDetail.jsx, Wallet.jsx
+│   │   │       ├── Offers.jsx (enhanced: Flash Sales + filters)
+│   │   │       ├── Events.jsx (enhanced: Featured hero + countdown)
+│   │   │       ├── BillUpload.jsx, BillHistory.jsx
+│   │   │       ├── Profile.jsx, Notifications.jsx, NotificationPrefs.jsx
+│   │   │       ├── Transactions.jsx, Rewards.jsx
+│   │   │       ├── HelpSupport.jsx, Legal.jsx, ProgramInfo.jsx
+│   │   │       ├── MallMap.jsx (NEW)
+│   │   │       ├── Amenities.jsx (NEW)
+│   │   │       └── Referrals.jsx (NEW)
 │   │   ├── pages/              # Admin dashboard
-│   │   │   ├── Brands.jsx      # Enhanced with store management
-│   │   │   └── ...
 │   │   └── App.js
 │   └── package.json
 └── memory/PRD.md
@@ -57,93 +69,58 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 
 **Brand & Store Management (Admin)**
 - 102 brands loaded from ATV sheet
-- Full store management with tabbed edit (Basic Info, Store Details, Images)
-- Image upload: logo + cover (stored in /uploads/brands/)
-- Auto-sync brands → consumer stores collection
-- App-Ready status tracking in table
-- Bulk sync to app button
+- Full store management with tabbed edit
+- Image upload: logo + cover
+- Auto-sync brands to consumer stores collection
+- App-Ready status tracking
 
-**Consumer Entry Points**
-- App Download QR code (GET /api/app-download-qr)
-- WhatsApp messages include app download link
-- QR codes for mall entrances, parking, in-store
+**Camera Fixes (Mar 19, 2026)**
+- Bill Upload camera: replaced with getUserMedia for PWA robustness
+- Parking Scanner camera: replaced with html5-qrcode
 
-**ATV Data Leak Fix (P0)**
-- Customer WhatsApp messages no longer expose brand ATV
-
-### Bug Fix (Mar 19, 2026)
-
-**Camera Fix on Bill Upload Page (P0)**
-- Fixed: "Start camera is getting stuck and not opening the camera"
-- Root cause: Used unreliable `<input type="file" capture="environment">` which doesn't work in many PWA contexts
-- Fix: Replaced with `navigator.mediaDevices.getUserMedia()` API for direct camera access
-- New features: Live camera viewfinder, capture button, front/back camera switch, proper error handling
-- Tested: 11/11 test cases passed (100% frontend success rate)
-
-**Parking Scanner Camera Fix (P0) — Mar 19, 2026**
-- Fixed: Camera on Parking Scanner admin page showing black screen despite "Camera Active" status
-- Root cause: Custom `getUserMedia` + video element had no `muted` attribute (required for iOS autoplay) and no QR decoding library
-- Fix: Replaced with `html5-qrcode` library which handles camera access, video rendering, and QR code scanning
-- Now auto-detects and validates parking QR codes when scanned
-- Removed misleading "Camera scanning requires manual code entry" message
-
-### Phase 1 Complete — Core Loyalty Features (Mar 21, 2026)
-Per "Homeland Advantage App Requirements Document Version 1.1":
+### Phase 2 Complete — Core Loyalty Features (Mar 21, 2026)
 
 **New Backend Endpoints:**
-- `GET /api/consumer/wallet/detailed` — Enhanced wallet with balance, earned, redeemed, expired, tier progress
-- `GET /api/consumer/transactions` — Transaction history with filter (all/earn/redeem)
-- `GET /api/consumer/rewards` — Rewards catalog (auto-seeded from brands: 4 denominations x 12 stores)
-- `POST /api/consumer/rewards/redeem` — One-tap redemption (1 pt = Rs 1)
-- `GET /api/consumer/rewards/history` — Redemption history
-- Profile update: added DOB, gender, address fields
+- `GET /api/consumer/wallet/detailed` — Enhanced wallet
+- `GET /api/consumer/transactions` — Transaction history with filters
+- `GET /api/consumer/rewards` — Rewards catalog
+- `POST /api/consumer/rewards/redeem` — One-tap redemption
+- Profile update: DOB, gender, address fields
 
-**New Frontend Pages (8 pages/components):**
-- Enhanced Wallet — Points breakdown (earned/redeemed/expired), tier progress bar, quick actions
-- Transactions — Full history with All/Earned/Redeemed filter tabs
-- Bill History — All bills with status filters (All/Approved/Pending/Rejected), rejection reasons
-- Rewards Catalog — Cards grouped by store, Rs 100/250/500/1000 denominations, one-tap redeem
-- Help & Support — 4 contact cards, 6 expandable FAQs
-- Legal — Terms & Conditions + Privacy Policy
-- Side Drawer Menu — 6 items (Profile, Rewards, Transactions, Bill History, Help, Legal) + Logout
-- Enhanced Profile — DOB, gender, address, tier display, edit form with save
+**New Frontend Pages (8 pages):**
+- Enhanced Wallet, Transactions, Bill History, Rewards Catalog
+- Help & Support, Legal, Side Drawer Menu, Enhanced Profile
 
-**Testing:** 32/32 backend tests passed, all frontend UI verified (100% pass rate)
+**WhatsApp Bot (Mar 21, 2026):**
+- 5-option list message menu
+- All message flows updated per revised journey doc
+- List reply + button reply webhook parsing
 
-### WhatsApp Bot List Reply Fix + Additional Features (Mar 21, 2026)
-**Critical Bug Fix:**
-- WhatsApp bot was not responding to menu selections (list message replies)
-- Root cause: Webhook only parsed `button_reply.id`, not `list_reply.id` from Karix interactive messages
-- Fix: Added `list_reply` parsing + TITLE_TO_ACTION fallback mapping for text messages matching known titles
-- All 5 menu actions tested and verified: upload_bill, my_points, redeem_points, customer_support, know_more
+**Additional Features:**
+- Store Favorites with heart toggle
+- Notification Preferences (6 category toggles)
 
-**Additional Features Built:**
-- Store Favorites — heart toggle on each store card + Favorites filter tab
-- Notification Preferences — 6 category toggles (Offers, Points, Events, Bills, Rewards, Promotions)
-- Link from Profile → Notification Settings
-- Backend: `/api/consumer/favorites`, `/favorites/toggle`, `/notification-preferences`
-- Testing: 25/25 backend + all frontend UI tests passed (100%)
-Per user-provided document "Revised WhatsApp Bot Journey_18.03.2026":
-- **Menu structure:** Changed from 3 buttons to 5-option list message (Upload Bill, Redeem Points, My Points, Help/Support, Know More)
-- **My Points:** Separate flow showing Total Earned, Redeemed, Available Balance
-- **Redeem Points:** Separate flow showing redemption info at participating brands
-- **Know More:** New option linking to `/app/program` landing page
-- **Bill upload prompt:** Updated with step-by-step instructions, e-bills accepted
-- **Bill success message:** Simplified to "Thank you for uploading your bill of {Brand} with Homeland Advantage"
-- **All rejection messages:** Updated (non-CP67, >15 days, >30K under review)
-- **Help/Support:** Reformatted with email, phone, support desk info
-- **Emoji cleanup:** All emoji characters removed from every WhatsApp message template
-- **New landing page:** Created at `/app/program` — Homeland Advantage program overview, participating brands (50 from API), How It Works, T&C, support contacts
-- Tested: 12/12 backend tests passed, landing page verified with 50 brands loading
+### Phase 3 — Map, Amenities, Referrals, Enhanced UX (Feb 2026)
 
-### Previously Implemented
-- WhatsApp bill upload + OCR
-- Fundle customer sync
-- Parking validation flow
-- Export reports
-- Multi-admin system
-- Bill approval workflow
-- Brand ATV rules
+**New Backend Endpoints:**
+- `GET /api/consumer/mall-map` — Floor-wise brand locations
+- `GET /api/consumer/amenities` — 6-category amenities directory (18 facilities)
+- `GET /api/consumer/referral` — User referral info & stats
+- `POST /api/consumer/referral/apply` — Apply referral code
+- `GET /api/consumer/tier-info` — Tier system details
+
+**3 New Frontend Pages:**
+- **Mall Map** (`/app/mall-map`) — Floor-wise accordion, search by store/category, store logos
+- **Amenities** (`/app/amenities`) — 6 category quick-grid, expandable sections with locations
+- **Referrals** (`/app/referrals`) — Referral code card with copy/share, stats dashboard, how-it-works, apply code form
+
+**Enhanced Existing Pages:**
+- **Offers** — Filter tabs (All Offers / Hot Deals), horizontal Flash Sales scroll section
+- **Events** — Filter tabs (All Events / Featured), featured hero banner with countdown, event countdown tags
+
+**SideDrawer Updated:** 9 menu items (added Mall Map, Amenities, Refer & Earn)
+
+**Testing:** 100% backend (15/15), 100% frontend — all verified
 
 ## Key API Endpoints
 
@@ -152,14 +129,19 @@ Per user-provided document "Revised WhatsApp Bot Journey_18.03.2026":
 - `GET /profile`, `PUT /profile`
 - `GET /home`, `GET /stores`, `GET /stores/{id}`
 - `GET /offers`, `GET /events`, `POST /events/{id}/register`
-- `GET /wallet`, `POST /bills/upload`, `GET /bills`
-- `GET /notifications`, `PUT /notifications/{id}/read`
+- `GET /wallet`, `GET /wallet/detailed`
+- `POST /bills/upload`, `GET /bills`
+- `GET /transactions`, `GET /rewards`, `POST /rewards/redeem`
+- `GET /favorites`, `POST /favorites/toggle`
+- `GET /notification-preferences`, `PUT /notification-preferences`
+- `GET /mall-map`, `GET /amenities`
+- `GET /referral`, `POST /referral/apply`
+- `GET /tier-info`
 
 ### Admin (/api/admin/*)
 - `GET/POST /brands`, `PUT /brands/{id}`, `DELETE /brands/{id}`
-- `POST /brands/{id}/upload-image` (logo/cover)
+- `POST /brands/{id}/upload-image`
 - `POST /brands/sync-to-stores`
-- `GET /app-download-qr`
 
 ## Database Collections
 - `users`, `bills`, `brands`, `stores`, `offers`, `events`, `banners`
@@ -167,24 +149,19 @@ Per user-provided document "Revised WhatsApp Bot Journey_18.03.2026":
 - `brand_upload_history`, `admin_users`, `qr_analytics`
 
 ## Known Issues
-- **Karix WhatsApp Image Delivery (BLOCKED):** Code is correct but images not delivered. External Karix platform issue - needs escalation to Karix support with message IDs.
+- **Karix WhatsApp Image Delivery (BLOCKED):** Code correct but images not delivered. External Karix platform issue.
 
-## Upcoming Tasks (Phase 2)
-- Loyalty engine: earn/burn rules, campaigns, multipliers, referral
-- Campaign builder: 2X/3X points, first visit, highest spender
-- Points expiry, voucher redemptions
-- AI mall concierge
+## Upcoming Tasks (P1)
+- Campaign Engine: Admin campaign builder (2X/3X points, multipliers, first visit, highest spender)
+- Tier System Visual UI: Bronze -> Silver -> Gold -> Platinum progression journey
 
-## Future Tasks (Phase 3-4)
-- Brand/store dashboard with analytics
-- CMS for banners, offers, events
-- Push notifications
-- RFM analysis, CLV, cohort analytics
+## Future Tasks (P2-P3)
+- **TECH DEBT**: Refactor monolithic server.py into /routes, /services, /models
+- Brand/Store Dashboard: Separate login for brands, self-manage offers
+- Advanced Analytics: RFM, CLV, cohort analysis
+- AI Mall Concierge
+- Push Notifications, CMS for banners/offers/events
 - Sponsored placements, media inventory
-- Mall admin CRM + segmentation
-
-## Technical Debt
-- **server.py refactoring** - Monolithic file needs to be broken into routes, services, models
 
 ## Credentials
 - Admin: admin / CP67Admin@2025
