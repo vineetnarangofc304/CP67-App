@@ -2093,19 +2093,18 @@ async def process_bill(bill_id: str, request: BillProcessRequest, background_tas
                 upsert=True
             )
         
-        # EXACT Success WhatsApp Message
-        whatsapp_message = f"""Thank you for uploading your bill with Homeland Advantage 🎉
+        # Success WhatsApp Message (per revised flow document)
+        whatsapp_message = f"""Thank you for uploading your bill of {store_name} with Homeland Advantage.
 
-🧾 Bill Details:
-🏬 Store: {store_name}
-🧾 Bill No.: {bill_no}
-📅 Date: {bill_date}
-💰 Amount: ₹{bill_amount:.0f}
+Points Credited: {points_earned}
+Total Balance: {total_balance}
 
-✨ Points Earned: {points_earned}
-💳 Total Balance: {total_balance}
+Earn more rewards every time you shop at CP67.
 
-🛍️ Keep shopping at CP67 Mall to earn more rewards & unlock exclusive benefits 🌟"""
+Download the CP67 App:
+{os.environ.get('BACKEND_PUBLIC_URL', '')}/app/welcome
+
+Happy Shopping!"""
         
     else:
         # Rejection
@@ -2142,18 +2141,18 @@ async def process_bill(bill_id: str, request: BillProcessRequest, background_tas
             current_balance = int(points_result["data"].get("balance_points", 0))
         
         # WhatsApp rejection message
-        whatsapp_message = f"""We're sorry, but your bill could not be processed 🧾
+        whatsapp_message = f"""We're sorry, but your bill could not be processed.
 
-📌 Reason: {admin_reason}
+Reason: {admin_reason}
 
-💳 Your Current Points Balance: {current_balance}
+Your Current Points Balance: {current_balance}
 
 Please ensure your next bill upload:
-✅ Is clearly visible and not blurry
-✅ Shows complete bill details
-✅ Has not been submitted before
+- Is clearly visible and not blurry
+- Shows complete bill details
+- Has not been submitted before
 
-🛍️ Keep shopping at CP67 Mall to earn more rewards 🌟"""
+Keep shopping at CP67 Mall to earn more rewards!"""
     
     await db.bills.update_one({"id": bill_id}, {"$set": update_data})
     
@@ -2170,12 +2169,15 @@ Please ensure your next bill upload:
         await db.whatsapp_logs.insert_one(outbound_log.model_dump())
         
         if request.action == "approve":
-            buttons = [{"id": "upload_bill", "title": "Upload Bill"}]
+            buttons = [
+                {"id": "upload_bill", "title": "Upload Another Bill"},
+                {"id": "my_points", "title": "My Points"}
+            ]
             background_tasks.add_task(send_whatsapp_buttons, phone, whatsapp_message, buttons)
         else:
             buttons = [
                 {"id": "upload_bill", "title": "Upload Bill"},
-                {"id": "my_points", "title": "Redeem Points"}
+                {"id": "my_points", "title": "My Points"}
             ]
             background_tasks.add_task(send_whatsapp_buttons, phone, whatsapp_message, buttons)
     
@@ -2779,25 +2781,27 @@ async def process_new_user_registration(phone: str, profile_name: str, source_co
                 upsert=True
             )
     
-    # EXACT Registration Success Message
-    welcome_msg = f"""Hi {profile_name or 'there'}! 🎉 Congratulations! 🎉
+    # EXACT Registration Success Message (per revised flow document)
+    welcome_msg = f"""Hi {profile_name or 'there'}! Congratulations!
 
-You are now successfully registered as a valued member of Homeland Advantage – CP67 Mall's exclusive Loyalty Program ✨
+You are now successfully registered as a valued member of Homeland Advantage – CP67 Mall's exclusive Loyalty Program.
 
-📱 Mobile: {mobile_10}
-👤 Name: {profile_name or 'Customer'}
-💳 Current Points: {balance_points}
+Mobile: {mobile_10}
+Name: {profile_name or 'Customer'}
+Current Points: {balance_points}
 
-Enjoy special privileges, exciting rewards & personalized offers every time you shop with us 🛍️
+Enjoy special privileges, exciting rewards & personalized offers every time you shop with us.
 
 Shop • Earn • Redeem • Repeat
 
-Welcome to a world of advantage & experiences crafted just for you! 🌟💎"""
+Welcome to a world of advantage & experiences crafted just for you!"""
     
-    buttons = [
-        {"id": "upload_bill", "title": "Upload Bill"},
-        {"id": "my_points", "title": "Redeem Points"},
-        {"id": "customer_support", "title": "Customer Support"}
+    menu_options = [
+        {"id": "upload_bill", "title": "Upload Bill", "description": "Upload your shopping bill to earn points"},
+        {"id": "redeem_points", "title": "Redeem Points", "description": "Redeem points at participating brands"},
+        {"id": "my_points", "title": "My Points", "description": "Check your loyalty points balance"},
+        {"id": "customer_support", "title": "Help / Support", "description": "Contact our support team"},
+        {"id": "know_more", "title": "Know More", "description": "Participating brands & T&C"}
     ]
     
     # Log outbound
@@ -2810,7 +2814,7 @@ Welcome to a world of advantage & experiences crafted just for you! 🌟💎"""
     )
     await db.whatsapp_logs.insert_one(outbound_log.model_dump())
     
-    await send_whatsapp_buttons(phone, welcome_msg, buttons)
+    await send_whatsapp_list(phone, welcome_msg, menu_options, header_text="Homeland Advantage", button_text="Menu")
     return new_user
 
 
@@ -2820,10 +2824,9 @@ async def process_bill_image(phone: str, user: dict, image_url: str, background_
     logger.info(f"Processing bill image for phone {phone}, image_url: {image_url}")
     
     try:
-        # First send acknowledgment
-        ack_msg = """Thank you for uploading your bill! 🧾
-
-We're scanning your bill now. Please wait a moment... ⏳"""
+        # First send acknowledgment (per revised flow document)
+        ack_msg = """Thank you for uploading your bill!
+We're scanning your bill now. Please wait a moment..."""
         await send_whatsapp_text(phone, ack_msg)
         
         # Download image from Karix URL if needed or extract base64 directly
@@ -2861,17 +2864,17 @@ We're scanning your bill now. Please wait a moment... ⏳"""
         if not image_base64:
             logger.error("No image data available - sending manual review message")
             # Send unclear image response
-            unclear_msg = """We noticed that the bill image you uploaded is not clear enough to process automatically 🧾
+            unclear_msg = """We noticed that the bill image you uploaded is not clear enough to process automatically.
 
-📌 Don't worry — your bill has been submitted to our backend team.
+Don't worry - your bill has been submitted to our backend team.
 
-We will manually verify it within 24–48 hours, and your points will be credited once validation is complete ✅
+We will manually verify it within 24-48 hours, and your points will be credited once validation is complete.
 
-Thank you for your patience and for being a valued member of Homeland Advantage 🌟"""
+Thank you for your patience and for being a valued member of Homeland Advantage."""
             
             buttons = [
                 {"id": "upload_bill", "title": "Upload Bill"},
-                {"id": "my_points", "title": "Redeem Points"}
+                {"id": "redeem_points", "title": "Redeem Points"}
             ]
             await send_whatsapp_buttons(phone, unclear_msg, buttons)
             return
@@ -2887,14 +2890,17 @@ Thank you for your patience and for being a valued member of Homeland Advantage 
             if points_result.get("success") and points_result.get("data"):
                 balance = int(points_result["data"].get("balance_points", 0))
             
-            # EXACT Duplicate Bill Message
-            duplicate_msg = f"""Our system shows that this bill has already been processed earlier and rewards have been issued ✅
+            # Duplicate Bill Message
+            duplicate_msg = f"""Our system shows that this bill has already been processed earlier and rewards have been issued.
 
-💳 Your Current Points Balance: {balance}
+Your Current Points Balance: {balance}
 
-🛍️ Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards 🌟"""
+Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards."""
             
-            buttons = [{"id": "upload_bill", "title": "Upload Bill"}]
+            buttons = [
+                {"id": "upload_bill", "title": "Upload Bill"},
+                {"id": "my_points", "title": "My Points"}
+            ]
             await send_whatsapp_buttons(phone, duplicate_msg, buttons)
             return
         
@@ -2966,16 +2972,16 @@ Thank you for your patience and for being a valued member of Homeland Advantage 
             days_old = (datetime.now() - bill_date_parsed).days
             
             if days_old > 15:
-                # Bill is older than 15 days - reject
-                old_bill_msg = f"""📋 *Bill Cannot Be Processed*
+                # Bill is older than 15 days - reject (per revised flow document)
+                old_bill_msg = f"""Bill Cannot Be Processed
 
-Thank you for uploading your bill from *{store_name}*.
+Thank you for uploading your bill from {store_name}.
 
-Unfortunately, this bill dated *{bill_date}* is more than 15 days old and cannot be processed for rewards.
+Unfortunately, this bill dated {bill_date} is more than 15 days old and cannot be processed for rewards.
 
-📌 *Policy:* Bills must be uploaded within 15 days of purchase to earn points.
+Policy: Bills must be uploaded within 15 days of purchase to earn points.
 
-We appreciate your understanding! Please upload your recent bills to continue earning rewards 🛍️✨"""
+We appreciate your understanding! Please upload your recent bills to continue earning rewards."""
                 
                 # Save as rejected
                 bill_data = BillData(
@@ -2995,8 +3001,8 @@ We appreciate your understanding! Please upload your recent bills to continue ea
                 await db.bills.insert_one(bill_data.model_dump())
                 
                 buttons = [
-                    {"id": "upload_bill", "title": "Upload Recent Bill"},
-                    {"id": "my_points", "title": "Check Points"}
+                    {"id": "know_more", "title": "Know More"},
+                    {"id": "upload_bill", "title": "Upload Valid Bill"}
                 ]
                 await send_whatsapp_buttons(phone, old_bill_msg, buttons)
                 return
@@ -3013,12 +3019,12 @@ We appreciate your understanding! Please upload your recent bills to continue ea
                 if points_result.get("success") and points_result.get("data"):
                     balance = int(points_result["data"].get("balance_points", 0))
                 
-                # EXACT Duplicate Bill Message
-                duplicate_msg = f"""Our system shows that this bill has already been processed earlier and rewards have been issued ✅
+                # Duplicate Bill Message
+                duplicate_msg = f"""Our system shows that this bill has already been processed earlier and rewards have been issued.
 
-💳 Your Current Points Balance: {balance}
+Your Current Points Balance: {balance}
 
-🛍️ Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards 🌟"""
+Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards."""
                 
                 # Save duplicate record for reference
                 bill_data = BillData(
@@ -3037,7 +3043,10 @@ We appreciate your understanding! Please upload your recent bills to continue ea
                 )
                 await db.bills.insert_one(bill_data.model_dump())
                 
-                buttons = [{"id": "upload_bill", "title": "Upload Bill"}]
+                buttons = [
+                    {"id": "upload_bill", "title": "Upload Bill"},
+                    {"id": "my_points", "title": "My Points"}
+                ]
                 await send_whatsapp_buttons(phone, duplicate_msg, buttons)
                 return
         
@@ -3087,18 +3096,20 @@ Processing your rewards... ⏳"""
         logger.info(f"CP67 check - OCR flag: {contains_cp67_ocr}, text search: {'cp67' in bill_text_combined}, result: {is_cp67_bill}")
         
         if not is_cp67_bill:
-            # NOT a CP67 bill - reject and mark as pending
+            # NOT a CP67 bill - reject (per revised flow document)
             rejection_reason = "Bill is not from CP67 Mall. Only CP67 Mall bills are eligible for rewards."
             
-            reject_msg = f"""❌ *Bill Rejected*
+            reject_msg = f"""Bill Cannot Be Processed
 
-This bill is not from CP67 Mall.
+Thank you for uploading your bill from {store_name}.
 
-🏬 Store detected: {store_name}
+Unfortunately, this bill is not eligible for processing.
 
-Only bills from shops inside CP67 Mall are eligible for Homeland Advantage rewards.
+This bill is not eligible under Homeland Advantage program.
 
-Please upload a valid CP67 Mall bill to earn points! 🛍️"""
+Only bills from shops inside CP67 Mall are eligible for rewards.
+
+Please upload a valid CP67 Mall bill to earn points!"""
             
             # Save as rejected/pending for backend review
             bill_data = BillData(
@@ -3139,19 +3150,22 @@ Please upload a valid CP67 Mall bill to earn points! 🛍️"""
             except Exception as e:
                 logger.error(f"Failed to log rejected bill to TagnPay: {e}")
             
-            buttons = [{"id": "upload_bill", "title": "Upload CP67 Bill"}]
+            buttons = [
+                {"id": "know_more", "title": "Know More"},
+                {"id": "upload_bill", "title": "Upload CP67 Bill"}
+            ]
             await send_whatsapp_buttons(phone, reject_msg, buttons)
             return
         
         # Check if image is unclear or tampered
         if image_quality == "poor" or confidence < 0.5 or tampering or not is_valid:
-            unclear_msg = """We noticed that the bill image you uploaded is not clear enough to process automatically 🧾
+            unclear_msg = """We noticed that the bill image you uploaded is not clear enough to process automatically.
 
-📌 Don't worry — your bill has been submitted to our backend team.
+Don't worry - your bill has been submitted to our backend team.
 
-We will manually verify it within 24–48 hours, and your points will be credited once validation is complete ✅
+We will manually verify it within 24-48 hours, and your points will be credited once validation is complete.
 
-Thank you for your patience and for being a valued member of Homeland Advantage 🌟"""
+Thank you for your patience and for being a valued member of Homeland Advantage."""
             
             # Save for manual review
             bill_data = BillData(
@@ -3171,26 +3185,24 @@ Thank you for your patience and for being a valued member of Homeland Advantage 
             
             buttons = [
                 {"id": "upload_bill", "title": "Upload Bill"},
-                {"id": "my_points", "title": "Redeem Points"}
+                {"id": "redeem_points", "title": "Redeem Points"}
             ]
             await send_whatsapp_buttons(phone, unclear_msg, buttons)
             return
         
         # CHECK: Bill amount > 30000 - Send to pending for manual review
         if amount > 30000:
-            high_amount_msg = f"""📋 *Bill Received - Under Review*
+            high_amount_msg = f"""Bill Received - Under Review
 
-Thank you for shopping at *{store_name}*!
+Thank you for shopping at {store_name}!
 
-🧾 *Bill No:* {bill_no}
-📅 *Date:* {bill_date}
-💰 *Amount:* ₹{amount:.0f}
+Bill No: {bill_no}
+Date: {bill_date}
+Amount: Rs {amount:.0f}
 
-⏳ Bills above ₹30,000 require manual verification by our team.
+Once verified, your Points will be credited to your account.
 
-Your bill will be reviewed within 24-48 hours and points will be credited once approved ✅
-
-Thank you for your patience! 🛍️"""
+Happy shopping!"""
             
             # Save as pending_review
             bill_data = BillData(
@@ -3227,7 +3239,7 @@ Please review in the admin dashboard."""
             
             buttons = [
                 {"id": "upload_bill", "title": "Upload Another Bill"},
-                {"id": "my_points", "title": "Check Points"}
+                {"id": "my_points", "title": "My Points"}
             ]
             await send_whatsapp_buttons(phone, high_amount_msg, buttons)
             return
@@ -3382,22 +3394,22 @@ Please review in the admin dashboard."""
             background_tasks.add_task(send_admin_sms_alert, store_name, bill_no, amount, phone)
             
             # Send processing message to user
-            processing_msg = f"""📋 *Bill Received Successfully!*
+            processing_msg = f"""Bill Received Successfully!
 
-🏬 Store: {store_name}
-🧾 Bill No: {bill_no}
-📅 Date: {bill_date}
-💰 Amount: ₹{amount:.0f}
+Store: {store_name}
+Bill No: {bill_no}
+Date: {bill_date}
+Amount: Rs {amount:.0f}
 
-⏳ Your bill is being processed. Points will be updated within 24 hours.
+Your bill is being processed. Points will be updated within 24 hours.
 
-💳 Current Points: {total_balance}
+Current Points: {total_balance}
 
-Thank you for shopping at CP67 Mall! 🛍️"""
+Thank you for shopping at CP67 Mall!"""
             
             buttons = [
                 {"id": "upload_bill", "title": "Upload Another Bill"},
-                {"id": "my_points", "title": "Redeem Points"},
+                {"id": "my_points", "title": "My Points"},
                 {"id": "customer_support", "title": "Customer Support"}
             ]
             await send_whatsapp_buttons(phone, processing_msg, buttons)
@@ -3444,24 +3456,23 @@ Thank you for shopping at CP67 Mall! 🛍️"""
                 upsert=True
             )
         
-        # EXACT Success Message - Always show points credited immediately
-        success_msg = f"""Thank you for uploading your bill with Homeland Advantage 🎉
+        # Success Message (per revised flow document)
+        success_msg = f"""Thank you for uploading your bill of {store_name} with Homeland Advantage.
 
-🧾 Bill Details:
-🏬 Store: {store_name}
-🧾 Bill No.: {bill_no}
-📅 Date: {bill_date}
-💰 Amount: ₹{amount:.0f}
+Points Credited: {points_earned}
+Total Balance: {total_balance}
 
-✨ Points Earned: {points_earned}
-💳 Total Balance: {total_balance}
+Earn more rewards every time you shop at CP67.
 
-📱 Download the CP67 App for a better experience:
+Download the CP67 App:
 {os.environ.get('BACKEND_PUBLIC_URL', '')}/app/welcome
 
-🛍️ Keep shopping at CP67 Mall to earn more rewards & unlock exclusive benefits 🌟"""
+Happy Shopping!"""
         
-        buttons = [{"id": "upload_bill", "title": "Upload Bill"}]
+        buttons = [
+            {"id": "upload_bill", "title": "Upload Another Bill"},
+            {"id": "my_points", "title": "My Points"}
+        ]
         await send_whatsapp_buttons(phone, success_msg, buttons)
         
     except Exception as e:
@@ -3470,17 +3481,17 @@ Thank you for shopping at CP67 Mall! 🛍️"""
         logger.error(traceback.format_exc())
         
         # Send error message
-        error_msg = """We're having trouble processing your bill right now 🧾
+        error_msg = """We're having trouble processing your bill right now.
 
-📌 Your bill has been submitted to our backend team for manual review.
+Your bill has been submitted to our backend team for manual review.
 
-We will verify it within 24–48 hours ✅
+We will verify it within 24-48 hours.
 
-Thank you for your patience! 🌟"""
+Thank you for your patience!"""
         
         buttons = [
             {"id": "upload_bill", "title": "Upload Bill"},
-            {"id": "my_points", "title": "Redeem Points"}
+            {"id": "redeem_points", "title": "Redeem Points"}
         ]
         await send_whatsapp_buttons(phone, error_msg, buttons)
 
@@ -3585,24 +3596,36 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
             
             msg_lower = clean_message.lower()
             
-            if message == "my_points" or "my points" in msg_lower or "redeem" in msg_lower or msg_lower.strip() == "2" or "point" in msg_lower or "balance" in msg_lower:
-                # REDEEM POINTS - Call TagnPay API
+            if message == "my_points" or (msg_lower.strip() == "3" and "my points" not in msg_lower):
+                # MY POINTS - Show detailed breakdown (per revised flow document)
                 points_result = await tagnpay_client.get_customer_points(mobile_10)
                 balance = 0
+                total_earned = 0
+                redeemed = 0
                 if points_result.get("success") and points_result.get("data"):
                     balance = int(points_result["data"].get("balance_points", 0))
+                    total_earned = int(points_result["data"].get("total_earned_points", balance))
+                    redeemed = int(points_result["data"].get("redeemed_points", 0))
+                
+                # Also check local DB for earned/redeemed
+                if total_earned == balance and redeemed == 0:
+                    local_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+                    if local_user:
+                        total_earned = int(local_user.get("total_earned_points", balance))
+                        redeemed = total_earned - balance if total_earned > balance else 0
                 
                 # Update local DB
                 await db.users.update_one({"id": user["id"]}, {"$set": {"balance_points": balance}})
                 
-                # EXACT Points Message
-                points_msg = f"""Your total Loyalty Points are: {balance}
+                points_msg = f"""Your Loyalty Points Summary:
 
-Redeem these points directly at participating retailers 🛍️"""
+Total Earned Points: {total_earned}
+Redeemed Points: {redeemed}
+Available Balance: {balance}"""
                 
                 buttons = [
-                    {"id": "upload_bill", "title": "Upload Bill"},
-                    {"id": "customer_support", "title": "Customer Support"}
+                    {"id": "know_more", "title": "Know More"},
+                    {"id": "upload_bill", "title": "Upload Bill"}
                 ]
                 
                 outbound_log = WhatsAppLog(
@@ -3616,23 +3639,77 @@ Redeem these points directly at participating retailers 🛍️"""
                 
                 background_tasks.add_task(send_whatsapp_buttons, phone, points_msg, buttons)
             
-            elif message == "customer_support" or "support" in msg_lower or "help" in msg_lower or "contact" in msg_lower or msg_lower.strip() == "3":
-                # CUSTOMER SUPPORT
-                support_msg = """📞 *Customer Support*
+            elif message == "redeem_points" or "redeem" in msg_lower or "point" in msg_lower or "balance" in msg_lower:
+                # REDEEM POINTS - Show redemption info (per revised flow document)
+                points_result = await tagnpay_client.get_customer_points(mobile_10)
+                balance = 0
+                if points_result.get("success") and points_result.get("data"):
+                    balance = int(points_result["data"].get("balance_points", 0))
+                
+                await db.users.update_one({"id": user["id"]}, {"$set": {"balance_points": balance}})
+                
+                redeem_msg = f"""Your available points: {balance}
 
-We're here to help! Reach out to us through any of these channels:
+Redeem these points directly at participating Brands, and get instant discounts."""
+                
+                buttons = [
+                    {"id": "know_more", "title": "Know More"},
+                    {"id": "upload_bill", "title": "Upload Bill"}
+                ]
+                
+                outbound_log = WhatsAppLog(
+                    user_id=user["id"],
+                    user_phone=phone,
+                    direction="outbound",
+                    message_type="interactive",
+                    content=redeem_msg
+                )
+                await db.whatsapp_logs.insert_one(outbound_log.model_dump())
+                
+                background_tasks.add_task(send_whatsapp_buttons, phone, redeem_msg, buttons)
+            
+            elif message == "know_more" or "know more" in msg_lower:
+                # KNOW MORE - Send landing page link (per revised flow document)
+                program_url = f"{os.environ.get('BACKEND_PUBLIC_URL', '')}/app/program"
+                know_more_msg = f"""Homeland Advantage - CP67 Mall's Loyalty Program
 
-📧 *Email:* advantage@homelandgroup.org
+Learn about participating brands, how to earn & redeem points, and program terms:
 
-📱 *Mobile:* 97296 76767
-
-🏢 *Support Desk:* Reach out to our customer support desk for more enquiries at Ground Floor
-
-Our team is happy to assist you with any questions! 💫"""
+{program_url}"""
                 
                 buttons = [
                     {"id": "upload_bill", "title": "Upload Bill"},
-                    {"id": "my_points", "title": "Redeem Points"}
+                    {"id": "my_points", "title": "My Points"}
+                ]
+                
+                outbound_log = WhatsAppLog(
+                    user_id=user["id"],
+                    user_phone=phone,
+                    direction="outbound",
+                    message_type="interactive",
+                    content=know_more_msg
+                )
+                await db.whatsapp_logs.insert_one(outbound_log.model_dump())
+                
+                background_tasks.add_task(send_whatsapp_buttons, phone, know_more_msg, buttons)
+            
+            elif message == "customer_support" or "support" in msg_lower or "help" in msg_lower or "contact" in msg_lower or msg_lower.strip() == "4":
+                # HELP / SUPPORT (per revised flow document)
+                support_msg = """Customer Support
+
+We're here to help! Reach out to us through any of these channels:
+
+Email: advantage@homelandgroup.org
+
+Mobile: 97296 76767
+
+Support Desk: Reach out to our customer support desk for more enquiries at Ground Floor
+
+Our team is happy to assist you with any questions!"""
+                
+                buttons = [
+                    {"id": "know_more", "title": "Know More"},
+                    {"id": "upload_bill", "title": "Upload Bill"}
                 ]
                 
                 outbound_log = WhatsAppLog(
@@ -3647,12 +3724,18 @@ Our team is happy to assist you with any questions! 💫"""
                 background_tasks.add_task(send_whatsapp_buttons, phone, support_msg, buttons)
                 
             elif message == "upload_bill" or "upload" in msg_lower or msg_lower.strip() == "1" or ("bill" in msg_lower and "upload" in msg_lower):
-                # UPLOAD BILL PROMPT - EXACT Text
-                upload_msg = """Great choice! 🎉
+                # UPLOAD BILL PROMPT (per revised flow document)
+                upload_msg = """Great choice!
 
-Just share your shopping bill here 🛍️ and we'll credit your Homeland Advantage loyalty points instantly ✨
+Just share your shopping bill here and we'll credit your Homeland Advantage loyalty points instantly.
 
-💡 More bills = More points = More rewards 🎁"""
+More bills = More points = More rewards
+(E bills Accepted via screenshots)
+
+Follow these steps:
+1. Take a picture of bill - Open camera - Share
+OR
+2. Upload from Gallery - Open gallery to select the bill picture and share."""
                 
                 outbound_log = WhatsAppLog(
                     user_id=user["id"],
@@ -3670,17 +3753,18 @@ Just share your shopping bill here 🛍️ and we'll credit your Homeland Advant
                 background_tasks.add_task(process_bill_image, phone, user, image_url, background_tasks)
                 
             else:
-                # DEFAULT MENU
-                menu_msg = f"""Hi {user.get('name', 'there')}! 👋
-
+                # DEFAULT MENU (per revised flow document)
+                menu_msg = f"""Hi {user.get('name', 'there')}!
 Welcome back to Homeland Advantage – CP67 Mall!
 
 What would you like to do today?"""
                 
-                buttons = [
-                    {"id": "upload_bill", "title": "Upload Bill"},
-                    {"id": "my_points", "title": "Redeem Points"},
-                    {"id": "customer_support", "title": "Customer Support"}
+                menu_options = [
+                    {"id": "upload_bill", "title": "Upload Bill", "description": "Upload your shopping bill to earn points"},
+                    {"id": "redeem_points", "title": "Redeem Points", "description": "Redeem points at participating brands"},
+                    {"id": "my_points", "title": "My Points", "description": "Check your loyalty points balance"},
+                    {"id": "customer_support", "title": "Help / Support", "description": "Contact our support team"},
+                    {"id": "know_more", "title": "Know More", "description": "Participating brands & T&C"}
                 ]
                 
                 outbound_log = WhatsAppLog(
@@ -3692,7 +3776,7 @@ What would you like to do today?"""
                 )
                 await db.whatsapp_logs.insert_one(outbound_log.model_dump())
                 
-                background_tasks.add_task(send_whatsapp_buttons, phone, menu_msg, buttons)
+                background_tasks.add_task(send_whatsapp_list, phone, menu_msg, menu_options, "Homeland Advantage", "Menu")
         
         return {"status": "ok", "message": "Webhook processed"}
         

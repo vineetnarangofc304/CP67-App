@@ -14,6 +14,7 @@ import Events from './pages/Events';
 import Offers from './pages/Offers';
 import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
+import ProgramInfo from './pages/ProgramInfo';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api/consumer';
 
@@ -111,6 +112,7 @@ export default function ConsumerApp() {
             <Route path="offers" element={<ProtectedConsumer><Offers /></ProtectedConsumer>} />
             <Route path="profile" element={<ProtectedConsumer><Profile /></ProtectedConsumer>} />
             <Route path="notifications" element={<ProtectedConsumer><Notifications /></ProtectedConsumer>} />
+            <Route path="program" element={<ProgramInfo />} />
             <Route path="" element={<Navigate to="/app/welcome" replace />} />
             <Route path="*" element={<Navigate to="/app/home" replace />} />
           </Routes>

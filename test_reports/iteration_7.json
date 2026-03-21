@@ -1,0 +1,116 @@
+{
+  "summary": "Tested CP67 WhatsApp bot journey changes and new landing page. All 12 backend tests passed. Landing page at /app/program loads correctly with Homeland Advantage hero, How It Works section, 50 participating brands from API, Terms & Conditions, and Support contact info. Main menu uses send_whatsapp_list with 5 options (upload_bill, redeem_points, my_points, customer_support, know_more). Handlers are properly separated. Bill success message format matches spec.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "WhatsApp message templates",
+        "issue": "Emoji characters still present in some message templates (🎉, ✅, 🏬, 💰, ✨, 💳, 🌟, 🛍️, 💎, 📋, 🔔, 📱, ⏰). Found ~50+ occurrences in server.py. Per requirements, emojis should be removed from bot messages.",
+        "priority": "MEDIUM"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "GET /api/consumer/stores returns 200 - PASS",
+    "GET /api/consumer/stores returns stores list with 100+ brands - PASS",
+    "Stores have required 'name' field - PASS",
+    "Expected brands (adidas, h&m, zara, starbucks) found - PASS",
+    "Backend is running and responding - PASS",
+    "Admin login endpoint exists - PASS",
+    "Main menu has 5 options (upload_bill, redeem_points, my_points, customer_support, know_more) - PASS",
+    "send_whatsapp_list function exists for list messages - PASS",
+    "my_points and redeem_points are separate handlers - PASS",
+    "know_more handler exists and sends /app/program URL - PASS",
+    "Bill success message format matches spec - PASS",
+    "Landing page loads with Homeland Advantage hero - PASS",
+    "Landing page shows How It Works section - PASS",
+    "Landing page shows Participating Brands (50 brands loaded from API) - PASS",
+    "Landing page shows Terms & Conditions - PASS",
+    "Landing page shows Need Help? section with support contacts - PASS"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_landing_page_api.py",
+    "/app/test_reports/pytest/landing_page_results.xml"
+  ],
+  "action_items": [
+    "MEDIUM: Remove emoji characters from WhatsApp message templates in server.py. Found emojis in: bill success messages (🎉, ✅, 🏬, 💰, ✨, 💳, 🌟), registration messages (🎉, ✨, 🌟, 💎), upload prompts (🛍️, 🎁, 💡), admin alerts (🔔, 📋, 📱, ⏰), parking messages (✅, 📋, ⏰, 🛍️, ✨). Lines with emojis: 2297-2305, 2916-2918, 3073-3082, 3227-3234, 3256-3266, 3290-3298, 3411-3415, 3842, 3880-3888, 3912-3916, 3920, 3985-3989, 4034-4038, 4048-4062, 4088-4099, 4594-4652, 4764-4765, 4839-4849"
+  ],
+  "critical_code_review_comments": [
+    "Main menu correctly uses send_whatsapp_list with 5 options per revised flow document",
+    "my_points handler (line 3599) is separate from redeem_points handler (line 3642)",
+    "know_more handler (line 3671) correctly sends program URL: /app/program",
+    "Bill success message at line 3460 matches spec: 'Thank you for uploading your bill of {store} with Homeland Advantage. Points Credited: X, Total Balance: Y'",
+    "Bill rejection messages updated: non-CP67 (line 3102), >15 days (line 2976), >30K (line 3195)",
+    "Help/Support message (line 3698) reformatted with email, phone, and support desk info",
+    "Upload bill prompt (line 3728) updated with e-bills instruction",
+    "ISSUE: Emoji characters NOT removed from message templates - ~50+ occurrences found"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_landing_page_api.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (landing page loads correctly)"
+  },
+  "test_credentials": {
+    "admin": "admin / CP67Admin@2025",
+    "api_base_url": "https://cp67-consumer-app.preview.emergentagent.com",
+    "landing_page_url": "https://cp67-consumer-app.preview.emergentagent.com/app/program"
+  },
+  "seed_data_creation": "None - used existing stores data",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Landing page and WhatsApp menu structure verified. Main issue: emoji characters still present in server.py message templates. The requirement was to remove all emojis from bot messages. Found emojis in success messages, registration messages, upload prompts, admin alerts, and parking messages. Main agent should grep for emoji characters and remove them from all WhatsApp message templates.",
+  "features_verified": {
+    "landing_page": {
+      "url": "/app/program",
+      "hero": "Homeland Advantage - CP67 Mall's Exclusive Loyalty Program",
+      "sections": ["How It Works (Shop, Earn, Redeem)", "Participating Brands (50 brands from API)", "Terms & Conditions", "Need Help?"],
+      "support_contacts": ["advantage@homelandgroup.org", "97296 76767", "Support Desk, Ground Floor"]
+    },
+    "whatsapp_menu": {
+      "type": "list message (send_whatsapp_list)",
+      "options": [
+        {"id": "upload_bill", "title": "Upload Bill"},
+        {"id": "redeem_points", "title": "Redeem Points"},
+        {"id": "my_points", "title": "My Points"},
+        {"id": "customer_support", "title": "Help / Support"},
+        {"id": "know_more", "title": "Know More"}
+      ]
+    },
+    "handler_separation": {
+      "my_points": "Line 3599 - Shows Total Earned, Redeemed, Available Balance",
+      "redeem_points": "Line 3642 - Shows available points and redemption info",
+      "know_more": "Line 3671 - Sends program URL",
+      "customer_support": "Line 3696 - Shows email, phone, support desk"
+    },
+    "bill_messages": {
+      "success": "Thank you for uploading your bill of {store} with Homeland Advantage. Points Credited: X, Total Balance: Y",
+      "rejection_non_cp67": "Bill Cannot Be Processed - not eligible under Homeland Advantage program",
+      "rejection_15_days": "Bill Cannot Be Processed - more than 15 days old",
+      "rejection_30k": "Bill Received - Under Review (manual verification)"
+    }
+  },
+  "emoji_issue_details": {
+    "status": "NOT FIXED",
+    "description": "Emoji characters still present in WhatsApp message templates",
+    "emojis_found": ["🎉", "✅", "❌", "🏬", "💰", "✨", "💳", "🌟", "🛍️", "💎", "📋", "🔔", "📱", "⏰", "🎁", "💡", "👋", "🎊", "🤝"],
+    "affected_messages": [
+      "Bill success messages (lines 2297-2305)",
+      "Registration welcome messages (lines 3842, 3880-3888)",
+      "Upload prompts (lines 3912-3916)",
+      "Duplicate bill messages (lines 3985-3989, 4034-4038)",
+      "Manual review messages (lines 2916-2918, 4048-4062)",
+      "Bill scan results (lines 3073-3082)",
+      "Admin alerts (lines 3227-3234, 3290-3298)",
+      "ATV exceed messages (lines 3256-3266)",
+      "Processing messages (lines 3411-3415)",
+      "Parking messages (lines 4594-4652, 4764-4765, 4839-4849)"
+    ]
+  }
+}
