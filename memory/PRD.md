@@ -113,12 +113,14 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - **Mall Map** (`/app/mall-map`) — Floor-wise accordion, search by store/category, store logos
 - **Amenities** (`/app/amenities`) — 6 category quick-grid, expandable sections with locations
 - **Referrals** (`/app/referrals`) — Referral code card with copy/share, stats dashboard, how-it-works, apply code form
+- **Participating Brands** (`/app/redeem-brands`) — 102 brands grid, search, floor/category filters (mirrors CP67 website)
 
 **Enhanced Existing Pages:**
 - **Offers** — Filter tabs (All Offers / Hot Deals), horizontal Flash Sales scroll section
 - **Events** — Filter tabs (All Events / Featured), featured hero banner with countdown, event countdown tags
+- **Rewards** — Added "View All Participating Brands" link button
 
-**SideDrawer Updated:** 9 menu items (added Mall Map, Amenities, Refer & Earn)
+**SideDrawer Updated:** 10 menu items (added Mall Map, Amenities, Refer & Earn, Redeem at Brands)
 
 **Testing:** 100% backend (15/15), 100% frontend — all verified
 
@@ -136,6 +138,7 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - `GET /notification-preferences`, `PUT /notification-preferences`
 - `GET /mall-map`, `GET /amenities`
 - `GET /referral`, `POST /referral/apply`
+- `GET /participating-brands` (search, floor, category filters)
 - `GET /tier-info`
 
 ### Admin (/api/admin/*)
