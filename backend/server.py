@@ -2294,17 +2294,17 @@ async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks, payloa
                 total_balance = int(points_result["data"].get("balance_points", 0))
             
             # Send success message to user
-            success_msg = f"""🎉 *Points Credited!*
+            success_msg = f""" *Points Credited!*
 
 Your bill has been processed:
-🏬 Store: {store_name}
-🧾 Bill No: {bill_no}
-💰 Amount: ₹{amount:.0f}
+ Store: {store_name}
+ Bill No: {bill_no}
+ Amount: ₹{amount:.0f}
 
-✨ Points Earned: {points_earned}
-💳 Total Balance: {total_balance}
+ Points Earned: {points_earned}
+ Total Balance: {total_balance}
 
-Thank you for your patience! 🛍️"""
+Thank you for your patience! """
             
             buttons = [{"id": "upload_bill", "title": "Upload Bill"}]
             background_tasks.add_task(send_whatsapp_buttons, phone, success_msg, buttons)
@@ -2348,14 +2348,14 @@ async def send_admin_sms_alert(brand_name: str, bill_no: str, amount: float, use
         logger.info(f"Sending admin alert for brand: {brand_name} to {ADMIN_PHONE}")
         
         # Send WhatsApp message to admin
-        admin_msg = f"""🚨 *New Brand Alert - Action Required*
+        admin_msg = f""" *New Brand Alert - Action Required*
 
 A bill was uploaded but the brand is not in Fundle master.
 
-📝 *Add this exact brand name to Fundle:*
-👉 *{brand_name}*
+ *Add this exact brand name to Fundle:*
+ *{brand_name}*
 
-🧾 Bill Details:
+ Bill Details:
 • Bill No: {bill_no}
 • Amount: ₹{amount:.0f}
 • User: {user_phone}
@@ -2909,13 +2909,13 @@ Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards."""
         
         if not ocr_result.get("success"):
             # OCR failed - manual review
-            unclear_msg = """We noticed that the bill image you uploaded is not clear enough to process automatically 🧾
+            unclear_msg = """We noticed that the bill image you uploaded is not clear enough to process automatically 
 
-📌 Don't worry — your bill has been submitted to our backend team.
+ Don't worry — your bill has been submitted to our backend team.
 
-We will manually verify it within 24–48 hours, and your points will be credited once validation is complete ✅
+We will manually verify it within 24–48 hours, and your points will be credited once validation is complete 
 
-Thank you for your patience and for being a valued member of Homeland Advantage 🌟"""
+Thank you for your patience and for being a valued member of Homeland Advantage """
             
             # Save for manual review
             bill_data = BillData(
@@ -3053,7 +3053,7 @@ Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards."""
         # FIRST: Show ALL extracted bill details with items
         items_text = ""
         if items and len(items) > 0:
-            items_text = "\n📦 *Items:*\n"
+            items_text = "\n *Items:*\n"
             for i, item in enumerate(items[:10], 1):  # Limit to 10 items
                 if isinstance(item, str):
                     items_text += f"  {i}. {item}\n"
@@ -3068,16 +3068,16 @@ Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards."""
                         items_text += f" - ₹{item_price}"
                     items_text += "\n"
         
-        tax_text = f"\n💵 Tax: ₹{tax}" if tax else ""
+        tax_text = f"\n Tax: ₹{tax}" if tax else ""
         
-        bill_details_msg = f"""📋 *Bill Scan Results*
+        bill_details_msg = f""" *Bill Scan Results*
 
-🏬 *Store:* {store_name}
-🧾 *Bill No:* {bill_no}
-📅 *Date:* {bill_date}
-💰 *Amount:* ₹{amount:.2f}{tax_text}
+ *Store:* {store_name}
+ *Bill No:* {bill_no}
+ *Date:* {bill_date}
+ *Amount:* ₹{amount:.2f}{tax_text}
 {items_text}
-🔍 *Confidence:* {confidence*100:.0f}%
+ *Confidence:* {confidence*100:.0f}%
 
 Processing your rewards... ⏳"""
         
@@ -3224,14 +3224,14 @@ Happy shopping!"""
             await db.bills.insert_one(bill_data.model_dump())
             
             # Send admin notification for high value bill
-            admin_alert_msg = f"""🔔 *High Value Bill Alert*
+            admin_alert_msg = f""" *High Value Bill Alert*
 
 A bill over ₹30,000 has been submitted for review.
 
-🏬 Store: {store_name}
-🧾 Bill No: {bill_no}
-💰 Amount: ₹{amount:.0f}
-📱 User: {phone}
+ Store: {store_name}
+ Bill No: {bill_no}
+ Amount: ₹{amount:.0f}
+ User: {phone}
 
 Please review in the admin dashboard."""
             
@@ -3253,19 +3253,19 @@ Please review in the admin dashboard."""
         if brand_config and brand_config.get("atv", 0) > 0:
             brand_atv = brand_config["atv"]
             if amount > brand_atv:
-                atv_exceed_msg = f"""📋 *Bill Received - Under Review*
+                atv_exceed_msg = f""" *Bill Received - Under Review*
 
 Thank you for shopping at *{store_name}*!
 
-🧾 *Bill No:* {bill_no}
-📅 *Date:* {bill_date}
-💰 *Amount:* ₹{amount:,.0f}
+ *Bill No:* {bill_no}
+ *Date:* {bill_date}
+ *Amount:* ₹{amount:,.0f}
 
 ⏳ Your bill is under review for validation by our team.
 
-Your bill will be reviewed within 24-48 hours and points will be credited once approved ✅
+Your bill will be reviewed within 24-48 hours and points will be credited once approved 
 
-Thank you for your patience! 🛍️"""
+Thank you for your patience! """
                 
                 # Save as pending_review
                 bill_data = BillData(
@@ -3287,15 +3287,15 @@ Thank you for your patience! 🛍️"""
                 await db.bills.insert_one(bill_data.model_dump())
                 
                 # Send admin notification
-                admin_alert_msg = f"""🔔 *ATV Exceeded Alert*
+                admin_alert_msg = f""" *ATV Exceeded Alert*
 
 A bill exceeding brand ATV has been submitted.
 
-🏬 Store: {store_name}
-🧾 Bill No: {bill_no}
-💰 Amount: ₹{amount:,.0f}
-📊 Brand ATV: ₹{brand_atv:,.0f}
-📱 User: {phone}
+ Store: {store_name}
+ Bill No: {bill_no}
+ Amount: ₹{amount:,.0f}
+ Brand ATV: ₹{brand_atv:,.0f}
+ User: {phone}
 
 Please review in the admin dashboard."""
                 
@@ -3417,18 +3417,18 @@ Thank you for shopping at CP67 Mall!"""
         
         # TEMPORARILY DISABLED 30-day check for testing
         # if bill_status == "pending_review" and "30 days" in (tagnpay_error or ""):
-        #     old_bill_msg = f"""📋 *Bill Received*
+        #     old_bill_msg = f""" *Bill Received*
         # 
-        # 🏬 Store: {store_name}
-        # 🧾 Bill No: {bill_no}
-        # 📅 Date: {bill_date}
-        # 💰 Amount: ₹{amount:.0f}
+        #  Store: {store_name}
+        #  Bill No: {bill_no}
+        #  Date: {bill_date}
+        #  Amount: ₹{amount:.0f}
         # 
-        # ⚠️ This bill is older than 30 days and cannot be processed for points.
+        #  This bill is older than 30 days and cannot be processed for points.
         # 
         # Please upload bills within 30 days of purchase to earn rewards.
         # 
-        # 💳 Current Points: {total_balance}"""
+        #  Current Points: {total_balance}"""
         #     
         #     buttons = [
         #         {"id": "upload_bill", "title": "Upload Recent Bill"},
@@ -3839,11 +3839,11 @@ async def simulate_whatsapp_message(request: WhatsAppMessageRequest, payload: di
                 upsert=True
             )
         
-        response_message = f"""Welcome to Homeland Advantage – CP67 Mall! 🎉
+        response_message = f"""Welcome to Homeland Advantage – CP67 Mall! 
 
 To complete your registration, please share:
-1️⃣ Your Name
-2️⃣ Your PAN Card Number
+1 Your Name
+2 Your PAN Card Number
 
 Type your details in format: NAME | PAN_NUMBER
 Example: Rahul Kumar | ABCDE1234F"""
@@ -3877,26 +3877,26 @@ Example: Rahul Kumar | ABCDE1234F"""
                             upsert=True
                         )
                     
-                    response_message = f"""Hi {name}! 🎉 Congratulations! 🎉
+                    response_message = f"""Hi {name}!  Congratulations! 
 
-You are now a valued member of Homeland Advantage – CP67 Mall's exclusive Loyalty Program ✨
+You are now a valued member of Homeland Advantage – CP67 Mall's exclusive Loyalty Program 
 
-Enjoy special privileges, exciting rewards & personalized offers every time you shop with us 🛍️
+Enjoy special privileges, exciting rewards & personalized offers every time you shop with us 
 
 Shop • Earn • Redeem • Repeat
 
-Welcome to a world of advantage & experiences crafted just for you! 🌟💎
+Welcome to a world of advantage & experiences crafted just for you! 
 
-1️⃣ Upload Bill
-2️⃣ Redeem Points"""
+1 Upload Bill
+2 Redeem Points"""
                 else:
                     response_message = """Please share your details in the correct format:
 NAME | PAN_NUMBER
 Example: Rahul Kumar | ABCDE1234F"""
             else:
                 response_message = f"""Welcome back! To complete registration, please share:
-1️⃣ Your Name
-2️⃣ Your PAN Card Number
+1 Your Name
+2 Your PAN Card Number
 
 Type: NAME | PAN_NUMBER"""
         else:
@@ -3905,24 +3905,24 @@ Type: NAME | PAN_NUMBER"""
             if "my points" in msg_lower or "balance" in msg_lower or "2" in msg_lower:
                 response_message = f"""Your total Loyalty Points are: {user.get('balance_points', 0):.0f}
 
-Redeem these points directly at participating retailers 🛍️
+Redeem these points directly at participating retailers 
 
-1️⃣ Upload Bill"""
+1 Upload Bill"""
             elif "upload" in msg_lower or "bill" in msg_lower or "1" in msg_lower:
-                response_message = """Great choice! 🎉
+                response_message = """Great choice! 
 
-Just share your shopping bill here 🛍️ and we'll credit your Homeland Advantage loyalty points instantly ✨
+Just share your shopping bill here  and we'll credit your Homeland Advantage loyalty points instantly 
 
-💡 More bills = More points = More rewards 🎁
+ More bills = More points = More rewards 
 
 Please upload an image of your bill."""
             else:
-                response_message = f"""Hi {user.get('name', 'there')}! 👋
+                response_message = f"""Hi {user.get('name', 'there')}! 
 
 What would you like to do today?
 
-1️⃣ Upload Bill
-2️⃣ Redeem Points
+1 Upload Bill
+2 Redeem Points
 
 Reply with 1 or 2"""
     
@@ -3982,13 +3982,13 @@ async def simulate_bill_upload(
     is_duplicate = await check_duplicate_bill(image_hash, None, None)
     
     if is_duplicate:
-        response_message = f"""Our system shows that this bill has already been processed earlier and rewards have been issued ✅
+        response_message = f"""Our system shows that this bill has already been processed earlier and rewards have been issued 
 
-💳 Your Current Points Balance: {user.get('balance_points', 0):.0f}
+ Your Current Points Balance: {user.get('balance_points', 0):.0f}
 
-🛍️ Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards 🌟
+ Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards 
 
-1️⃣ Upload Bill"""
+1 Upload Bill"""
         
         # Log outbound
         outbound_log = WhatsAppLog(
@@ -4031,38 +4031,38 @@ async def simulate_bill_upload(
             is_duplicate = await check_duplicate_bill(image_hash, bill_data.bill_no, bill_data.store_name)
             if is_duplicate:
                 bill_data.status = "duplicate"
-                response_message = f"""Our system shows that this bill has already been processed earlier and rewards have been issued ✅
+                response_message = f"""Our system shows that this bill has already been processed earlier and rewards have been issued 
 
-💳 Your Current Points Balance: {user.get('balance_points', 0):.0f}
+ Your Current Points Balance: {user.get('balance_points', 0):.0f}
 
-🛍️ Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards 🌟
+ Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards 
 
-1️⃣ Upload Bill"""
+1 Upload Bill"""
             elif data.get("tampering_detected"):
                 bill_data.status = "manual_review"
                 bill_data.rejection_reason = f"Tampering indicators: {', '.join(data.get('tampering_indicators', []))}"
-                response_message = """We noticed some issues with the bill image you uploaded 🧾
+                response_message = """We noticed some issues with the bill image you uploaded 
 
-📌 Your bill has been submitted to our backend team for review.
+ Your bill has been submitted to our backend team for review.
 
-We will manually verify it within 24–48 hours, and your points will be credited once validation is complete ✅
+We will manually verify it within 24–48 hours, and your points will be credited once validation is complete 
 
-Thank you for your patience! 🌟
+Thank you for your patience! 
 
-1️⃣ Upload Bill
-2️⃣ Redeem Points"""
+1 Upload Bill
+2 Redeem Points"""
             elif data.get("image_quality") == "poor" or bill_data.ocr_confidence < 0.6:
                 bill_data.status = "manual_review"
-                response_message = """We noticed that the bill image you uploaded is not clear enough to process automatically 🧾
+                response_message = """We noticed that the bill image you uploaded is not clear enough to process automatically 
 
-📌 Don't worry — your bill has been submitted to our backend team.
+ Don't worry — your bill has been submitted to our backend team.
 
-We will manually verify it within 24–48 hours, and your points will be credited once validation is complete ✅
+We will manually verify it within 24–48 hours, and your points will be credited once validation is complete 
 
-Thank you for your patience and for being a valued member of Homeland Advantage 🌟
+Thank you for your patience and for being a valued member of Homeland Advantage 
 
-1️⃣ Upload Bill
-2️⃣ Redeem Points"""
+1 Upload Bill
+2 Redeem Points"""
             elif data.get("is_valid_bill") and bill_data.amount and bill_data.amount > 0:
                 # Auto approve
                 points = round(bill_data.amount * 0.01, 2)  # 1% of bill amount
@@ -4085,51 +4085,51 @@ Thank you for your patience and for being a valued member of Homeland Advantage 
                     )
                 
                 new_balance = user.get("balance_points", 0) + points
-                response_message = f"""Thank you for uploading your bill with Homeland Advantage 🎉
+                response_message = f"""Thank you for uploading your bill with Homeland Advantage 
 
-🧾 Bill Details:
-🏬 Store: {bill_data.store_name or 'N/A'}
-🧾 Bill No.: {bill_data.bill_no or 'N/A'}
-📅 Date: {bill_data.bill_date or 'N/A'}
-💰 Amount: ₹{bill_data.amount:.2f}
+ Bill Details:
+ Store: {bill_data.store_name or 'N/A'}
+ Bill No.: {bill_data.bill_no or 'N/A'}
+ Date: {bill_data.bill_date or 'N/A'}
+ Amount: ₹{bill_data.amount:.2f}
 
-✨ Points Earned: {points:.0f}
-💳 Total Balance: {new_balance:.0f}
+ Points Earned: {points:.0f}
+ Total Balance: {new_balance:.0f}
 
-🛍️ Keep shopping at CP67 Mall to earn more rewards & unlock exclusive benefits 🌟
+ Keep shopping at CP67 Mall to earn more rewards & unlock exclusive benefits 
 
-1️⃣ Upload Bill"""
+1 Upload Bill"""
             else:
                 bill_data.status = "manual_review"
-                response_message = """We couldn't validate the bill details automatically 🧾
+                response_message = """We couldn't validate the bill details automatically 
 
-📌 Your bill has been submitted to our backend team for review.
+ Your bill has been submitted to our backend team for review.
 
-We will verify it within 24–48 hours ✅
+We will verify it within 24–48 hours 
 
-1️⃣ Upload Bill
-2️⃣ Redeem Points"""
+1 Upload Bill
+2 Redeem Points"""
         else:
             bill_data.status = "manual_review"
-            response_message = """We couldn't extract all bill details 🧾
+            response_message = """We couldn't extract all bill details 
 
-📌 Your bill has been submitted to our backend team for review.
+ Your bill has been submitted to our backend team for review.
 
-We will verify it within 24–48 hours ✅
+We will verify it within 24–48 hours 
 
-1️⃣ Upload Bill
-2️⃣ Redeem Points"""
+1 Upload Bill
+2 Redeem Points"""
     else:
         bill_data.status = "manual_review"
         bill_data.ocr_raw_data = {"error": ocr_result.get("error")}
-        response_message = """We're having trouble processing your bill image 🧾
+        response_message = """We're having trouble processing your bill image 
 
-📌 Your bill has been submitted to our backend team for review.
+ Your bill has been submitted to our backend team for review.
 
-We will verify it within 24–48 hours ✅
+We will verify it within 24–48 hours 
 
-1️⃣ Upload Bill
-2️⃣ Redeem Points"""
+1 Upload Bill
+2 Redeem Points"""
     
     await db.bills.insert_one(bill_data.model_dump())
     
@@ -4587,20 +4587,20 @@ async def process_parking_entry(phone: str, name: Optional[str], background_task
             session_code = existing_active["session_code"]
             entry_time = datetime.fromisoformat(existing_active["entry_time"].replace('Z', '+00:00')).strftime("%I:%M %p")
             
-            reminder_msg = f"""🅿️ *CP67 Mall Parking*
+            reminder_msg = f"""🅿 *CP67 Mall Parking*
 
 You already have an active parking session!
 
-📋 *Your Exit Code:*
+ *Your Exit Code:*
 ━━━━━━━━━━━━━━━
 *{session_code}*
 ━━━━━━━━━━━━━━━
 
 ⏰ *Entry Time:* {entry_time}
 
-👉 Show this code at the exit counter when leaving.
+ Show this code at the exit counter when leaving.
 
-Have a great time shopping! 🛍️"""
+Have a great time shopping! """
             
             # Log outbound
             outbound_log = WhatsAppLog(
@@ -4635,21 +4635,21 @@ Have a great time shopping! 🛍️"""
         entry_time = datetime.fromisoformat(session.entry_time).strftime("%I:%M %p")
         entry_date = datetime.fromisoformat(session.entry_time).strftime("%d %b %Y")
         
-        welcome_msg = f"""🅿️ *Welcome to CP67 Mall Parking!*
+        welcome_msg = f"""🅿 *Welcome to CP67 Mall Parking!*
 
-Your FREE parking session has started ✅
+Your FREE parking session has started 
 
-📋 *Your Exit Code:*
+ *Your Exit Code:*
 ━━━━━━━━━━━━━━━━━━
 *{session_code}*
 ━━━━━━━━━━━━━━━━━━
 
-📅 *Date:* {entry_date}
+ *Date:* {entry_date}
 ⏰ *Entry Time:* {entry_time}
 
-👉 *Show this code at the parking exit counter when leaving.*
+ *Show this code at the parking exit counter when leaving.*
 
-Enjoy your visit to CP67 Mall! 🛍️✨"""
+Enjoy your visit to CP67 Mall! """
         
         # Log outbound
         outbound_log = WhatsAppLog(
@@ -4665,17 +4665,17 @@ Enjoy your visit to CP67 Mall! 🛍️✨"""
         
         # Try to send QR image first, fall back to buttons if image fails
         if qr_image:
-            qr_caption = f"""🅿️ *Welcome to CP67 Mall Parking!*
+            qr_caption = f"""🅿 *Welcome to CP67 Mall Parking!*
 
-Your FREE parking session has started ✅
+Your FREE parking session has started 
 
-📋 *Session Code:* {session_code}
-📅 *Date:* {entry_date}
+ *Session Code:* {session_code}
+ *Date:* {entry_date}
 ⏰ *Entry Time:* {entry_time}
 
-👆 *Show this QR code at the exit counter*
+ *Show this QR code at the exit counter*
 
-Enjoy your visit to CP67 Mall! 🛍️✨"""
+Enjoy your visit to CP67 Mall! """
             
             # Try sending image
             image_sent = await send_whatsapp_image(clean_phone, qr_image, qr_caption)
@@ -4757,16 +4757,16 @@ async def create_parking_entry(phone: str, name: Optional[str] = None, backgroun
     # Send WhatsApp message with QR
     if qr_image and background_tasks:
         entry_time = datetime.fromisoformat(session.entry_time).strftime("%I:%M %p")
-        message = f"""🅿️ *CP67 Mall Parking*
+        message = f"""🅿 *CP67 Mall Parking*
 
 Your parking session has started!
 
-📋 *Session Code:* {session_code}
+ *Session Code:* {session_code}
 ⏰ *Entry Time:* {entry_time}
 
 Please show the QR code below at the exit counter when leaving.
 
-Thank you for visiting CP67 Mall! 🛍️"""
+Thank you for visiting CP67 Mall! """
         
         background_tasks.add_task(send_whatsapp_image, clean_phone, qr_image, message)
     
@@ -4836,21 +4836,21 @@ async def validate_parking(session_code: str, scanned_by: Optional[str] = None, 
     # Send Thank You WhatsApp message to customer
     user_phone = session.get("user_phone")
     if user_phone:
-        thank_you_msg = f"""🎉 *Thank You for Visiting CP67 Mall!*
+        thank_you_msg = f""" *Thank You for Visiting CP67 Mall!*
 
-We hope you had a wonderful experience! 🛍️
+We hope you had a wonderful experience! 
 
-🅿️ *Parking Summary:*
-📅 Date: {date_display}
+🅿 *Parking Summary:*
+ Date: {date_display}
 ⏰ Entry: {entry_display}
 ⏰ Exit: {exit_display}
-⏱️ Duration: {duration_display}
+⏱ Duration: {duration_display}
 
-✨ Your parking was FREE! ✨
+ Your parking was FREE! 
 
 We look forward to seeing you again soon!
 
-💎 *Homeland Advantage* - Your CP67 Mall Loyalty Program"""
+ *Homeland Advantage* - Your CP67 Mall Loyalty Program"""
         
         # Log outbound message
         outbound_log = WhatsAppLog(

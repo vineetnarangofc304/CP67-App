@@ -87,6 +87,20 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - Now auto-detects and validates parking QR codes when scanned
 - Removed misleading "Camera scanning requires manual code entry" message
 
+### Revised WhatsApp Bot Journey — Mar 20, 2026
+Per user-provided document "Revised WhatsApp Bot Journey_18.03.2026":
+- **Menu structure:** Changed from 3 buttons to 5-option list message (Upload Bill, Redeem Points, My Points, Help/Support, Know More)
+- **My Points:** Separate flow showing Total Earned, Redeemed, Available Balance
+- **Redeem Points:** Separate flow showing redemption info at participating brands
+- **Know More:** New option linking to `/app/program` landing page
+- **Bill upload prompt:** Updated with step-by-step instructions, e-bills accepted
+- **Bill success message:** Simplified to "Thank you for uploading your bill of {Brand} with Homeland Advantage"
+- **All rejection messages:** Updated (non-CP67, >15 days, >30K under review)
+- **Help/Support:** Reformatted with email, phone, support desk info
+- **Emoji cleanup:** All emoji characters removed from every WhatsApp message template
+- **New landing page:** Created at `/app/program` — Homeland Advantage program overview, participating brands (50 from API), How It Works, T&C, support contacts
+- Tested: 12/12 backend tests passed, landing page verified with 50 brands loading
+
 ### Previously Implemented
 - WhatsApp bill upload + OCR
 - Fundle customer sync
