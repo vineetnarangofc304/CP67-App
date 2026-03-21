@@ -22,6 +22,9 @@ import Rewards from './pages/Rewards';
 import HelpSupport from './pages/HelpSupport';
 import Legal from './pages/Legal';
 import NotificationPrefs from './pages/NotificationPrefs';
+import MallMap from './pages/MallMap';
+import Amenities from './pages/Amenities';
+import Referrals from './pages/Referrals';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api/consumer';
 
@@ -123,6 +126,9 @@ export default function ConsumerApp() {
             <Route path="help" element={<ProtectedConsumer><HelpSupport /></ProtectedConsumer>} />
             <Route path="legal" element={<ProtectedConsumer><Legal /></ProtectedConsumer>} />
             <Route path="notification-settings" element={<ProtectedConsumer><NotificationPrefs /></ProtectedConsumer>} />
+            <Route path="mall-map" element={<ProtectedConsumer><MallMap /></ProtectedConsumer>} />
+            <Route path="amenities" element={<ProtectedConsumer><Amenities /></ProtectedConsumer>} />
+            <Route path="referrals" element={<ProtectedConsumer><Referrals /></ProtectedConsumer>} />
             <Route path="program" element={<ProgramInfo />} />
             <Route path="" element={<Navigate to="/app/welcome" replace />} />
             <Route path="*" element={<Navigate to="/app/home" replace />} />

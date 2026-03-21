@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Gift, Receipt, FileText, HelpCircle, Shield, ChevronRight, LogOut } from 'lucide-react';
+import { X, User, Gift, Receipt, FileText, HelpCircle, Shield, ChevronRight, LogOut, Map, Building2, Share2 } from 'lucide-react';
 import { useConsumerAuth } from '../ConsumerApp';
 
 const menuItems = [
@@ -9,6 +9,9 @@ const menuItems = [
   { path: '/app/rewards', icon: Gift, label: 'My Rewards' },
   { path: '/app/transactions', icon: Receipt, label: 'Transactions' },
   { path: '/app/bill-history', icon: FileText, label: 'Bill History' },
+  { path: '/app/mall-map', icon: Map, label: 'Mall Map' },
+  { path: '/app/amenities', icon: Building2, label: 'Amenities' },
+  { path: '/app/referrals', icon: Share2, label: 'Refer & Earn' },
   { path: '/app/help', icon: HelpCircle, label: 'Help & Support' },
   { path: '/app/legal', icon: Shield, label: 'Legal' },
 ];
