@@ -3617,6 +3617,17 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
             # EXISTING USER
             await db.whatsapp_logs.update_one({"id": log_entry.id}, {"$set": {"user_id": user["id"]}})
             
+            # Resolve display name: WhatsApp profileName > stored name > 'there'
+            display_name = (profile_name or user.get("name") or "there").strip()
+            if display_name.lower() in ("none", "null", ""):
+                display_name = "there"
+            
+            # Update stored name from WhatsApp if user has no name or name is generic
+            stored_name = user.get("name") or ""
+            if profile_name and profile_name.strip() and stored_name in ("", "Customer", "there", "None"):
+                await db.users.update_one({"id": user["id"]}, {"$set": {"name": profile_name.strip()}})
+                display_name = profile_name.strip()
+            
             msg_lower = clean_message.lower()
             
             # Map list/button titles to action IDs for robust matching
@@ -3794,8 +3805,8 @@ OR
                 
             else:
                 # DEFAULT MENU (per revised flow document)
-                menu_msg = f"""Hi {user.get('name', 'there')}!
-Welcome back to Homeland Advantage – CP67 Mall!
+                menu_msg = f"""Hi {display_name}!
+Welcome back to Homeland Advantage - CP67 Mall!
 
 What would you like to do today?"""
                 
