@@ -1059,6 +1059,171 @@ async def update_notification_prefs(prefs: dict, current_user=Depends(get_curren
     return {"preferences": filtered}
 
 
+# ==================== MALL MAP & AMENITIES ====================
+
+@consumer_router.get("/mall-map")
+async def get_mall_map(current_user=Depends(get_current_consumer)):
+    """Get floor-wise brand locations for mall map"""
+    floors = {}
+    async for brand in _db.brands.find(
+        {"name": {"$exists": True, "$ne": ""}},
+        {"_id": 0, "name": 1, "floor": 1, "category": 1, "logo_url": 1}
+    ):
+        floor = brand.get("floor") or "Other"
+        if floor not in floors:
+            floors[floor] = []
+        floors[floor].append({
+            "name": brand["name"],
+            "category": brand.get("category", ""),
+            "logo_url": brand.get("logo_url", "")
+        })
+    # Sort floors
+    floor_order = ["Lower Ground", "Ground Floor", "First Floor", "Second Floor", "Third Floor", "Food Court", "Other"]
+    sorted_floors = []
+    for f in floor_order:
+        if f in floors:
+            sorted_floors.append({"floor": f, "stores": floors[f]})
+    for f in floors:
+        if f not in floor_order:
+            sorted_floors.append({"floor": f, "stores": floors[f]})
+    return {"floors": sorted_floors}
+
+
+@consumer_router.get("/amenities")
+async def get_amenities():
+    """Get mall amenities list"""
+    amenities = [
+        {"category": "Restrooms", "items": [
+            {"name": "Restroom - Ground Floor", "location": "Near Entrance A", "floor": "Ground Floor"},
+            {"name": "Restroom - First Floor", "location": "Near Food Court", "floor": "First Floor"},
+            {"name": "Restroom - Second Floor", "location": "Near Elevator B", "floor": "Second Floor"},
+        ]},
+        {"category": "ATMs & Banking", "items": [
+            {"name": "HDFC ATM", "location": "Ground Floor, Main Lobby", "floor": "Ground Floor"},
+            {"name": "SBI ATM", "location": "Lower Ground, Near Parking", "floor": "Lower Ground"},
+            {"name": "ICICI ATM", "location": "Ground Floor, East Wing", "floor": "Ground Floor"},
+        ]},
+        {"category": "Services", "items": [
+            {"name": "Customer Service Desk", "location": "Ground Floor, Main Entrance", "floor": "Ground Floor"},
+            {"name": "Lost & Found", "location": "Ground Floor, Security Office", "floor": "Ground Floor"},
+            {"name": "Wheelchair Access", "location": "All Floors via Elevator", "floor": "All Floors"},
+            {"name": "Baby Care Room", "location": "First Floor, Near Restroom", "floor": "First Floor"},
+        ]},
+        {"category": "Connectivity", "items": [
+            {"name": "Free WiFi", "location": "Available throughout mall", "floor": "All Floors"},
+            {"name": "Mobile Charging Station", "location": "Food Court & Ground Floor", "floor": "Multiple"},
+        ]},
+        {"category": "Parking & Transport", "items": [
+            {"name": "Basement Parking", "location": "B1 & B2 Levels", "floor": "Basement"},
+            {"name": "Valet Parking", "location": "Main Entrance", "floor": "Ground Floor"},
+            {"name": "EV Charging", "location": "B1 Level, Section C", "floor": "Basement"},
+        ]},
+        {"category": "Emergency", "items": [
+            {"name": "First Aid", "location": "Ground Floor, Security Office", "floor": "Ground Floor"},
+            {"name": "Fire Exit A", "location": "East Wing, All Floors", "floor": "All Floors"},
+            {"name": "Fire Exit B", "location": "West Wing, All Floors", "floor": "All Floors"},
+        ]},
+    ]
+    return {"amenities": amenities}
+
+
+# ==================== REFERRAL SYSTEM ====================
+
+@consumer_router.get("/referral")
+async def get_referral_info(current_user=Depends(get_current_consumer)):
+    """Get user's referral info and stats"""
+    user = await _db.users.find_one({"id": current_user["sub"]}, {"_id": 0})
+    referral_code = user.get("referral_code", "")
+
+    # Count successful referrals
+    referral_count = await _db.users.count_documents({"referred_by": referral_code})
+
+    # Referral bonus points earned
+    bonus_earned = referral_count * 50  # 50 points per referral
+
+    return {
+        "referral_code": referral_code,
+        "referral_link": f"{os.environ.get('BACKEND_PUBLIC_URL', '')}/app/welcome?ref={referral_code}",
+        "total_referrals": referral_count,
+        "bonus_points_earned": bonus_earned,
+        "points_per_referral": 50,
+        "share_text": f"Join Homeland Advantage at CP67 Mall and earn exciting rewards! Use my referral code: {referral_code}"
+    }
+
+
+@consumer_router.post("/referral/apply")
+async def apply_referral(code: str, current_user=Depends(get_current_consumer)):
+    """Apply a referral code"""
+    user = await _db.users.find_one({"id": current_user["sub"]}, {"_id": 0})
+    if user.get("referred_by"):
+        raise HTTPException(status_code=400, detail="You have already used a referral code")
+
+    # Find referrer
+    referrer = await _db.users.find_one({"referral_code": code}, {"_id": 0, "id": 1})
+    if not referrer:
+        raise HTTPException(status_code=404, detail="Invalid referral code")
+    if referrer["id"] == current_user["sub"]:
+        raise HTTPException(status_code=400, detail="Cannot use your own referral code")
+
+    await _db.users.update_one({"id": current_user["sub"]}, {"$set": {"referred_by": code}})
+    return {"success": True, "message": "Referral code applied! You'll earn bonus points on your first bill upload."}
+
+
+# ==================== TIER SYSTEM ====================
+
+@consumer_router.get("/tier-info")
+async def get_tier_info(current_user=Depends(get_current_consumer)):
+    """Get detailed tier information and benefits"""
+    phone_10 = current_user["phone"][-10:]
+    points_result = await _tagnpay_client.get_customer_points(phone_10)
+    total_earned = 0
+    if points_result.get("success") and points_result.get("data"):
+        total_earned = int(points_result["data"].get("total_earned_points",
+                          points_result["data"].get("balance_points", 0)))
+
+    user = await _db.users.find_one({"id": current_user["sub"]}, {"_id": 0})
+    local_earned = int(user.get("total_earned_points", 0)) if user else 0
+    if local_earned > total_earned:
+        total_earned = local_earned
+
+    current_tier = calculate_tier(total_earned)
+
+    tiers = [
+        {"name": "Bronze", "min_points": 0, "color": "#CD7F32", "benefits": [
+            "Earn points on every purchase",
+            "Access to basic rewards catalog",
+            "Birthday bonus points",
+        ]},
+        {"name": "Silver", "min_points": 2500, "color": "#C0C0C0", "benefits": [
+            "All Bronze benefits",
+            "1.5x points multiplier",
+            "Priority customer support",
+            "Exclusive Silver member offers",
+        ]},
+        {"name": "Gold", "min_points": 10000, "color": "#FFD700", "benefits": [
+            "All Silver benefits",
+            "2x points multiplier",
+            "Free valet parking (weekends)",
+            "Exclusive Gold member events",
+            "Early access to sales",
+        ]},
+        {"name": "Platinum", "min_points": 25000, "color": "#8B5CF6", "benefits": [
+            "All Gold benefits",
+            "3x points multiplier",
+            "Free valet parking (anytime)",
+            "Personal shopping concierge",
+            "Platinum-only lounge access",
+            "Anniversary bonus rewards",
+        ]},
+    ]
+
+    return {
+        "current_tier": current_tier,
+        "total_earned": total_earned,
+        "tiers": tiers
+    }
+
+
 # ==================== SEED DATA ====================
 
 @consumer_router.post("/seed")

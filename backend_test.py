@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 
 class CP67LoyaltyAPITester:
-    def __init__(self, base_url="https://cp67-consumer-app.preview.emergentagent.com"):
+    def __init__(self, base_url="https://cp67-mall-app.preview.emergentagent.com"):
         self.base_url = base_url
         self.token = None
         self.tests_run = 0
