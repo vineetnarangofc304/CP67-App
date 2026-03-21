@@ -87,7 +87,28 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - Now auto-detects and validates parking QR codes when scanned
 - Removed misleading "Camera scanning requires manual code entry" message
 
-### Revised WhatsApp Bot Journey — Mar 20, 2026
+### Phase 1 Complete — Core Loyalty Features (Mar 21, 2026)
+Per "Homeland Advantage App Requirements Document Version 1.1":
+
+**New Backend Endpoints:**
+- `GET /api/consumer/wallet/detailed` — Enhanced wallet with balance, earned, redeemed, expired, tier progress
+- `GET /api/consumer/transactions` — Transaction history with filter (all/earn/redeem)
+- `GET /api/consumer/rewards` — Rewards catalog (auto-seeded from brands: 4 denominations x 12 stores)
+- `POST /api/consumer/rewards/redeem` — One-tap redemption (1 pt = Rs 1)
+- `GET /api/consumer/rewards/history` — Redemption history
+- Profile update: added DOB, gender, address fields
+
+**New Frontend Pages (8 pages/components):**
+- Enhanced Wallet — Points breakdown (earned/redeemed/expired), tier progress bar, quick actions
+- Transactions — Full history with All/Earned/Redeemed filter tabs
+- Bill History — All bills with status filters (All/Approved/Pending/Rejected), rejection reasons
+- Rewards Catalog — Cards grouped by store, Rs 100/250/500/1000 denominations, one-tap redeem
+- Help & Support — 4 contact cards, 6 expandable FAQs
+- Legal — Terms & Conditions + Privacy Policy
+- Side Drawer Menu — 6 items (Profile, Rewards, Transactions, Bill History, Help, Legal) + Logout
+- Enhanced Profile — DOB, gender, address, tier display, edit form with save
+
+**Testing:** 32/32 backend tests passed, all frontend UI verified (100% pass rate)
 Per user-provided document "Revised WhatsApp Bot Journey_18.03.2026":
 - **Menu structure:** Changed from 3 buttons to 5-option list message (Upload Bill, Redeem Points, My Points, Help/Support, Know More)
 - **My Points:** Separate flow showing Total Earned, Redeemed, Available Balance
