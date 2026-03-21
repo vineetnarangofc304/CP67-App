@@ -61,7 +61,12 @@ class UpdateProfileRequest(BaseModel):
     email: Optional[str] = None
     gender: Optional[str] = None
     dob: Optional[str] = None
+    address: Optional[str] = None
     interests: Optional[List[str]] = None
+
+class RedeemRequest(BaseModel):
+    reward_id: str
+    points: int
 
 
 # ==================== AUTH HELPERS ====================
@@ -210,6 +215,7 @@ async def get_profile(current_user=Depends(get_current_consumer)):
         "email": user.get("email"),
         "gender": user.get("gender"),
         "dob": user.get("dob"),
+        "address": user.get("address"),
         "interests": user.get("interests", []),
         "tier": tier,
         "balance_points": balance,
@@ -233,6 +239,8 @@ async def update_profile(request: UpdateProfileRequest, current_user=Depends(get
         update_data["dob"] = request.dob
     if request.interests is not None:
         update_data["interests"] = request.interests
+    if request.address is not None:
+        update_data["address"] = request.address
 
     if update_data:
         update_data["onboarding_complete"] = True
@@ -738,6 +746,263 @@ async def mark_all_read(current_user=Depends(get_current_consumer)):
         {"$set": {"is_read": True}}
     )
     return {"success": True}
+
+
+# ==================== TRANSACTIONS ====================
+
+@consumer_router.get("/transactions")
+async def list_transactions(
+    filter_type: str = "all",
+    current_user=Depends(get_current_consumer)
+):
+    """Get transaction history with filters: all, earn, redeem, expire"""
+    phone_10 = current_user["phone"][-10:]
+    user_id = current_user["sub"]
+    transactions = []
+
+    if filter_type in ("all", "earn"):
+        async for b in _db.bills.find(
+            {"user_phone": {"$in": [current_user["phone"], phone_10, f"91{phone_10}"]},
+             "status": {"$in": ["approved", "auto_approved"]}},
+            {"_id": 0, "image_url": 0, "ocr_raw_data": 0}
+        ).sort("created_at", -1).limit(100):
+            transactions.append({
+                "id": b["id"],
+                "type": "earn",
+                "description": f"Bill from {b.get('store_name', 'Unknown')}",
+                "store_name": b.get("store_name", "Unknown"),
+                "amount": b.get("amount", 0),
+                "points": b.get("points_issued", 0),
+                "status": b.get("status"),
+                "date": b.get("created_at"),
+                "bill_no": b.get("bill_no")
+            })
+
+    if filter_type in ("all", "redeem"):
+        async for r in _db.redemptions.find(
+            {"user_id": user_id},
+            {"_id": 0}
+        ).sort("created_at", -1).limit(100):
+            transactions.append({
+                "id": r.get("id"),
+                "type": "redeem",
+                "description": f"Redeemed at {r.get('store_name', r.get('reward_name', 'Unknown'))}",
+                "store_name": r.get("store_name", ""),
+                "amount": r.get("discount_value", 0),
+                "points": -(r.get("points_used", 0)),
+                "status": r.get("status", "completed"),
+                "date": r.get("created_at")
+            })
+
+    # Sort all by date descending
+    transactions.sort(key=lambda x: x.get("date", ""), reverse=True)
+    return {"transactions": transactions[:100]}
+
+
+# ==================== REWARDS ====================
+
+@consumer_router.get("/rewards")
+async def list_rewards(current_user=Depends(get_current_consumer)):
+    """Get available rewards catalog"""
+    rewards = []
+    async for r in _db.rewards.find(
+        {"is_active": True},
+        {"_id": 0}
+    ).sort("points_required", 1):
+        rewards.append(r)
+
+    # If no rewards exist, create default ones from brands
+    if not rewards:
+        rewards = await _seed_default_rewards()
+
+    return {"rewards": rewards, "conversion_rate": {"points": 1, "inr": 1}}
+
+
+@consumer_router.post("/rewards/redeem")
+async def redeem_reward(request: RedeemRequest, current_user=Depends(get_current_consumer)):
+    """Redeem points for a reward"""
+    phone_10 = current_user["phone"][-10:]
+    user_id = current_user["sub"]
+
+    # Get current points
+    points_result = await _tagnpay_client.get_customer_points(phone_10)
+    balance = 0
+    if points_result.get("success") and points_result.get("data"):
+        balance = int(points_result["data"].get("balance_points", 0))
+
+    if balance < request.points:
+        raise HTTPException(status_code=400, detail=f"Insufficient points. You have {balance} points.")
+
+    # Get reward details
+    reward = await _db.rewards.find_one({"id": request.reward_id, "is_active": True}, {"_id": 0})
+    if not reward:
+        raise HTTPException(status_code=404, detail="Reward not found or expired")
+
+    if balance < reward.get("points_required", 0):
+        raise HTTPException(status_code=400, detail="Insufficient points for this reward")
+
+    # Create redemption record
+    redemption_id = str(uuid.uuid4())
+    redemption = {
+        "id": redemption_id,
+        "user_id": user_id,
+        "user_phone": current_user["phone"],
+        "reward_id": request.reward_id,
+        "reward_name": reward.get("name", ""),
+        "store_name": reward.get("store_name", ""),
+        "points_used": reward["points_required"],
+        "discount_value": reward["points_required"],  # 1:1 ratio
+        "status": "completed",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await _db.redemptions.insert_one(redemption)
+
+    # Update local points
+    await _db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"balance_points": -reward["points_required"], "total_redeemed_points": reward["points_required"]}}
+    )
+
+    return {
+        "success": True,
+        "redemption_id": redemption_id,
+        "points_used": reward["points_required"],
+        "new_balance": balance - reward["points_required"],
+        "message": f"Successfully redeemed {reward['points_required']} points at {reward.get('store_name', 'CP67 Mall')}!"
+    }
+
+
+@consumer_router.get("/rewards/history")
+async def redemption_history(current_user=Depends(get_current_consumer)):
+    """Get redemption history"""
+    history = []
+    async for r in _db.redemptions.find(
+        {"user_id": current_user["sub"]},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(50):
+        history.append(r)
+    return {"redemptions": history}
+
+
+async def _seed_default_rewards():
+    """Create default reward vouchers from existing brands"""
+    brands = []
+    async for b in _db.brands.find({"name": {"$exists": True, "$ne": ""}}, {"_id": 0, "name": 1}).limit(20):
+        brands.append(b["name"])
+
+    if not brands:
+        brands = ["Starbucks", "H&M", "Zara", "McDonald's", "Burger King"]
+
+    rewards = []
+    reward_templates = [
+        {"points": 100, "label": "Rs 100 Off"},
+        {"points": 250, "label": "Rs 250 Off"},
+        {"points": 500, "label": "Rs 500 Off"},
+        {"points": 1000, "label": "Rs 1000 Off"},
+    ]
+
+    for brand in brands[:12]:
+        for tmpl in reward_templates:
+            reward = {
+                "id": str(uuid.uuid4()),
+                "name": f"{tmpl['label']} at {brand}",
+                "store_name": brand,
+                "description": f"Get {tmpl['label']} on your next purchase at {brand}, CP67 Mall",
+                "points_required": tmpl["points"],
+                "discount_value": tmpl["points"],
+                "category": "discount",
+                "validity_days": 30,
+                "terms": f"Valid at {brand}, CP67 Mall. One voucher per transaction. Cannot be combined with other offers.",
+                "is_active": True,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            rewards.append(reward)
+
+    if rewards:
+        await _db.rewards.insert_many(rewards)
+        # Re-fetch without _id to avoid ObjectId serialization
+        rewards = []
+        async for r in _db.rewards.find({"is_active": True}, {"_id": 0}).sort("points_required", 1):
+            rewards.append(r)
+    return rewards
+
+
+# ==================== WALLET DETAILED ====================
+
+@consumer_router.get("/wallet/detailed")
+async def get_wallet_detailed(current_user=Depends(get_current_consumer)):
+    """Enhanced wallet with full breakdown"""
+    phone_10 = current_user["phone"][-10:]
+    user_id = current_user["sub"]
+
+    # Points from TagnPay
+    points_result = await _tagnpay_client.get_customer_points(phone_10)
+    balance = 0
+    total_earned = 0
+    if points_result.get("success") and points_result.get("data"):
+        balance = int(points_result["data"].get("balance_points", 0))
+        total_earned = int(points_result["data"].get("total_earned_points", balance))
+
+    # Get local data for redeemed
+    user = await _db.users.find_one({"id": user_id}, {"_id": 0})
+    total_redeemed = int(user.get("total_redeemed_points", 0)) if user else 0
+
+    # If local earned is higher, use it
+    local_earned = int(user.get("total_earned_points", 0)) if user else 0
+    if local_earned > total_earned:
+        total_earned = local_earned
+
+    # Calculate expired (earned - balance - redeemed = expired)
+    expired = max(0, total_earned - balance - total_redeemed)
+
+    tier_info = calculate_tier(total_earned)
+
+    # Count bills
+    bill_count = await _db.bills.count_documents(
+        {"user_phone": {"$in": [current_user["phone"], phone_10, f"91{phone_10}"]},
+         "status": {"$in": ["approved", "auto_approved"]}}
+    )
+
+    # Recent transactions (last 5)
+    recent = []
+    async for b in _db.bills.find(
+        {"user_phone": {"$in": [current_user["phone"], phone_10, f"91{phone_10}"]}},
+        {"_id": 0, "image_url": 0, "ocr_raw_data": 0}
+    ).sort("created_at", -1).limit(5):
+        recent.append({
+            "id": b["id"],
+            "type": "earn",
+            "store_name": b.get("store_name", "Unknown"),
+            "points": b.get("points_issued", 0),
+            "status": b.get("status"),
+            "date": b.get("created_at")
+        })
+
+    # Redemptions (last 5)
+    async for r in _db.redemptions.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("created_at", -1).limit(5):
+        recent.append({
+            "id": r.get("id"),
+            "type": "redeem",
+            "store_name": r.get("store_name", ""),
+            "points": -(r.get("points_used", 0)),
+            "status": "completed",
+            "date": r.get("created_at")
+        })
+
+    recent.sort(key=lambda x: x.get("date", ""), reverse=True)
+
+    return {
+        "balance": balance,
+        "total_earned": total_earned,
+        "total_redeemed": total_redeemed,
+        "expired": expired,
+        "tier": tier_info,
+        "bill_count": bill_count,
+        "conversion_rate": "1 Point = Rs 1",
+        "recent_transactions": recent[:5]
+    }
 
 
 # ==================== SEED DATA ====================

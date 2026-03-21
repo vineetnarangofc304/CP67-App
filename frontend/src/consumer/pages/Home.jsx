@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Bell, ChevronRight, Gift, MapPin, ShoppingBag, Ticket, Camera } from 'lucide-react';
+import { Bell, ChevronRight, Gift, MapPin, ShoppingBag, Ticket, Camera, Menu } from 'lucide-react';
 import { useConsumerAuth, API } from '../ConsumerApp';
 
-export default function Home() {
+export default function Home({ onMenuOpen }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const { token, user } = useConsumerAuth();
@@ -34,9 +34,12 @@ export default function Home() {
     >
       {/* Header */}
       <div className="home-top">
-        <div className="home-greeting">
-          <p className="home-greeting-sub">Welcome back,</p>
-          <h1 data-testid="home-user-name">{firstName}</h1>
+        <div className="home-greeting-row">
+          <button className="home-menu-btn" onClick={onMenuOpen} data-testid="menu-btn"><Menu size={22} /></button>
+          <div className="home-greeting">
+            <p className="home-greeting-sub">Welcome back,</p>
+            <h1 data-testid="home-user-name">{firstName}</h1>
+          </div>
         </div>
         <button className="home-bell" onClick={() => navigate('/app/notifications')} data-testid="notifications-btn">
           <Bell size={22} />

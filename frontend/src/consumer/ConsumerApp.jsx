@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import BottomNav from './components/BottomNav';
+import SideDrawer from './components/SideDrawer';
 import Welcome from './pages/Welcome';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
@@ -15,6 +16,11 @@ import Offers from './pages/Offers';
 import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
 import ProgramInfo from './pages/ProgramInfo';
+import Transactions from './pages/Transactions';
+import BillHistory from './pages/BillHistory';
+import Rewards from './pages/Rewards';
+import HelpSupport from './pages/HelpSupport';
+import Legal from './pages/Legal';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api/consumer';
 
@@ -77,11 +83,7 @@ const ConsumerAuthProvider = ({ children }) => {
 
 const ProtectedConsumer = ({ children }) => {
   const { token, loading, user } = useConsumerAuth();
-  if (loading) return (
-    <div className="consumer-loading">
-      <div className="consumer-spinner" />
-    </div>
-  );
+  if (loading) return <div className="consumer-loading"><div className="consumer-spinner" /></div>;
   if (!token) return <Navigate to="/app/login" replace />;
   if (user && !user.onboarding_complete && window.location.pathname !== '/app/onboarding') {
     return <Navigate to="/app/onboarding" replace />;
@@ -93,17 +95,19 @@ const showNav = ['/app', '/app/home', '/app/stores', '/app/wallet', '/app/events
 
 export default function ConsumerApp() {
   const location = useLocation();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const showBottomNav = showNav.includes(location.pathname) || location.pathname === '/app/';
 
   return (
     <ConsumerAuthProvider>
       <div className="consumer-app">
+        <SideDrawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
             <Route path="welcome" element={<Welcome />} />
             <Route path="login" element={<Login />} />
             <Route path="onboarding" element={<ProtectedConsumer><Onboarding /></ProtectedConsumer>} />
-            <Route path="home" element={<ProtectedConsumer><Home /></ProtectedConsumer>} />
+            <Route path="home" element={<ProtectedConsumer><Home onMenuOpen={() => setDrawerOpen(true)} /></ProtectedConsumer>} />
             <Route path="stores" element={<ProtectedConsumer><Stores /></ProtectedConsumer>} />
             <Route path="stores/:storeId" element={<ProtectedConsumer><StoreDetail /></ProtectedConsumer>} />
             <Route path="wallet" element={<ProtectedConsumer><Wallet /></ProtectedConsumer>} />
@@ -112,6 +116,11 @@ export default function ConsumerApp() {
             <Route path="offers" element={<ProtectedConsumer><Offers /></ProtectedConsumer>} />
             <Route path="profile" element={<ProtectedConsumer><Profile /></ProtectedConsumer>} />
             <Route path="notifications" element={<ProtectedConsumer><Notifications /></ProtectedConsumer>} />
+            <Route path="transactions" element={<ProtectedConsumer><Transactions /></ProtectedConsumer>} />
+            <Route path="bill-history" element={<ProtectedConsumer><BillHistory /></ProtectedConsumer>} />
+            <Route path="rewards" element={<ProtectedConsumer><Rewards /></ProtectedConsumer>} />
+            <Route path="help" element={<ProtectedConsumer><HelpSupport /></ProtectedConsumer>} />
+            <Route path="legal" element={<ProtectedConsumer><Legal /></ProtectedConsumer>} />
             <Route path="program" element={<ProgramInfo />} />
             <Route path="" element={<Navigate to="/app/welcome" replace />} />
             <Route path="*" element={<Navigate to="/app/home" replace />} />
