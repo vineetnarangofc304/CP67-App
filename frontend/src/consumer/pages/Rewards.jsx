@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Gift, Star, Check, X, Loader2 } from 'lucide-react';
+import { ArrowLeft, Gift, Star, Check, X, Loader2, Award } from 'lucide-react';
 import { useConsumerAuth, API } from '../ConsumerApp';
 
 export default function Rewards() {
@@ -109,6 +109,13 @@ export default function Rewards() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Participating Brands Link */}
+      <button className="redeem-brands-link" onClick={() => navigate('/app/redeem-brands')} data-testid="view-participating-brands">
+        <Award size={18} />
+        <span>View All Participating Brands</span>
+        <span className="redeem-brands-arrow">&rarr;</span>
+      </button>
 
       {tab === 'catalog' ? (
         <div className="rewards-catalog" data-testid="rewards-catalog">

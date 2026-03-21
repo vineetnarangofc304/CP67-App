@@ -1060,6 +1060,59 @@ async def update_notification_prefs(prefs: dict, current_user=Depends(get_curren
     return {"preferences": filtered}
 
 
+
+# ==================== PARTICIPATING BRANDS (REDEMPTION) ====================
+
+@consumer_router.get("/participating-brands")
+async def get_participating_brands(
+    search: str = "",
+    floor: str = "",
+    category: str = "",
+):
+    """Get participating brands for redemption with search and filters"""
+    query = {"brand_name": {"$exists": True, "$ne": ""}}
+    if search:
+        query["brand_name"] = {"$regex": search, "$options": "i"}
+    if floor:
+        query["floor"] = floor
+    if category and category != "All":
+        query["category"] = category
+
+    brands = []
+    async for b in _db.brands.find(query, {"_id": 0}).sort("brand_name", 1):
+        brands.append({
+            "id": b.get("id", ""),
+            "name": b.get("brand_name", ""),
+            "category": b.get("category", "General"),
+            "floor": b.get("floor", ""),
+            "logo_url": b.get("logo_url", ""),
+            "unit_no": b.get("unit_no", ""),
+        })
+
+    # Get unique floors and categories for filter dropdowns
+    all_floors = []
+    all_categories = []
+    async for b in _db.brands.find({"brand_name": {"$exists": True, "$ne": ""}}, {"_id": 0, "floor": 1, "category": 1}):
+        if b.get("floor") and b["floor"] not in all_floors:
+            all_floors.append(b["floor"])
+        if b.get("category") and b["category"] not in all_categories:
+            all_categories.append(b["category"])
+
+    floor_order = ["Lower Ground", "Ground Floor", "First Floor", "Second Floor", "Third Floor", "Food Court"]
+    all_floors.sort(key=lambda f: floor_order.index(f) if f in floor_order else 99)
+    all_categories.sort()
+
+    return {
+        "brands": brands,
+        "total": len(brands),
+        "filters": {
+            "floors": all_floors,
+            "categories": all_categories,
+        }
+    }
+
+
+
 # ==================== MALL MAP & AMENITIES ====================
 
 @consumer_router.get("/mall-map")
@@ -1067,14 +1120,14 @@ async def get_mall_map(current_user=Depends(get_current_consumer)):
     """Get floor-wise brand locations for mall map"""
     floors = {}
     async for brand in _db.brands.find(
-        {"name": {"$exists": True, "$ne": ""}},
-        {"_id": 0, "name": 1, "floor": 1, "category": 1, "logo_url": 1}
+        {"brand_name": {"$exists": True, "$ne": ""}},
+        {"_id": 0, "brand_name": 1, "floor": 1, "category": 1, "logo_url": 1}
     ):
         floor = brand.get("floor") or "Other"
         if floor not in floors:
             floors[floor] = []
         floors[floor].append({
-            "name": brand["name"],
+            "name": brand["brand_name"],
             "category": brand.get("category", ""),
             "logo_url": brand.get("logo_url", "")
         })

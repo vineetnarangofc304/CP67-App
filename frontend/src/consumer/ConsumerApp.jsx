@@ -25,6 +25,7 @@ import NotificationPrefs from './pages/NotificationPrefs';
 import MallMap from './pages/MallMap';
 import Amenities from './pages/Amenities';
 import Referrals from './pages/Referrals';
+import RedeemBrands from './pages/RedeemBrands';
 
 const API = process.env.REACT_APP_BACKEND_URL + '/api/consumer';
 
@@ -129,6 +130,7 @@ export default function ConsumerApp() {
             <Route path="mall-map" element={<ProtectedConsumer><MallMap /></ProtectedConsumer>} />
             <Route path="amenities" element={<ProtectedConsumer><Amenities /></ProtectedConsumer>} />
             <Route path="referrals" element={<ProtectedConsumer><Referrals /></ProtectedConsumer>} />
+            <Route path="redeem-brands" element={<ProtectedConsumer><RedeemBrands /></ProtectedConsumer>} />
             <Route path="program" element={<ProgramInfo />} />
             <Route path="" element={<Navigate to="/app/welcome" replace />} />
             <Route path="*" element={<Navigate to="/app/home" replace />} />
