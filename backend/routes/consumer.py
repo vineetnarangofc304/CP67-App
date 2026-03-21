@@ -68,6 +68,9 @@ class RedeemRequest(BaseModel):
     reward_id: str
     points: int
 
+class FavoriteRequest(BaseModel):
+    store_id: str
+
 
 # ==================== AUTH HELPERS ====================
 
@@ -1003,6 +1006,57 @@ async def get_wallet_detailed(current_user=Depends(get_current_consumer)):
         "conversion_rate": "1 Point = Rs 1",
         "recent_transactions": recent[:5]
     }
+
+
+# ==================== FAVORITES ====================
+
+@consumer_router.get("/favorites")
+async def get_favorites(current_user=Depends(get_current_consumer)):
+    """Get user's favorite store IDs"""
+    user = await _db.users.find_one({"id": current_user["sub"]}, {"_id": 0, "favorites": 1})
+    return {"favorites": user.get("favorites", []) if user else []}
+
+@consumer_router.post("/favorites/toggle")
+async def toggle_favorite(request: FavoriteRequest, current_user=Depends(get_current_consumer)):
+    """Toggle a store as favorite"""
+    user = await _db.users.find_one({"id": current_user["sub"]}, {"_id": 0, "favorites": 1})
+    favorites = user.get("favorites", []) if user else []
+
+    if request.store_id in favorites:
+        favorites.remove(request.store_id)
+        action = "removed"
+    else:
+        favorites.append(request.store_id)
+        action = "added"
+
+    await _db.users.update_one({"id": current_user["sub"]}, {"$set": {"favorites": favorites}})
+    return {"favorites": favorites, "action": action}
+
+
+# ==================== NOTIFICATION PREFERENCES ====================
+
+@consumer_router.get("/notification-preferences")
+async def get_notification_prefs(current_user=Depends(get_current_consumer)):
+    """Get notification preferences"""
+    user = await _db.users.find_one({"id": current_user["sub"]}, {"_id": 0, "notification_prefs": 1})
+    defaults = {
+        "offers": True,
+        "points_updates": True,
+        "events": True,
+        "bill_status": True,
+        "promotions": True,
+        "rewards": True,
+    }
+    prefs = user.get("notification_prefs", defaults) if user else defaults
+    return {"preferences": {**defaults, **prefs}}
+
+@consumer_router.put("/notification-preferences")
+async def update_notification_prefs(prefs: dict, current_user=Depends(get_current_consumer)):
+    """Update notification preferences"""
+    allowed_keys = {"offers", "points_updates", "events", "bill_status", "promotions", "rewards"}
+    filtered = {k: bool(v) for k, v in prefs.items() if k in allowed_keys}
+    await _db.users.update_one({"id": current_user["sub"]}, {"$set": {"notification_prefs": filtered}})
+    return {"preferences": filtered}
 
 
 # ==================== SEED DATA ====================

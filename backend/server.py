@@ -3529,10 +3529,16 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
         
         if message_type == "text":
             message = message_data.get("text", {}).get("body", "")
+            # Karix sometimes sends text as a flat string
+            if not message and isinstance(message_data.get("text"), str):
+                message = message_data["text"]
         elif message_type == "interactive":
             interactive = message_data.get("interactive", {})
+            # Handle both button replies AND list replies
             button_reply = interactive.get("button_reply", {})
-            message = button_reply.get("id", "") or button_reply.get("title", "")
+            list_reply = interactive.get("list_reply", {})
+            message = button_reply.get("id", "") or list_reply.get("id", "") or button_reply.get("title", "") or list_reply.get("title", "")
+            logger.info(f"Interactive message parsed - button_reply: {button_reply}, list_reply: {list_reply}, message: {message}")
         elif message_type == "image":
             message = "[IMAGE]"
             # Get image URL or base64 from Karix - uses fileLink for media download
@@ -3544,7 +3550,24 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
                 image_url = f"base64:{image_data.get('data')}"
             logger.info(f"Image message received - image_data: {image_data}, extracted URL: {image_url[:100] if image_url else None}...")
         else:
-            message = request.get("text") or request.get("message", "")
+            # Fallback: try various Karix formats
+            message = message_data.get("text", "") or message_data.get("body", "") or request.get("text") or request.get("message", "")
+            if isinstance(message, dict):
+                message = message.get("body", "") or message.get("text", "")
+            logger.info(f"Unknown message type '{message_type}', raw message_data keys: {list(message_data.keys())}, extracted message: {message}")
+        
+        # Also check for Karix-specific postback / selectedOption fields
+        if not message:
+            message = (message_data.get("postbackText", "") or
+                       message_data.get("selectedOption", {}).get("id", "") or
+                       message_data.get("selectedOption", {}).get("title", "") or
+                       event_content.get("postbackText", "") or
+                       event_content.get("selectedOption", {}).get("id", "") or
+                       "")
+            if message:
+                logger.info(f"Extracted message from Karix postback/selectedOption: {message}")
+        
+        logger.info(f"Webhook - type: {message_type}, message: '{message}', phone: {phone}")
         
         if not message:
             return {"status": "ok", "message": "No message content"}
@@ -3595,6 +3618,23 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
             await db.whatsapp_logs.update_one({"id": log_entry.id}, {"$set": {"user_id": user["id"]}})
             
             msg_lower = clean_message.lower()
+            
+            # Map list/button titles to action IDs for robust matching
+            TITLE_TO_ACTION = {
+                "upload bill": "upload_bill",
+                "redeem points": "redeem_points",
+                "my points": "my_points",
+                "help / support": "customer_support",
+                "help/support": "customer_support",
+                "help & support": "customer_support",
+                "customer support": "customer_support",
+                "know more": "know_more",
+            }
+            # If message matches a known title, convert to action ID
+            if msg_lower.strip() in TITLE_TO_ACTION:
+                message = TITLE_TO_ACTION[msg_lower.strip()]
+                msg_lower = message
+                logger.info(f"Title matched to action: {message}")
             
             if message == "my_points" or (msg_lower.strip() == "3" and "my points" not in msg_lower):
                 # MY POINTS - Show detailed breakdown (per revised flow document)

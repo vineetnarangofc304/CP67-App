@@ -2246,6 +2246,64 @@
 }
 
 
+/* === Store Favorites === */
+.store-fav-btn {
+  position: absolute; top: 8px; right: 8px; width: 32px; height: 32px;
+  border-radius: 50%; border: none; background: rgba(255,255,255,0.9);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: #94a3b8; z-index: 2;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+.store-fav-btn.active { color: #ef4444; }
+.store-fav-btn:active { transform: scale(0.85); }
+.store-grid-img { position: relative; }
+
+/* === Notification Preferences === */
+.consumer-notif-prefs { padding-bottom: 100px; }
+.notif-prefs-header {
+  display: flex; align-items: center; gap: 14px; padding: 16px 20px;
+  border-bottom: 1px solid var(--cp-border);
+}
+.notif-prefs-header svg { color: var(--cp-gold); }
+.notif-prefs-header h2 { font-size: 16px; font-weight: 700; color: var(--cp-text); }
+.notif-prefs-header p { font-size: 13px; color: var(--cp-text-2); }
+.notif-prefs-list { padding: 0 20px; }
+.notif-pref-item {
+  display: flex; align-items: center; gap: 14px; padding: 16px 0;
+  border-bottom: 1px solid var(--cp-border);
+}
+.notif-pref-icon {
+  width: 40px; height: 40px; border-radius: 12px; background: var(--cp-card);
+  border: 1px solid var(--cp-border); display: flex; align-items: center;
+  justify-content: center; color: var(--cp-gold);
+}
+.notif-pref-info { flex: 1; }
+.notif-pref-info h4 { font-size: 14px; font-weight: 600; color: var(--cp-text); }
+.notif-pref-info p { font-size: 12px; color: var(--cp-text-2); margin-top: 2px; }
+.notif-toggle {
+  width: 48px; height: 28px; border-radius: 14px; border: none;
+  cursor: pointer; position: relative; transition: background 0.2s ease;
+  padding: 0;
+}
+.notif-toggle.on { background: var(--cp-gold); }
+.notif-toggle.off { background: #d1d5db; }
+.notif-toggle-knob {
+  width: 22px; height: 22px; border-radius: 50%; background: white;
+  position: absolute; top: 3px; transition: left 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.notif-toggle.on .notif-toggle-knob { left: 23px; }
+.notif-toggle.off .notif-toggle-knob { left: 3px; }
+
+/* === Profile Nav Button === */
+.profile-nav-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 14px 0;
+  border: none; background: none; font-size: 14px; font-weight: 500;
+  color: var(--cp-text); cursor: pointer; text-align: left;
+}
+.profile-nav-btn svg:last-child { margin-left: auto; color: var(--cp-text-2); }
+
+
 /* === Hamburger Menu Button === */
 .home-greeting-row { display: flex; align-items: center; gap: 12px; }
 .home-menu-btn {

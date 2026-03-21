@@ -1,0 +1,134 @@
+{
+  "summary": "Completed comprehensive testing of CP67 Consumer App - WhatsApp webhook list_reply handling and Phase 2 features. All 25 backend API tests passed (100%). All frontend UI tests passed - verified WhatsApp webhook handles list_reply properly, all new consumer app pages working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "CRITICAL: WhatsApp webhook handles list_reply with id='upload_bill' - returns 200 OK",
+    "CRITICAL: WhatsApp webhook handles list_reply with id='my_points' - returns 200 OK",
+    "CRITICAL: WhatsApp webhook handles list_reply with id='customer_support' - returns 200 OK",
+    "CRITICAL: WhatsApp webhook handles list_reply with id='redeem_points' - returns 200 OK",
+    "CRITICAL: WhatsApp webhook handles list_reply with id='know_more' - returns 200 OK",
+    "WhatsApp webhook handles text 'My Points' via TITLE_TO_ACTION mapping",
+    "WhatsApp webhook handles text 'Upload Bill' via TITLE_TO_ACTION mapping",
+    "WhatsApp webhook handles text 'Help / Support' via TITLE_TO_ACTION mapping",
+    "GET /api/consumer/wallet/detailed returns balance, total_earned, total_redeemed, expired, tier",
+    "GET /api/consumer/transactions?filter_type=all returns transactions list",
+    "GET /api/consumer/transactions?filter_type=earn returns earn transactions",
+    "GET /api/consumer/transactions?filter_type=redeem returns redeem transactions",
+    "GET /api/consumer/rewards returns rewards catalog (auto-seeded)",
+    "GET /api/consumer/rewards/history returns redemption history",
+    "GET /api/consumer/favorites returns favorites array",
+    "POST /api/consumer/favorites/toggle adds/removes store from favorites",
+    "GET /api/consumer/notification-preferences returns 6 preference categories",
+    "PUT /api/consumer/notification-preferences updates preferences",
+    "GET /api/consumer/profile returns address field",
+    "PUT /api/consumer/profile accepts address field update",
+    "GET /api/consumer/bills returns bill history",
+    "Protected endpoints require auth (401 without token)",
+    "Frontend: Home page has hamburger menu button (data-testid='menu-btn')",
+    "Frontend: Side drawer opens with 6 menu items (My Profile, My Rewards, Transactions, Bill History, Help & Support, Legal)",
+    "Frontend: Side drawer has Logout button",
+    "Frontend: Wallet page shows points breakdown (Total Earned, Redeemed, Expired)",
+    "Frontend: Wallet page shows tier progress bar",
+    "Frontend: Wallet page has Scan Bill and Rewards action buttons",
+    "Frontend: Transactions page loads with filter tabs (All, Earned, Redeemed)",
+    "Frontend: Rewards page shows catalog grouped by store (Starbucks, H&M, etc.)",
+    "Frontend: Rewards page shows Available Points balance bar",
+    "Frontend: Rewards page has Catalog and Redeemed tabs",
+    "Frontend: Stores page has favorites hearts on cards (102 found)",
+    "Frontend: Notification settings page has 6 toggle controls",
+    "Frontend: Help page has 4 contact cards (Email, Phone, Support Desk, WhatsApp)",
+    "Frontend: Help page has FAQ items",
+    "Frontend: Legal page has Terms & Conditions section",
+    "Frontend: Legal page has Privacy Policy section"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_whatsapp_webhook.py",
+    "/app/test_reports/pytest/whatsapp_webhook_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "WhatsApp webhook correctly parses list_reply.id from interactive messages",
+    "TITLE_TO_ACTION mapping provides fallback for text messages matching known titles",
+    "All data-testid attributes properly implemented for testing",
+    "API endpoints follow RESTful conventions",
+    "Auth token properly managed in localStorage",
+    "Rewards auto-seeding works correctly from brands collection"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_whatsapp_webhook.py"
+  ],
+  "success_rate": {
+    "backend": "100% (25/25 tests passed)",
+    "frontend": "100% (all UI components verified)"
+  },
+  "test_credentials": {
+    "phone": "9876543210",
+    "otp": "1234 (dev mode)",
+    "api_base_url": "https://cp67-consumer-app.preview.emergentagent.com"
+  },
+  "seed_data_creation": "Rewards auto-seeded from brands collection (Starbucks, H&M, etc. with Rs 100/250/500/1000 denominations)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "WhatsApp webhook list_reply handling verified working. All consumer app Phase 2 features tested: Enhanced Wallet (breakdown, tier progress), Transactions (filters), Rewards (catalog, redemption), Favorites (toggle), Notification Preferences (6 toggles), Help & Support (4 contacts, FAQs), Legal (Terms, Privacy). All backend APIs return correct data structures. All frontend pages load correctly with proper data-testid attributes.",
+  "whatsapp_webhook_verification": {
+    "list_reply_parsing": "Verified - webhook correctly extracts list_reply.id from interactive messages",
+    "title_to_action_mapping": "Verified - TITLE_TO_ACTION dict maps titles like 'My Points' to action IDs",
+    "tested_actions": ["upload_bill", "my_points", "customer_support", "redeem_points", "know_more"],
+    "all_return_200_ok": true
+  },
+  "features_verified": {
+    "home_page": {
+      "hamburger_menu": true,
+      "points_card": true,
+      "quick_actions": true,
+      "banners": true,
+      "featured_stores": true
+    },
+    "side_drawer": {
+      "menu_items": ["My Profile", "My Rewards", "Transactions", "Bill History", "Help & Support", "Legal"],
+      "logout_button": true
+    },
+    "wallet_page": {
+      "balance_display": true,
+      "points_breakdown": ["Total Earned", "Redeemed", "Expired"],
+      "tier_progress_bar": true,
+      "action_buttons": ["Scan Bill", "Rewards"]
+    },
+    "transactions_page": {
+      "filter_tabs": ["All", "Earned", "Redeemed"],
+      "transaction_list": true
+    },
+    "rewards_page": {
+      "balance_bar": true,
+      "tabs": ["Catalog", "Redeemed"],
+      "rewards_grouped_by_store": true,
+      "denominations": ["Rs 100", "Rs 250", "Rs 500", "Rs 1000"]
+    },
+    "stores_page": {
+      "search_input": true,
+      "favorites_filter": true,
+      "category_filters": true,
+      "favorite_hearts_on_cards": "102 found"
+    },
+    "notification_settings": {
+      "toggle_controls": 6,
+      "categories": ["Offers & Deals", "Points Updates", "Events", "Bill Status", "Rewards", "Promotions"]
+    },
+    "help_support_page": {
+      "contact_cards": ["Email", "Phone", "Support Desk", "WhatsApp"],
+      "faq_items": true
+    },
+    "legal_page": {
+      "terms_conditions": true,
+      "privacy_policy": true
+    }
+  }
+}
