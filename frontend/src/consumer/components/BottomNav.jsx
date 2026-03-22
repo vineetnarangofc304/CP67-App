@@ -1,11 +1,11 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, Wallet, CalendarDays, User } from 'lucide-react';
+import { Home, Search, Wallet, User, Camera } from 'lucide-react';
 
 const tabs = [
   { path: '/app/home', icon: Home, label: 'Home' },
   { path: '/app/stores', icon: Search, label: 'Explore' },
-  { path: '/app/upload', icon: null, label: 'Scan', isCenter: true },
+  { path: '/app/upload', icon: null, label: 'Upload Bill', isCenter: true },
   { path: '/app/wallet', icon: Wallet, label: 'Wallet' },
   { path: '/app/profile', icon: User, label: 'Profile' },
 ];
@@ -22,21 +22,13 @@ export default function BottomNav() {
         if (tab.isCenter) {
           return (
             <button
-              key="scan"
-              data-testid="nav-scan-btn"
+              key="upload-bill"
+              data-testid="nav-upload-bill-btn"
               className="consumer-nav-center-btn"
               onClick={() => navigate('/app/upload')}
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-                <line x1="12" y1="1" x2="12" y2="5" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-                <line x1="1" y1="12" x2="5" y2="12" />
-                <line x1="19" y1="12" x2="23" y2="12" />
-              </svg>
+              <Camera size={26} strokeWidth={2.5} />
+              <span className="center-btn-label">Upload Bill</span>
             </button>
           );
         }

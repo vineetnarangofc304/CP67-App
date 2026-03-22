@@ -101,18 +101,34 @@
 }
 
 .consumer-nav-center-btn {
-  width: 52px;
-  height: 52px;
+  width: 64px;
+  height: 64px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--cp-gold), var(--cp-gold-dark));
-  border: none;
+  border: 3px solid var(--cp-bg);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 1px;
   cursor: pointer;
-  box-shadow: 0 4px 20px rgba(200, 149, 108, 0.4);
-  margin-top: -20px;
+  box-shadow: 0 4px 24px rgba(198, 137, 57, 0.45);
+  margin-top: -28px;
   transition: transform 0.2s, box-shadow 0.2s;
+  color: white;
+}
+
+.consumer-nav-center-btn svg {
+  color: white;
+}
+
+.center-btn-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .consumer-nav-center-btn:active {

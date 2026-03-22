@@ -47,6 +47,89 @@ async def auto_seed_if_empty():
             logger.info("Auto-seed complete")
     except Exception as e:
         logger.error(f"Auto-seed error: {e}")
+    # Always ensure brand logos are set to CDN URLs
+    try:
+        await _migrate_brand_logos()
+    except Exception as e:
+        logger.error(f"Logo migration error: {e}")
+
+
+BRAND_LOGO_MAP = {
+    "Adidas": "adidas.com", "Aldo": "aldoshoes.com", "Allen Solly": "allensolly.com",
+    "Allen Solly Junior": "allensolly.com", "American Eagle": "ae.com", "Apple": "apple.com",
+    "Arrow": "arrowlife.com", "Baskin Robbins": "baskinrobbins.com", "Bata": "bata.in",
+    "Bath And Body Works": "bathandbodyworks.com", "Bella Vita": "bellavitaorganic.com",
+    "Biba": "bfrands.com", "Bira Taproom": "bfrands.com", "Burger King": "bk.com",
+    "Calvin Klein": "calvinklein.com", "Chaayos": "chaayos.com", "Crocs": "crocs.com",
+    "Croma": "croma.com", "Da Milano": "damilano.it", "Dominos": "dominos.com",
+    "Fab India": "fabindia.com", "Forever New": "forevernew.com.au", "Gant": "gant.com",
+    "H&M": "hm.com", "Haldirams": "haldirams.com", "Hamleys": "hamleys.com",
+    "Hidesign": "hidesign.com", "Home Centre": "homecentre.com",
+    "Hush Puppies": "hushpuppies.com", "Jack And Jones": "jackjones.com",
+    "Kazo": "kazo.com", "Kiko Milano": "kikocosmetics.com",
+    "Lakme Salon": "lakmesalon.in", "Levis": "levi.com",
+    "Lifestyle": "lifestylestores.com", "Louis Philippe": "louisphilippe.com",
+    "Mango": "mango.com", "Marks & Spencer": "marksandspencer.in",
+    "M&S Food": "marksandspencer.in", "Mcdonald": "mcdonalds.com",
+    "Metro Shoes": "metroshoes.net", "Mini So": "miniso.com",
+    "Monte Carlo": "montecarlo.in", "Nicobar": "nicobar.com", "Only": "only.com",
+    "Pantaloons": "pantaloons.com", "Park Avenue": "parkavenue.co.in",
+    "Peter England": "peterengland.com", "Plum": "plumgoodness.com", "Puma": "puma.com",
+    "Reliance Digital": "reliancedigital.in", "Samsung": "samsung.com",
+    "Sketchers": "skechers.com", "Starbucks": "starbucks.com", "Subway": "subway.com",
+    "Sugar": "sugarcosmetics.com", "Superdry": "superdry.com", "Titan": "titan.co.in",
+    "Titan Eye+": "titaneyeplus.com", "Titan Tanishq": "tanishq.co.in",
+    "Tommy Hilfiger": "tommy.com", "U.S. Polo Assn.": "uspoloassn.com",
+    "United Colors Of Benetton": "benetton.com", "Van Heusen": "vanheusenindia.com",
+    "Vero Moda": "veromoda.com", "W": "wforwoman.com", "Woodland": "woodland.co.in",
+    "Zara": "zara.com", "Licious": "licious.in", "Keventers": "keventers.com",
+    "T.g.i. Friday": "tgifridays.com", "Tasva": "tasva.com",
+    "Paris Saint-Germain": "psg.fr", "Cookie Man": "cookieman.in",
+    "Fizzy Goblet": "fizzygoblet.com", "Fun City": "funcity.in",
+    "Lk Bennette": "lkbennett.com", "Miraj Cinemas": "mirajcinemas.com",
+    "Naturals": "naturals.in", "Paul": "paul-uk.com", "Satya Paul": "satyapaul.com",
+    "Reliance Smart Bazaar": "jiomart.com", "Ethos": "ethoswatches.com",
+    "Zimson Watch & Lifestyle": "zimsonwatches.com",
+    "Melting Moments": "meltingmoments.in", "House Of Candy": "houseofcandy.in",
+    "House of Candy 2nd floor": "houseofcandy.in", "Bonker Corner": "bonkerscorner.com",
+    "Berry Brothers": "berrybrothers.in", "Trends": "ajio.com",
+    "Dayal Opticals": "dayalopticals.com", "Dayal Opticals Kiosk": "dayalopticals.com",
+    "Bhpc": "bhpc.com", "Colorplus": "colorplus.in", "La Pino": "lapinoz.com",
+    "Chique": "chiqueindia.com", "Kap Kids": "kapkids.com",
+    "Gola Sizzlers": "golasizzlers.com", "Healthy Hut": "healthyhut.in",
+    "Chai Choori": "chaichoori.com", "Fluffy Whirls": "fluffywhirls.com",
+    "Mama Earth": "mamaearth.in", "Nykaa": "nykaa.com", "Mars": "mars.com",
+    "Nailashes": "nailashes.in", "Love Child by Masaba": "lovelychild.in",
+    "Oud Arabia": "oudarabia.com", "Oud by Idol": "oudbyidol.com",
+    "Pilgrim": "discover.pilgrim.com", "The Man Company": "themancompany.com",
+    "Lakme Salon": "lakmesalon.in",
+}
+
+async def _migrate_brand_logos():
+    """Ensure all brands have CDN-hosted logo URLs (not local file paths)"""
+    if _db is None:
+        return
+    updated = 0
+    async for brand in _db.brands.find({"brand_name": {"$exists": True, "$ne": ""}}, {"_id": 0, "id": 1, "brand_name": 1, "logo_url": 1}):
+        name = brand.get("brand_name", "")
+        current_logo = brand.get("logo_url", "")
+        domain = BRAND_LOGO_MAP.get(name, "")
+        if domain:
+            expected = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
+            if current_logo != expected:
+                await _db.brands.update_one(
+                    {"id": brand["id"]},
+                    {"$set": {"logo_url": expected}}
+                )
+                updated += 1
+        elif not current_logo or "/api/uploads/" in current_logo:
+            # Brand not in map and has no external logo - clear broken local URL
+            await _db.brands.update_one(
+                {"id": brand["id"]},
+                {"$set": {"logo_url": ""}}
+            )
+    if updated > 0:
+        logger.info(f"Migrated {updated} brand logos to CDN URLs")
 
 
 # ==================== MODELS ====================
