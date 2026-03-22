@@ -113,12 +113,15 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - **Mall Map** (`/app/mall-map`) — Floor-wise accordion, search by store/category, store logos
 - **Amenities** (`/app/amenities`) — 6 category quick-grid, expandable sections with locations
 - **Referrals** (`/app/referrals`) — Referral code card with copy/share, stats dashboard, how-it-works, apply code form
-- **Participating Brands** (`/app/redeem-brands`) — 102 brands grid, search, floor/category filters (mirrors CP67 website)
+- **Participating Brands** (`/app/redeem-brands`) — 102 brands grid, search, floor/category filters, dark/gold CP67-style hero header matching cp67.co.in/advantages. Only shows brands with `is_eligible` ON.
 
 **Enhanced Existing Pages:**
 - **Offers** — Filter tabs (All Offers / Hot Deals), horizontal Flash Sales scroll section
 - **Events** — Filter tabs (All Events / Featured), featured hero banner with countdown, event countdown tags
 - **Rewards** — Added "View All Participating Brands" link button
+
+**Admin Enhancements:**
+- **Brands page** — Added Eligible column with On/Off toggle per brand. When OFF, brand hides from consumer participating brands. Added Floor and Category filter dropdowns. Logo URL normalization for cross-deployment compatibility.
 
 **SideDrawer Updated:** 10 menu items (added Mall Map, Amenities, Refer & Earn, Redeem at Brands)
 
