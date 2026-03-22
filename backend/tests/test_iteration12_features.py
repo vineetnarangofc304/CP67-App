@@ -11,7 +11,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://cp67-mall-app.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://explore-loyalty.preview.emergentagent.com')
 ADIDAS_BRAND_ID = "21110bec-0005-417c-adda-d0600b58fb2e"
 
 @pytest.fixture(scope="module")

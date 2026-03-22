@@ -6,7 +6,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://cp67-mall-app.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://explore-loyalty.preview.emergentagent.com').rstrip('/')
 API = f"{BASE_URL}/api/consumer"
 
 # Test credentials

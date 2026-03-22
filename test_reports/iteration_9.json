@@ -72,7 +72,7 @@
   "test_credentials": {
     "phone": "9876543210",
     "otp": "1234 (dev mode)",
-    "api_base_url": "https://cp67-mall-app.preview.emergentagent.com"
+    "api_base_url": "https://explore-loyalty.preview.emergentagent.com"
   },
   "seed_data_creation": "Rewards auto-seeded from brands collection (Starbucks, H&M, etc. with Rs 100/250/500/1000 denominations)",
   "retest_needed": false,

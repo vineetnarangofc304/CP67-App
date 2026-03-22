@@ -409,50 +409,61 @@ async def get_home(current_user=Depends(get_current_consumer)):
 
 @consumer_router.get("/stores")
 async def list_stores(category: str = None, search: str = None, floor: str = None):
-    query = {"is_active": True}
+    """List stores from brands collection with filters"""
+    query = {"is_active": {"$ne": False}, "brand_name": {"$exists": True, "$ne": ""}}
     if category:
         query["category"] = category
     if floor:
         query["floor"] = floor
     if search:
-        query["name"] = {"$regex": search, "$options": "i"}
+        query["brand_name"] = {"$regex": search, "$options": "i"}
 
     stores = []
-    async for s in _db.stores.find(query, {"_id": 0}).sort("name", 1):
-        stores.append(s)
+    async for b in _db.brands.find(query, {"_id": 0}).sort("brand_name", 1):
+        stores.append({
+            "id": b.get("id"),
+            "name": b.get("brand_name"),
+            "category": b.get("category") or "",
+            "floor": b.get("floor") or "",
+            "unit_no": b.get("unit_no") or "",
+            "description": b.get("description") or "",
+            "cover_image": b.get("cover_image_url") or "",
+            "logo_url": b.get("logo_url") or "",
+            "timing": b.get("timing") or "11:00 AM - 9:00 PM",
+            "tags": b.get("tags") or [],
+            "is_featured": b.get("is_featured", False),
+            "is_active": True
+        })
 
-    # Fallback: if stores empty, pull from brands collection
-    if not stores and not category and not search and not floor:
-        brand_query = {"is_active": {"$ne": False}}
-        async for b in _db.brands.find(brand_query, {"_id": 0}).sort("brand_name", 1):
-            stores.append({
-                "id": b.get("id"),
-                "name": b.get("brand_name"),
-                "category": b.get("category") or "General",
-                "floor": b.get("floor") or "",
-                "unit_no": b.get("unit_no") or "",
-                "description": b.get("description") or "",
-                "cover_image": b.get("cover_image_url") or "",
-                "logo_url": b.get("logo_url") or "",
-                "timing": b.get("timing") or "11:00 AM - 9:00 PM",
-                "tags": b.get("tags") or [],
-                "is_featured": b.get("is_featured", False),
-                "is_active": True
-            })
+    categories = sorted([c for c in await _db.brands.distinct("category", {"is_active": {"$ne": False}, "brand_name": {"$exists": True, "$ne": ""}}) if c])
+    floors_list = sorted([f for f in await _db.brands.distinct("floor", {"is_active": {"$ne": False}, "brand_name": {"$exists": True, "$ne": ""}}) if f])
 
-    categories = await _db.stores.distinct("category", {"is_active": True})
-    if not categories:
-        categories = await _db.brands.distinct("category", {"is_active": {"$ne": False}})
-    floors = await _db.stores.distinct("floor", {"is_active": True})
-
-    return {"stores": stores, "categories": sorted([c for c in categories if c]), "floors": floors}
+    return {"stores": stores, "categories": categories, "floors": floors_list}
 
 
 @consumer_router.get("/stores/{store_id}")
 async def get_store(store_id: str):
-    store = await _db.stores.find_one({"id": store_id, "is_active": True}, {"_id": 0})
-    if not store:
+    # Try brands collection first (primary data source)
+    brand = await _db.brands.find_one({"id": store_id}, {"_id": 0})
+    if not brand:
+        brand = await _db.stores.find_one({"id": store_id, "is_active": True}, {"_id": 0})
+    if not brand:
         raise HTTPException(status_code=404, detail="Store not found")
+
+    store = {
+        "id": brand.get("id"),
+        "name": brand.get("brand_name") or brand.get("name"),
+        "category": brand.get("category") or "",
+        "floor": brand.get("floor") or "",
+        "unit_no": brand.get("unit_no") or "",
+        "description": brand.get("description") or "",
+        "cover_image": brand.get("cover_image_url") or brand.get("cover_image") or "",
+        "logo_url": brand.get("logo_url") or "",
+        "timing": brand.get("timing") or "11:00 AM - 9:00 PM",
+        "tags": brand.get("tags") or [],
+        "is_featured": brand.get("is_featured", False),
+        "is_active": True
+    }
 
     # Get offers for this store
     offers = []

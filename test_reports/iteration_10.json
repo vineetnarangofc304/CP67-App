@@ -56,7 +56,7 @@
   "test_credentials": {
     "phone": "9876543210",
     "otp": "1234 (dev mode)",
-    "api_base_url": "https://cp67-mall-app.preview.emergentagent.com"
+    "api_base_url": "https://explore-loyalty.preview.emergentagent.com"
   },
   "seed_data_creation": "None - using existing data",
   "retest_needed": false,

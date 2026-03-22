@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, MapPin, Clock, Heart } from 'lucide-react';
+import { Search, MapPin, Clock, Heart, ChevronDown } from 'lucide-react';
 import { useConsumerAuth, API } from '../ConsumerApp';
 
 export default function Stores() {
   const [stores, setStores] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [floors, setFloors] = useState([]);
   const [selectedCat, setSelectedCat] = useState('All');
+  const [selectedFloor, setSelectedFloor] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [favorites, setFavorites] = useState([]);
@@ -20,6 +22,7 @@ export default function Stores() {
     try {
       const params = new URLSearchParams();
       if (selectedCat !== 'All') params.set('category', selectedCat);
+      if (selectedFloor) params.set('floor', selectedFloor);
       if (search) params.set('search', search);
       const [storesRes, favRes] = await Promise.all([
         fetch(`${API}/stores?${params}`, { headers: { 'Authorization': `Bearer ${token}` } }),
@@ -29,6 +32,7 @@ export default function Stores() {
         const data = await storesRes.json();
         setStores(data.stores);
         if (data.categories?.length) setCategories(['All', ...data.categories]);
+        if (data.floors?.length) setFloors(data.floors);
       }
       if (favRes.ok) {
         const data = await favRes.json();
@@ -36,7 +40,7 @@ export default function Stores() {
       }
     } catch { /* */ }
     setLoading(false);
-  }, [token, selectedCat, search]);
+  }, [token, selectedCat, selectedFloor, search]);
 
   useEffect(() => { fetchStores(); }, [fetchStores]);
 
@@ -61,6 +65,7 @@ export default function Stores() {
     <motion.div className="consumer-stores" initial={{ opacity: 0 }} animate={{ opacity: 1 }} data-testid="stores-screen">
       <div className="stores-header">
         <h1>Explore Stores</h1>
+        <p className="stores-count">{stores.length} brands at CP67 Mall</p>
         <div className="stores-search">
           <Search size={18} />
           <input placeholder="Search stores, brands..." value={search}
@@ -68,6 +73,21 @@ export default function Stores() {
         </div>
       </div>
 
+      {/* Floor Filter */}
+      {floors.length > 0 && (
+        <div className="stores-floor-filter" data-testid="stores-floor-filter">
+          <div className="stores-floor-select">
+            <select value={selectedFloor} onChange={e => setSelectedFloor(e.target.value)}
+              data-testid="stores-floor-dropdown">
+              <option value="">All Floors</option>
+              {floors.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+            <ChevronDown size={14} />
+          </div>
+        </div>
+      )}
+
+      {/* Category Pills */}
       <div className="stores-categories" data-testid="store-categories">
         <button className={`category-pill ${showFavOnly ? 'active' : ''}`}
           onClick={() => { setShowFavOnly(!showFavOnly); setSelectedCat('All'); }} data-testid="cat-favorites">
@@ -88,7 +108,9 @@ export default function Stores() {
           {displayed.map(s => (
             <div key={s.id} className="store-grid-card" onClick={() => navigate(`/app/stores/${s.id}`)} data-testid={`store-${s.id}`}>
               <div className="store-grid-img">
-                {s.cover_image ? (
+                {s.logo_url ? (
+                  <img src={s.logo_url} alt={s.name} loading="lazy" className="store-logo-img" />
+                ) : s.cover_image ? (
                   <img src={s.cover_image} alt={s.name} loading="lazy" />
                 ) : (
                   <div className="store-grid-placeholder"><span>{s.name[0]}</span></div>
@@ -101,8 +123,8 @@ export default function Stores() {
               </div>
               <div className="store-grid-info">
                 <h3>{s.name}</h3>
-                <span className="store-cat">{s.category}</span>
-                <p className="store-timing"><Clock size={12} /> {s.timing}</p>
+                {s.category && <span className="store-cat">{s.category}</span>}
+                {s.timing && <p className="store-timing"><Clock size={12} /> {s.timing}</p>}
               </div>
             </div>
           ))}
