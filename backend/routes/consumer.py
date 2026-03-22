@@ -11,6 +11,7 @@ import logging
 import base64
 import re
 import json
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -268,10 +269,11 @@ async def get_home(current_user=Depends(get_current_consumer)):
     if points_result.get("success") and points_result.get("data"):
         balance = int(points_result["data"].get("balance_points", 0))
 
-    # Banners
+    # Banners (random order each time)
     banners = []
-    async for b in _db.banners.find({"is_active": True}, {"_id": 0}).sort("position", 1).limit(5):
+    async for b in _db.banners.find({"is_active": True}, {"_id": 0}):
         banners.append(b)
+    random.shuffle(banners)
 
     # Featured stores
     featured_stores = []
