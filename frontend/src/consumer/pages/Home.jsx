@@ -64,7 +64,7 @@ export default function Home({ onMenuOpen }) {
       {/* Quick Actions */}
       <div className="home-quick-actions" data-testid="quick-actions">
         {[
-          { icon: Camera, label: 'Scan Bill', path: '/app/upload', color: '#c8956c' },
+          { icon: Camera, label: 'Scan Bill', path: '/app/upload', color: '#C68939' },
           { icon: Gift, label: 'Offers', path: '/app/offers', color: '#e74c3c' },
           { icon: Ticket, label: 'Events', path: '/app/events', color: '#8b5cf6' },
           { icon: MapPin, label: 'Mall Map', path: '/app/stores', color: '#3b82f6' },

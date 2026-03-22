@@ -15,7 +15,7 @@ const CATEGORY_ICONS = {
 const CATEGORY_COLORS = {
   'Restrooms': '#3b82f6',
   'ATMs & Banking': '#22c55e',
-  'Services': '#c8956c',
+  'Services': '#C68939',
   'Connectivity': '#8b5cf6',
   'Parking & Transport': '#f59e0b',
   'Emergency': '#ef4444',
@@ -54,7 +54,7 @@ export default function Amenities() {
       <div className="amenities-quick-grid" data-testid="amenities-quick-grid">
         {amenities.map(cat => {
           const Icon = CATEGORY_ICONS[cat.category] || ShieldCheck;
-          const color = CATEGORY_COLORS[cat.category] || '#c8956c';
+          const color = CATEGORY_COLORS[cat.category] || '#C68939';
           return (
             <button
               key={cat.category}
@@ -73,7 +73,7 @@ export default function Amenities() {
       <div className="amenities-sections" data-testid="amenities-sections">
         {amenities.map((cat, idx) => {
           const Icon = CATEGORY_ICONS[cat.category] || ShieldCheck;
-          const color = CATEGORY_COLORS[cat.category] || '#c8956c';
+          const color = CATEGORY_COLORS[cat.category] || '#C68939';
           const isOpen = openCat === cat.category;
 
           return (

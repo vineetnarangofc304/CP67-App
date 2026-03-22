@@ -4,23 +4,26 @@
 
 /* === CSS Variables === */
 :root {
-  --cp-gold: #c8956c;
-  --cp-gold-light: #e8c9a8;
-  --cp-gold-dark: #a87b58;
-  --cp-dark: #1a1a2e;
-  --cp-dark-2: #16213e;
-  --cp-dark-3: #0f3460;
-  --cp-bg: #f6f5f0;
+  --cp-gold: #C68939;
+  --cp-gold-light: #E0AF6D;
+  --cp-gold-dark: #a07030;
+  --cp-dark: #2E2219;
+  --cp-dark-2: #1A1A1A;
+  --cp-dark-3: #3d2e1f;
+  --cp-bg: #FAF8F5;
   --cp-card: #ffffff;
-  --cp-text: #1a1a1a;
-  --cp-text-2: #6b6b6b;
-  --cp-text-3: #9a9a9a;
-  --cp-border: #e8e6e1;
-  --cp-success: #22c55e;
+  --cp-text: #1A1A1A;
+  --cp-text-2: #666666;
+  --cp-text-3: #999999;
+  --cp-border: #e8e4de;
+  --cp-success: #1FAD53;
   --cp-error: #ef4444;
   --cp-radius: 16px;
   --cp-radius-sm: 10px;
   --cp-nav-height: 72px;
+  --cp-cream: #F8F6F2;
+  --cp-gold-bg: rgba(198, 137, 57, 0.08);
+  --cp-gold-border: rgba(198, 137, 57, 0.2);
 }
 
 /* === App Shell === */
@@ -538,7 +541,7 @@
 .points-card-bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, var(--cp-dark) 0%, #2d2b4e 60%, var(--cp-dark) 100%);
+  background: linear-gradient(135deg, var(--cp-dark) 0%, #3d2e1f 60%, var(--cp-dark) 100%);
   border-radius: inherit;
 }
 
@@ -987,7 +990,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--cp-dark) 0%, #2d2b4e 100%);
+  background: linear-gradient(135deg, var(--cp-dark) 0%, #3d2e1f 100%);
 }
 
 .store-grid-placeholder span {
@@ -1238,7 +1241,7 @@
 .wallet-card-bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, var(--cp-dark) 0%, #2d2b4e 40%, #1a1a3e 100%);
+  background: linear-gradient(135deg, var(--cp-dark) 0%, #3d2e1f 40%, #2E2219 100%);
 }
 
 .wallet-card-bg::before {
@@ -1964,7 +1967,7 @@
   width: 72px;
   height: 72px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--cp-dark), #2d2b4e);
+  background: linear-gradient(135deg, var(--cp-dark), #3d2e1f);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2322,7 +2325,7 @@
   box-shadow: 4px 0 20px rgba(0,0,0,0.2);
 }
 .drawer-header {
-  padding: 48px 20px 20px; background: linear-gradient(135deg, #1a1a2e, #16213e);
+  padding: 48px 20px 20px; background: linear-gradient(135deg, #2E2219, #1A1A1A);
   display: flex; align-items: flex-start; justify-content: space-between;
 }
 .drawer-user-info { display: flex; align-items: center; gap: 12px; }
@@ -2443,7 +2446,7 @@
 .consumer-rewards-page { padding-bottom: 100px; }
 .rewards-balance-bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 20px; background: linear-gradient(135deg, #1a1a2e, #0f3460); color: white;
+  padding: 14px 20px; background: linear-gradient(135deg, #2E2219, #1A1A1A); color: white;
 }
 .rewards-balance-bar span { font-size: 13px; opacity: 0.8; }
 .rewards-balance-bar strong { font-size: 15px; }
@@ -2570,7 +2573,7 @@
 }
 
 .program-hero {
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  background: linear-gradient(135deg, #2E2219 0%, #1A1A1A 50%, #3d2e1f 100%);
   padding: 60px 24px 40px;
   text-align: center;
   color: white;

@@ -330,9 +330,9 @@ const Brands = () => {
                         <TableCell>
                           <button onClick={() => toggleEligibility(brand)} className="flex items-center" data-testid={`eligibility-${brand.id}`}>
                             {brand.is_eligible !== false ? (
-                              <ToggleRight className="h-6 w-6 text-green-500" />
+                              <ToggleRight className="h-6 w-6 text-emerald-500" />
                             ) : (
-                              <ToggleLeft className="h-6 w-6 text-slate-300" />
+                              <ToggleLeft className="h-6 w-6 text-red-400" />
                             )}
                           </button>
                         </TableCell>
