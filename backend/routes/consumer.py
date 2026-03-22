@@ -1560,6 +1560,23 @@ async def get_tier_info(current_user=Depends(get_current_consumer)):
     }
 
 
+
+# ==================== ACTIVE CAMPAIGNS (CONSUMER) ====================
+
+@consumer_router.get("/campaigns")
+async def get_consumer_campaigns():
+    """Get currently active campaigns for consumer display"""
+    now = datetime.now(timezone.utc).isoformat()
+    campaigns = []
+    async for c in _db.campaigns.find(
+        {"is_active": True, "start_date": {"$lte": now}, "end_date": {"$gte": now}},
+        {"_id": 0, "applicable_brand_ids": 0, "created_by": 0, "total_triggered": 0, "total_bonus_issued": 0}
+    ):
+        campaigns.append(c)
+    return {"campaigns": campaigns}
+
+
+
 # ==================== SEED DATA ====================
 
 @consumer_router.post("/seed")

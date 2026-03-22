@@ -16,7 +16,8 @@ import {
   Car,
   ScanLine,
   Store,
-  Download
+  Download,
+  Megaphone
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -26,6 +27,7 @@ const navItems = [
   { path: '/users', label: 'Users', icon: Users },
   { path: '/bills', label: 'Bills', icon: Receipt },
   { path: '/brands', label: 'Brands & ATV', icon: Store },
+  { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
   { path: '/reports', label: 'Export Reports', icon: Download },
   { path: '/parking-scanner', label: 'Parking Scanner', icon: ScanLine },
   { path: '/parking-report', label: 'Parking Report', icon: Car },

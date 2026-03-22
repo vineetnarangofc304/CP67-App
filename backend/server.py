@@ -172,6 +172,20 @@ class BillProcessRequest(BaseModel):
     points_override: Optional[float] = None
     send_whatsapp: bool = True  # Whether to send WhatsApp message to user
 
+class CampaignCreate(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    campaign_type: str  # multiplier, bonus, first_visit, spend_threshold
+    multiplier: float = 1.0  # e.g., 2.0 for 2X, 3.0 for 3X
+    bonus_points: int = 0  # flat bonus points
+    min_spend: float = 0  # minimum spend to qualify
+    applicable_floors: Optional[List[str]] = None  # null = all floors
+    applicable_categories: Optional[List[str]] = None  # null = all categories
+    applicable_brand_ids: Optional[List[str]] = None  # null = all brands
+    start_date: str  # ISO date
+    end_date: str  # ISO date
+    is_active: bool = True
+
 # ======================== HELPER FUNCTIONS ========================
 
 def create_jwt_token(data: dict) -> str:
@@ -4199,6 +4213,105 @@ We will verify it within 24–48 hours
         "response": response_message,
         "ocr_data": bill_data.ocr_raw_data
     }
+
+
+# ======================== CAMPAIGN ROUTES ========================
+
+@api_router.get("/admin/campaigns")
+async def list_campaigns(payload: dict = Depends(verify_jwt_token)):
+    """Get all campaigns"""
+    campaigns = []
+    async for c in db.campaigns.find({}, {"_id": 0}).sort("created_at", -1):
+        campaigns.append(c)
+    return {"campaigns": campaigns, "total": len(campaigns)}
+
+
+@api_router.post("/admin/campaigns")
+async def create_campaign(data: CampaignCreate, payload: dict = Depends(verify_jwt_token)):
+    """Create a new campaign"""
+    campaign = {
+        "id": str(uuid.uuid4()),
+        "name": data.name,
+        "description": data.description or "",
+        "campaign_type": data.campaign_type,
+        "multiplier": data.multiplier,
+        "bonus_points": data.bonus_points,
+        "min_spend": data.min_spend,
+        "applicable_floors": data.applicable_floors,
+        "applicable_categories": data.applicable_categories,
+        "applicable_brand_ids": data.applicable_brand_ids,
+        "start_date": data.start_date,
+        "end_date": data.end_date,
+        "is_active": data.is_active,
+        "total_triggered": 0,
+        "total_bonus_issued": 0,
+        "created_by": payload.get("sub", "admin"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": None,
+    }
+    await db.campaigns.insert_one(campaign)
+    campaign.pop("_id", None)
+    return {"success": True, "campaign": campaign}
+
+
+@api_router.put("/admin/campaigns/{campaign_id}")
+async def update_campaign(campaign_id: str, data: CampaignCreate, payload: dict = Depends(verify_jwt_token)):
+    """Update an existing campaign"""
+    existing = await db.campaigns.find_one({"id": campaign_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    update_data = {
+        "name": data.name,
+        "description": data.description or "",
+        "campaign_type": data.campaign_type,
+        "multiplier": data.multiplier,
+        "bonus_points": data.bonus_points,
+        "min_spend": data.min_spend,
+        "applicable_floors": data.applicable_floors,
+        "applicable_categories": data.applicable_categories,
+        "applicable_brand_ids": data.applicable_brand_ids,
+        "start_date": data.start_date,
+        "end_date": data.end_date,
+        "is_active": data.is_active,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.campaigns.update_one({"id": campaign_id}, {"$set": update_data})
+    updated = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0})
+    return {"success": True, "campaign": updated}
+
+
+@api_router.delete("/admin/campaigns/{campaign_id}")
+async def delete_campaign(campaign_id: str, payload: dict = Depends(verify_jwt_token)):
+    """Delete a campaign"""
+    result = await db.campaigns.delete_one({"id": campaign_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return {"success": True, "message": "Campaign deleted"}
+
+
+@api_router.put("/admin/campaigns/{campaign_id}/toggle")
+async def toggle_campaign(campaign_id: str, payload: dict = Depends(verify_jwt_token)):
+    """Toggle campaign active status"""
+    campaign = await db.campaigns.find_one({"id": campaign_id}, {"_id": 0, "is_active": 1})
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    new_status = not campaign.get("is_active", True)
+    await db.campaigns.update_one({"id": campaign_id}, {"$set": {"is_active": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"success": True, "is_active": new_status}
+
+
+@api_router.get("/admin/campaigns/active")
+async def get_active_campaigns():
+    """Get currently active campaigns (for consumer display / bill processing)"""
+    now = datetime.now(timezone.utc).isoformat()
+    campaigns = []
+    async for c in db.campaigns.find(
+        {"is_active": True, "start_date": {"$lte": now}, "end_date": {"$gte": now}},
+        {"_id": 0}
+    ):
+        campaigns.append(c)
+    return {"campaigns": campaigns}
+
 
 # ======================== EXPORT ROUTES ========================
 
