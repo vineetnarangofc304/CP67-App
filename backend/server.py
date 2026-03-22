@@ -2093,8 +2093,9 @@ async def process_bill(bill_id: str, request: BillProcessRequest, background_tas
                 upsert=True
             )
         
+        store_display = store_name if store_name and store_name != "None" else "CP67 Mall"
         # Success WhatsApp Message (per revised flow document)
-        whatsapp_message = f"""Thank you for uploading your bill of {store_name} with Homeland Advantage.
+        whatsapp_message = f"""Thank you for uploading your bill of {store_display} with Homeland Advantage.
 
 Points Credited: {points_earned}
 Total Balance: {total_balance}
@@ -2975,8 +2976,6 @@ Thank you for your patience and for being a valued member of Homeland Advantage 
                 # Bill is older than 15 days - reject (per revised flow document)
                 old_bill_msg = f"""Bill Cannot Be Processed
 
-Thank you for uploading your bill from {store_name}.
-
 Unfortunately, this bill dated {bill_date} is more than 15 days old and cannot be processed for rewards.
 
 Policy: Bills must be uploaded within 15 days of purchase to earn points.
@@ -3100,8 +3099,6 @@ Processing your rewards... ⏳"""
             rejection_reason = "Bill is not from CP67 Mall. Only CP67 Mall bills are eligible for rewards."
             
             reject_msg = f"""Bill Cannot Be Processed
-
-Thank you for uploading your bill from {store_name}.
 
 Unfortunately, this bill is not eligible for processing.
 
@@ -3457,7 +3454,8 @@ Thank you for shopping at CP67 Mall!"""
             )
         
         # Success Message (per revised flow document)
-        success_msg = f"""Thank you for uploading your bill of {store_name} with Homeland Advantage.
+        store_display2 = store_name if store_name and store_name != "None" else "CP67 Mall"
+        success_msg = f"""Thank you for uploading your bill of {store_display2} with Homeland Advantage.
 
 Points Credited: {points_earned}
 Total Balance: {total_balance}
@@ -3690,7 +3688,7 @@ Available Balance: {balance}"""
                 
                 background_tasks.add_task(send_whatsapp_buttons, phone, points_msg, buttons)
             
-            elif message == "redeem_points" or "redeem" in msg_lower or "point" in msg_lower or "balance" in msg_lower:
+            elif message == "redeem_points" or "redeem" in msg_lower or ("point" in msg_lower and message != "my_points") or "balance" in msg_lower:
                 # REDEEM POINTS - Show redemption info (per revised flow document)
                 points_result = await tagnpay_client.get_customer_points(mobile_10)
                 balance = 0
