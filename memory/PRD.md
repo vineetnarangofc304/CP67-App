@@ -11,155 +11,94 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 ```
 /app/
 ├── backend/
-│   ├── server.py              # Admin + WhatsApp APIs
+│   ├── server.py              # Admin APIs, WhatsApp, Campaign CRUD, Analytics
 │   ├── routes/
 │   │   ├── __init__.py
-│   │   └── consumer.py        # Consumer app APIs (Map, Amenities, Referral, Wallet, etc.)
-│   ├── uploads/
-│   │   └── brands/            # Brand logos & cover images
+│   │   └── consumer.py        # Consumer app APIs (Map, Amenities, Referral, Wallet, Campaigns, etc.)
+│   ├── uploads/brands/
 │   ├── tests/
-│   │   ├── test_new_features.py
-│   │   ├── test_cp67_loyalty.py
-│   │   ├── test_consumer_app.py
-│   │   └── test_brand_management.py
 │   └── .env
 ├── frontend/
 │   ├── src/
 │   │   ├── consumer/           # Consumer PWA
 │   │   │   ├── ConsumerApp.jsx
 │   │   │   ├── consumer.css
-│   │   │   ├── components/
-│   │   │   │   ├── BottomNav.jsx
-│   │   │   │   └── SideDrawer.jsx (9 menu items)
-│   │   │   └── pages/ (18 screens)
-│   │   │       ├── Home.jsx, Login.jsx, Welcome.jsx, Onboarding.jsx
-│   │   │       ├── Stores.jsx, StoreDetail.jsx, Wallet.jsx
-│   │   │       ├── Offers.jsx (enhanced: Flash Sales + filters)
-│   │   │       ├── Events.jsx (enhanced: Featured hero + countdown)
-│   │   │       ├── BillUpload.jsx, BillHistory.jsx
-│   │   │       ├── Profile.jsx, Notifications.jsx, NotificationPrefs.jsx
-│   │   │       ├── Transactions.jsx, Rewards.jsx
-│   │   │       ├── HelpSupport.jsx, Legal.jsx, ProgramInfo.jsx
-│   │   │       ├── MallMap.jsx (NEW)
-│   │   │       ├── Amenities.jsx (NEW)
-│   │   │       └── Referrals.jsx (NEW)
-│   │   ├── pages/              # Admin dashboard
+│   │   │   ├── components/     # BottomNav, SideDrawer (11 items)
+│   │   │   └── pages/          # 19 screens incl. TierJourney
+│   │   ├── pages/              # Admin dashboard (incl. Campaigns.jsx)
 │   │   └── App.js
-│   └── package.json
+│   └── public/manifest.json    # PWA manifest
 └── memory/PRD.md
 ```
 
 ## What's Implemented
 
-### Phase 1 Complete (Mar 17, 2026)
+### Phase 1 (Mar 17, 2026) - Core PWA
+- OTP login, Onboarding, Home, Store directory, Wallet, Bill upload + OCR, Events, Offers, Profile, Notifications
 
-**Consumer Mobile PWA (12 screens)**
-- OTP login via TagnPay (dev OTP: 1234)
-- Onboarding (name, gender, interests)
-- Home screen (points card, banners, offers, featured stores, events)
-- Store directory (16+ stores, search, category filters)
-- Store detail with offers
-- Loyalty wallet (Fundle-powered, tier system)
-- Bill upload with camera/gallery + Gemini OCR
-- Events listing + registration
-- Offers page
-- Profile management
-- Notifications
-- Bottom navigation with center scan button
+### Phase 2 (Mar 21, 2026) - Core Loyalty
+- Enhanced Wallet, Transactions, Bill History, Rewards Catalog, Help & Support, Side Drawer, WhatsApp Bot
 
-**Brand & Store Management (Admin)**
-- 102 brands loaded from ATV sheet
-- Full store management with tabbed edit
-- Image upload: logo + cover
-- Auto-sync brands to consumer stores collection
-- App-Ready status tracking
+### Phase 3 (Feb 2026) - Map, Amenities, Referrals, Enhanced UX
+- Mall Map, Amenities, Referrals, Participating Brands, Offers/Events enhancements, Admin brand eligibility toggles
 
-**Camera Fixes (Mar 19, 2026)**
-- Bill Upload camera: replaced with getUserMedia for PWA robustness
-- Parking Scanner camera: replaced with html5-qrcode
+### Phase 4 (Mar 22, 2026) - Campaign Engine & Tier System
+**Explore/Stores Fix:**
+- Fixed `/api/consumer/stores` to pull from `brands` collection (not hardcoded)
+- Added `_enrich_brands()` startup function to populate floor/category for all 102 brands
+- Floor filter, category filter, and search all work against real DB data
+- Brand logos via Google Favicon CDN
 
-### Phase 2 Complete — Core Loyalty Features (Mar 21, 2026)
+**Campaign Engine (Admin):**
+- Full CRUD: `POST/GET/PUT/DELETE /api/admin/campaigns`
+- Toggle endpoint: `PUT /api/admin/campaigns/{id}/toggle`
+- Active campaigns: `GET /api/admin/campaigns/active`
+- Consumer campaigns: `GET /api/consumer/campaigns`
+- 4 campaign types: Points Multiplier, Bonus Points, Spend Threshold, First Visit Reward
+- Scoped by floor and category
+- Admin UI: Stats cards, Campaign Builder table, Create/Edit dialog with type selectors, multiplier presets (1.5X-5X), date pickers, floor/category chips
 
-**New Backend Endpoints:**
-- `GET /api/consumer/wallet/detailed` — Enhanced wallet
-- `GET /api/consumer/transactions` — Transaction history with filters
-- `GET /api/consumer/rewards` — Rewards catalog
-- `POST /api/consumer/rewards/redeem` — One-tap redemption
-- Profile update: DOB, gender, address fields
+**Tier System Visual UI:**
+- New page: `/app/tier-journey`
+- Hero card with current tier + lifetime points
+- Visual progression: Bronze (0) -> Silver (2,500) -> Gold (10,000) -> Platinum (25,000)
+- Benefits listed per tier
+- Progress bar showing points needed for next tier
+- Accessible from Wallet tier badge and SideDrawer
 
-**New Frontend Pages (8 pages):**
-- Enhanced Wallet, Transactions, Bill History, Rewards Catalog
-- Help & Support, Legal, Side Drawer Menu, Enhanced Profile
-
-**WhatsApp Bot (Mar 21, 2026):**
-- 5-option list message menu
-- All message flows updated per revised journey doc
-- List reply + button reply webhook parsing
-
-**Additional Features:**
-- Store Favorites with heart toggle
-- Notification Preferences (6 category toggles)
-
-### Phase 3 — Map, Amenities, Referrals, Enhanced UX (Feb 2026)
-
-**New Backend Endpoints:**
-- `GET /api/consumer/mall-map` — Floor-wise brand locations
-- `GET /api/consumer/amenities` — 6-category amenities directory (18 facilities)
-- `GET /api/consumer/referral` — User referral info & stats
-- `POST /api/consumer/referral/apply` — Apply referral code
-- `GET /api/consumer/tier-info` — Tier system details
-
-**3 New Frontend Pages:**
-- **Mall Map** (`/app/mall-map`) — Floor-wise accordion, search by store/category, store logos
-- **Amenities** (`/app/amenities`) — 6 category quick-grid, expandable sections with locations
-- **Referrals** (`/app/referrals`) — Referral code card with copy/share, stats dashboard, how-it-works, apply code form
-- **Participating Brands** (`/app/redeem-brands`) — 102 brands grid, search, floor/category filters, dark/gold CP67-style hero header matching cp67.co.in/advantages. Only shows brands with `is_eligible` ON.
-
-**Enhanced Existing Pages:**
-- **Offers** — Filter tabs (All Offers / Hot Deals), horizontal Flash Sales scroll section
-- **Events** — Filter tabs (All Events / Featured), featured hero banner with countdown, event countdown tags
-- **Rewards** — Added "View All Participating Brands" link button
-
-**Admin Enhancements:**
-- **Brands page** — Added Eligible column with On/Off toggle per brand. When OFF, brand hides from consumer participating brands. Added Floor and Category filter dropdowns. Logo URL normalization for cross-deployment compatibility.
-
-**SideDrawer Updated:** 10 menu items (added Mall Map, Amenities, Refer & Earn, Redeem at Brands)
-
-**Testing:** 100% backend (15/15), 100% frontend — all verified
+**PWA Enhancements:**
+- Added `manifest.json` with app name, icons, theme colors
+- Apple mobile web app meta tags
+- `start_url: /app/welcome`, `display: standalone`
 
 ## Key API Endpoints
 
 ### Consumer App (/api/consumer/*)
-- `POST /auth/send-otp`, `POST /auth/verify-otp`
-- `GET /profile`, `PUT /profile`
-- `GET /home`, `GET /stores`, `GET /stores/{id}`
-- `GET /offers`, `GET /events`, `POST /events/{id}/register`
-- `GET /wallet`, `GET /wallet/detailed`
-- `POST /bills/upload`, `GET /bills`
-- `GET /transactions`, `GET /rewards`, `POST /rewards/redeem`
-- `GET /favorites`, `POST /favorites/toggle`
-- `GET /notification-preferences`, `PUT /notification-preferences`
-- `GET /mall-map`, `GET /amenities`
-- `GET /referral`, `POST /referral/apply`
-- `GET /participating-brands` (search, floor, category filters)
-- `GET /tier-info`
+- Auth: `POST /auth/send-otp`, `POST /auth/verify-otp`
+- Profile: `GET /profile`, `PUT /profile`
+- Content: `GET /home`, `GET /stores`, `GET /stores/{id}`, `GET /offers`, `GET /events`
+- Wallet: `GET /wallet`, `GET /wallet/detailed`, `GET /transactions`, `GET /rewards`
+- Bills: `POST /bills/upload`, `GET /bills`
+- Social: `GET /favorites`, `POST /favorites/toggle`, `GET /referral`, `POST /referral/apply`
+- Discovery: `GET /mall-map`, `GET /amenities`, `GET /participating-brands`
+- Tiers: `GET /tier-info`, `GET /campaigns`
 
 ### Admin (/api/admin/*)
-- `GET/POST /brands`, `PUT /brands/{id}`, `DELETE /brands/{id}`
-- `POST /brands/{id}/upload-image`
-- `POST /brands/sync-to-stores`
+- Brands: `GET/POST /brands`, `PUT/DELETE /brands/{id}`
+- Campaigns: `GET/POST /campaigns`, `PUT/DELETE /campaigns/{id}`, `PUT /campaigns/{id}/toggle`, `GET /campaigns/active`
+- Analytics, Bills, Users, Parking, WhatsApp endpoints
 
 ## Database Collections
 - `users`, `bills`, `brands`, `stores`, `offers`, `events`, `banners`
-- `notifications`, `event_registrations`, `fundle_customers`
-- `brand_upload_history`, `admin_users`, `qr_analytics`
+- `campaigns` (NEW), `notifications`, `event_registrations`, `fundle_customers`
+- `redemptions`, `rewards`, `admin_users`, `qr_analytics`
 
 ## Known Issues
 - **Karix WhatsApp Image Delivery (BLOCKED):** Code correct but images not delivered. External Karix platform issue.
 
 ## Upcoming Tasks (P1)
-- Campaign Engine: Admin campaign builder (2X/3X points, multipliers, first visit, highest spender)
-- Tier System Visual UI: Bronze -> Silver -> Gold -> Platinum progression journey
+- Campaign-aware bill processing (apply multiplier/bonus when processing bills)
+- PWA Install Guide modal for mall visitors
 
 ## Future Tasks (P2-P3)
 - **TECH DEBT**: Refactor monolithic server.py into /routes, /services, /models
@@ -167,7 +106,6 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - Advanced Analytics: RFM, CLV, cohort analysis
 - AI Mall Concierge
 - Push Notifications, CMS for banners/offers/events
-- Sponsored placements, media inventory
 
 ## Credentials
 - Admin: admin / CP67Admin@2025
