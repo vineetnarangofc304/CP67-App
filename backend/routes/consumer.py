@@ -36,7 +36,7 @@ def init_consumer_routes(db, tagnpay_client, jwt_secret, jwt_algorithm, emergent
 
 
 async def auto_seed_if_empty():
-    """Auto-seed consumer data on startup if banners collection is empty"""
+    """Auto-seed consumer data on startup if banners/brands collections are empty"""
     if _db is None:
         return
     try:
@@ -47,6 +47,11 @@ async def auto_seed_if_empty():
             logger.info("Auto-seed complete")
     except Exception as e:
         logger.error(f"Auto-seed error: {e}")
+    # Ensure brands have floor/category data
+    try:
+        await _enrich_brands()
+    except Exception as e:
+        logger.error(f"Brand enrichment error: {e}")
     # Always ensure brand logos are set to CDN URLs
     try:
         await _migrate_brand_logos()
@@ -130,6 +135,181 @@ async def _migrate_brand_logos():
             )
     if updated > 0:
         logger.info(f"Migrated {updated} brand logos to CDN URLs")
+
+
+BRAND_DIRECTORY = [
+    # Ground Floor
+    {"brand_name": "Zara", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-01"},
+    {"brand_name": "H&M", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-02"},
+    {"brand_name": "Marks & Spencer", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-03"},
+    {"brand_name": "Calvin Klein", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-04"},
+    {"brand_name": "Tommy Hilfiger", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-05"},
+    {"brand_name": "Levis", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-06"},
+    {"brand_name": "Mango", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-07"},
+    {"brand_name": "Gant", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-08"},
+    {"brand_name": "Superdry", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-09"},
+    {"brand_name": "Forever New", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-10"},
+    {"brand_name": "Vero Moda", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-11"},
+    {"brand_name": "Only", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-12"},
+    {"brand_name": "Jack And Jones", "category": "Fashion", "floor": "Ground Floor", "unit_no": "G-13"},
+    {"brand_name": "Bath And Body Works", "category": "Beauty", "floor": "Ground Floor", "unit_no": "G-14"},
+    {"brand_name": "Kiko Milano", "category": "Beauty", "floor": "Ground Floor", "unit_no": "G-15"},
+    {"brand_name": "Samsung", "category": "Electronics", "floor": "Ground Floor", "unit_no": "G-16"},
+    {"brand_name": "Apple", "category": "Electronics", "floor": "Ground Floor", "unit_no": "G-17"},
+    {"brand_name": "Titan", "category": "Accessories", "floor": "Ground Floor", "unit_no": "G-18"},
+    {"brand_name": "Hidesign", "category": "Accessories", "floor": "Ground Floor", "unit_no": "G-19"},
+    {"brand_name": "Da Milano", "category": "Accessories", "floor": "Ground Floor", "unit_no": "G-20"},
+    {"brand_name": "Aldo", "category": "Footwear", "floor": "Ground Floor", "unit_no": "G-21"},
+    {"brand_name": "Crocs", "category": "Footwear", "floor": "Ground Floor", "unit_no": "G-22"},
+    {"brand_name": "Starbucks", "category": "Cafe", "floor": "Ground Floor", "unit_no": "G-23"},
+    # First Floor
+    {"brand_name": "Adidas", "category": "Sports", "floor": "First Floor", "unit_no": "F-01"},
+    {"brand_name": "Puma", "category": "Sports", "floor": "First Floor", "unit_no": "F-02"},
+    {"brand_name": "United Colors Of Benetton", "category": "Fashion", "floor": "First Floor", "unit_no": "F-03"},
+    {"brand_name": "Allen Solly", "category": "Fashion", "floor": "First Floor", "unit_no": "F-04"},
+    {"brand_name": "Van Heusen", "category": "Fashion", "floor": "First Floor", "unit_no": "F-05"},
+    {"brand_name": "Louis Philippe", "category": "Fashion", "floor": "First Floor", "unit_no": "F-06"},
+    {"brand_name": "Arrow", "category": "Fashion", "floor": "First Floor", "unit_no": "F-07"},
+    {"brand_name": "Peter England", "category": "Fashion", "floor": "First Floor", "unit_no": "F-08"},
+    {"brand_name": "Park Avenue", "category": "Fashion", "floor": "First Floor", "unit_no": "F-09"},
+    {"brand_name": "Pantaloons", "category": "Fashion", "floor": "First Floor", "unit_no": "F-10"},
+    {"brand_name": "Lifestyle", "category": "Department Store", "floor": "First Floor", "unit_no": "F-11"},
+    {"brand_name": "Bata", "category": "Footwear", "floor": "First Floor", "unit_no": "F-12"},
+    {"brand_name": "Metro Shoes", "category": "Footwear", "floor": "First Floor", "unit_no": "F-13"},
+    {"brand_name": "Hush Puppies", "category": "Footwear", "floor": "First Floor", "unit_no": "F-14"},
+    {"brand_name": "Woodland", "category": "Footwear", "floor": "First Floor", "unit_no": "F-15"},
+    {"brand_name": "Sketchers", "category": "Footwear", "floor": "First Floor", "unit_no": "F-16"},
+    {"brand_name": "W", "category": "Fashion", "floor": "First Floor", "unit_no": "F-17"},
+    {"brand_name": "Biba", "category": "Fashion", "floor": "First Floor", "unit_no": "F-18"},
+    {"brand_name": "Fab India", "category": "Fashion", "floor": "First Floor", "unit_no": "F-19"},
+    {"brand_name": "Kazo", "category": "Fashion", "floor": "First Floor", "unit_no": "F-20"},
+    {"brand_name": "Monte Carlo", "category": "Fashion", "floor": "First Floor", "unit_no": "F-21"},
+    {"brand_name": "Nicobar", "category": "Fashion", "floor": "First Floor", "unit_no": "F-22"},
+    {"brand_name": "Allen Solly Junior", "category": "Kids", "floor": "First Floor", "unit_no": "F-23"},
+    {"brand_name": "Hamleys", "category": "Kids", "floor": "First Floor", "unit_no": "F-24"},
+    {"brand_name": "Croma", "category": "Electronics", "floor": "First Floor", "unit_no": "F-25"},
+    {"brand_name": "Reliance Digital", "category": "Electronics", "floor": "First Floor", "unit_no": "F-26"},
+    {"brand_name": "Titan Eye+", "category": "Accessories", "floor": "First Floor", "unit_no": "F-27"},
+    {"brand_name": "Titan Tanishq", "category": "Jewellery", "floor": "First Floor", "unit_no": "F-28"},
+    # Second Floor
+    {"brand_name": "American Eagle", "category": "Fashion", "floor": "Second Floor", "unit_no": "S-01"},
+    {"brand_name": "U.S. Polo Assn.", "category": "Fashion", "floor": "Second Floor", "unit_no": "S-02"},
+    {"brand_name": "Colorplus", "category": "Fashion", "floor": "Second Floor", "unit_no": "S-03"},
+    {"brand_name": "Bhpc", "category": "Fashion", "floor": "Second Floor", "unit_no": "S-04"},
+    {"brand_name": "Tasva", "category": "Fashion", "floor": "Second Floor", "unit_no": "S-05"},
+    {"brand_name": "Paris Saint-Germain", "category": "Sports", "floor": "Second Floor", "unit_no": "S-06"},
+    {"brand_name": "Satya Paul", "category": "Fashion", "floor": "Second Floor", "unit_no": "S-07"},
+    {"brand_name": "Lk Bennette", "category": "Fashion", "floor": "Second Floor", "unit_no": "S-08"},
+    {"brand_name": "Fizzy Goblet", "category": "Footwear", "floor": "Second Floor", "unit_no": "S-09"},
+    {"brand_name": "Bonker Corner", "category": "Fashion", "floor": "Second Floor", "unit_no": "S-10"},
+    {"brand_name": "Trends", "category": "Fashion", "floor": "Second Floor", "unit_no": "S-11"},
+    {"brand_name": "Home Centre", "category": "Home & Living", "floor": "Second Floor", "unit_no": "S-12"},
+    {"brand_name": "Mini So", "category": "Lifestyle", "floor": "Second Floor", "unit_no": "S-13"},
+    {"brand_name": "Ethos", "category": "Accessories", "floor": "Second Floor", "unit_no": "S-14"},
+    {"brand_name": "Zimson Watch & Lifestyle", "category": "Accessories", "floor": "Second Floor", "unit_no": "S-15"},
+    {"brand_name": "Dayal Opticals", "category": "Accessories", "floor": "Second Floor", "unit_no": "S-16"},
+    {"brand_name": "Dayal Opticals Kiosk", "category": "Accessories", "floor": "Second Floor", "unit_no": "S-17"},
+    {"brand_name": "Bella Vita", "category": "Beauty", "floor": "Second Floor", "unit_no": "S-18"},
+    {"brand_name": "Plum", "category": "Beauty", "floor": "Second Floor", "unit_no": "S-19"},
+    {"brand_name": "Sugar", "category": "Beauty", "floor": "Second Floor", "unit_no": "S-20"},
+    {"brand_name": "Mama Earth", "category": "Beauty", "floor": "Second Floor", "unit_no": "S-21"},
+    {"brand_name": "Nykaa", "category": "Beauty", "floor": "Second Floor", "unit_no": "S-22"},
+    {"brand_name": "Pilgrim", "category": "Beauty", "floor": "Second Floor", "unit_no": "S-23"},
+    {"brand_name": "Love Child by Masaba", "category": "Beauty", "floor": "Second Floor", "unit_no": "S-24"},
+    {"brand_name": "The Man Company", "category": "Grooming", "floor": "Second Floor", "unit_no": "S-25"},
+    {"brand_name": "Oud Arabia", "category": "Fragrance", "floor": "Second Floor", "unit_no": "S-26"},
+    {"brand_name": "Oud by Idol", "category": "Fragrance", "floor": "Second Floor", "unit_no": "S-27"},
+    {"brand_name": "Nailashes", "category": "Beauty", "floor": "Second Floor", "unit_no": "S-28"},
+    {"brand_name": "Lakme Salon", "category": "Beauty", "floor": "Second Floor", "unit_no": "S-29"},
+    {"brand_name": "Naturals", "category": "Beauty", "floor": "Second Floor", "unit_no": "S-30"},
+    {"brand_name": "Fun City", "category": "Entertainment", "floor": "Second Floor", "unit_no": "S-31"},
+    {"brand_name": "Kap Kids", "category": "Kids", "floor": "Second Floor", "unit_no": "S-32"},
+    {"brand_name": "Chique", "category": "Fashion", "floor": "Second Floor", "unit_no": "S-33"},
+    {"brand_name": "Miraj Cinemas", "category": "Entertainment", "floor": "Second Floor", "unit_no": "S-34"},
+    # Third Floor / Food Court
+    {"brand_name": "Burger King", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-01"},
+    {"brand_name": "Mcdonald", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-02"},
+    {"brand_name": "Dominos", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-03"},
+    {"brand_name": "Subway", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-04"},
+    {"brand_name": "Haldirams", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-05"},
+    {"brand_name": "Baskin Robbins", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-06"},
+    {"brand_name": "Chaayos", "category": "Cafe", "floor": "Food Court", "unit_no": "FC-07"},
+    {"brand_name": "Bira Taproom", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-08"},
+    {"brand_name": "Paul", "category": "Cafe", "floor": "Food Court", "unit_no": "FC-09"},
+    {"brand_name": "T.g.i. Friday", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-10"},
+    {"brand_name": "Keventers", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-11"},
+    {"brand_name": "Cookie Man", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-12"},
+    {"brand_name": "Licious", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-13"},
+    {"brand_name": "La Pino", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-14"},
+    {"brand_name": "Gola Sizzlers", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-15"},
+    {"brand_name": "Healthy Hut", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-16"},
+    {"brand_name": "Chai Choori", "category": "Cafe", "floor": "Food Court", "unit_no": "FC-17"},
+    {"brand_name": "Fluffy Whirls", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-18"},
+    {"brand_name": "Melting Moments", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-19"},
+    {"brand_name": "House Of Candy", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-20"},
+    {"brand_name": "House of Candy 2nd floor", "category": "Food & Beverage", "floor": "Second Floor", "unit_no": "S-35"},
+    {"brand_name": "Berry Brothers", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-21"},
+    {"brand_name": "Mars", "category": "Food & Beverage", "floor": "Food Court", "unit_no": "FC-22"},
+    # Lower Ground
+    {"brand_name": "Reliance Smart Bazaar", "category": "Supermarket", "floor": "Lower Ground", "unit_no": "LG-01"},
+    {"brand_name": "M&S Food", "category": "Food & Beverage", "floor": "Lower Ground", "unit_no": "LG-02"},
+]
+
+async def _seed_brands():
+    """Seed brand directory from master list"""
+    if _db is None:
+        return
+    brands_to_insert = []
+    for b in BRAND_DIRECTORY:
+        domain = BRAND_LOGO_MAP.get(b["brand_name"], "")
+        logo_url = f"https://www.google.com/s2/favicons?domain={domain}&sz=128" if domain else ""
+        brands_to_insert.append({
+            "id": str(uuid.uuid4()),
+            "brand_name": b["brand_name"],
+            "category": b.get("category", ""),
+            "floor": b.get("floor", ""),
+            "unit_no": b.get("unit_no", ""),
+            "description": f"{b['brand_name']} at CP67 Mall, Mohali",
+            "logo_url": logo_url,
+            "cover_image_url": "",
+            "timing": "11:00 AM - 9:00 PM",
+            "tags": [],
+            "atv": 0,
+            "is_active": True,
+            "is_eligible": True,
+            "is_featured": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    if brands_to_insert:
+        await _db.brands.insert_many(brands_to_insert)
+        logger.info(f"Seeded {len(brands_to_insert)} brands")
+
+
+async def _enrich_brands():
+    """Update existing brands with floor/category from directory if missing"""
+    if _db is None:
+        return
+    directory_map = {b["brand_name"]: b for b in BRAND_DIRECTORY}
+    updated = 0
+    async for brand in _db.brands.find({"brand_name": {"$exists": True, "$ne": ""}}, {"_id": 0, "id": 1, "brand_name": 1, "category": 1, "floor": 1, "unit_no": 1, "is_eligible": 1}):
+        name = brand.get("brand_name", "")
+        info = directory_map.get(name)
+        if not info:
+            continue
+        updates = {}
+        if not brand.get("category"):
+            updates["category"] = info["category"]
+        if not brand.get("floor"):
+            updates["floor"] = info["floor"]
+        if not brand.get("unit_no"):
+            updates["unit_no"] = info.get("unit_no", "")
+        if brand.get("is_eligible") is None:
+            updates["is_eligible"] = True
+        if updates:
+            await _db.brands.update_one({"id": brand["id"]}, {"$set": updates})
+            updated += 1
+    if updated > 0:
+        logger.info(f"Enriched {updated} brands with floor/category data")
 
 
 # ==================== MODELS ====================

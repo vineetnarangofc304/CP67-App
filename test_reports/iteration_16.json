@@ -1,0 +1,100 @@
+{
+  "summary": "Iteration 16 testing complete. All features verified: Explore/Stores page now pulls brands from MongoDB brands collection instead of hardcoded data. Floor filter, category filter, and search all work correctly against DB data. 102 brands displayed with proper name, category, floor, and logo_url fields.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "API: GET /api/consumer/stores returns 102 brands from MongoDB with proper fields (name, category, floor, logo_url)",
+    "API: GET /api/consumer/stores?floor=Food%20Court returns 21 Food Court brands",
+    "API: GET /api/consumer/stores?floor=Ground%20Floor returns Ground Floor brands",
+    "API: GET /api/consumer/stores?category=Fashion returns 37 Fashion brands",
+    "API: GET /api/consumer/stores?search=star returns Starbucks (Cafe, Ground Floor)",
+    "API: GET /api/consumer/stores?floor=Ground%20Floor&category=Fashion returns 13 filtered results",
+    "API: Stores endpoint returns categories and floors filter options",
+    "API: Brand logos use Google CDN URLs (80+ brands)",
+    "API: GET /api/consumer/participating-brands returns 102 brands with filters",
+    "API: GET /api/consumer/home returns featured stores and banners",
+    "API: POST /api/consumer/auth/verify-otp works with OTP 1234 (dev mode)",
+    "API: Invalid OTP (9999) correctly rejected with 400 status",
+    "Frontend: Stores page loads with 'Explore Stores' header",
+    "Frontend: Shows '102 brands at CP67 Mall' count",
+    "Frontend: Floor dropdown filter works (Food Court shows 21 brands)",
+    "Frontend: Category pill filter works (Fashion shows 37 brands)",
+    "Frontend: Search works (Starbucks found for 'starbucks' search)",
+    "Frontend: Store cards display name, category, floor tag, and logo",
+    "Frontend: Login flow works (9876543210, OTP 1234)"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_stores_iteration16.py",
+    "/app/test_reports/pytest/iteration16_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "list_stores() in consumer.py (line ~591) queries brands collection with proper filters",
+    "_enrich_brands() function fills in floor/category from BRAND_DIRECTORY for brands missing data",
+    "Stores.jsx fetchStores() correctly calls /api/consumer/stores with query params",
+    "Floor dropdown uses data-testid='stores-floor-dropdown' for testing",
+    "Category pills use data-testid='cat-{category}' pattern"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_stores_iteration16.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "100% (all UI components verified)"
+  },
+  "test_credentials": {
+    "consumer_phone": "9876543210",
+    "consumer_otp": "1234 (dev mode)",
+    "admin_username": "admin",
+    "admin_password": "CP67Admin@2025",
+    "api_base_url": "https://explore-loyalty.preview.emergentagent.com"
+  },
+  "seed_data_creation": "None - using existing 102 brands from admin Excel upload",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 16 verified the Explore/Stores page fix. The stores endpoint now queries the brands collection (not deprecated stores collection). Key implementation: list_stores() at line ~591 in consumer.py builds query with category, floor, search filters and returns stores with proper structure. The _enrich_brands() function runs at startup to fill in floor/category from BRAND_DIRECTORY for brands that were imported via admin Excel upload. 102 brands total, with proper floor distribution: Ground Floor, First Floor, Second Floor, Food Court, Lower Ground.",
+  "features_verified": {
+    "stores_from_db": {
+      "total_brands": 102,
+      "endpoint": "GET /api/consumer/stores",
+      "fields_returned": ["id", "name", "category", "floor", "unit_no", "description", "cover_image", "logo_url", "timing", "tags", "is_featured", "is_active"],
+      "status": "Working"
+    },
+    "floor_filter": {
+      "endpoint": "GET /api/consumer/stores?floor=Food%20Court",
+      "food_court_count": 21,
+      "ground_floor_count": 23,
+      "status": "Working"
+    },
+    "category_filter": {
+      "endpoint": "GET /api/consumer/stores?category=Fashion",
+      "fashion_count": 37,
+      "status": "Working"
+    },
+    "search": {
+      "endpoint": "GET /api/consumer/stores?search=star",
+      "starbucks_found": true,
+      "status": "Working"
+    },
+    "combined_filters": {
+      "endpoint": "GET /api/consumer/stores?floor=Ground%20Floor&category=Fashion",
+      "result_count": 13,
+      "status": "Working"
+    },
+    "frontend_ui": {
+      "stores_screen_testid": "stores-screen",
+      "floor_dropdown_testid": "stores-floor-dropdown",
+      "search_input_testid": "store-search-input",
+      "categories_testid": "store-categories",
+      "stores_grid_testid": "stores-grid",
+      "status": "Working"
+    }
+  }
+}
