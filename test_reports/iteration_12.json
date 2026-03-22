@@ -1,0 +1,127 @@
+{
+  "summary": "Iteration 12 testing complete. All 18 backend API tests passed (100%). Frontend verified: Consumer RedeemBrands page with dark/gold CP67-style hero header, HOMELAND ADVANTAGE badge, search/floor/category filters, 102 brand grid. Admin Brands page with Eligible column toggle (102 toggles), floor/category filter dropdowns, '102 eligible for redemption' counter. Eligibility toggle working - disabling Adidas hides it from consumer endpoint, re-enabling shows it again. Mall Map regression verified (3 floors, 102 stores). Consumer Home/Wallet/Stores pages working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Backend: GET /api/consumer/participating-brands returns 102 brands (default all eligible)",
+    "Backend: GET /api/consumer/participating-brands?search=adidas returns 1 result",
+    "Backend: GET /api/consumer/participating-brands?floor=Ground+Floor returns floor-filtered results",
+    "Backend: participating-brands includes filters (floors, categories) for dropdowns",
+    "Backend: Brand structure has required fields (id, name, category, floor, logo_url)",
+    "Backend: PUT /api/admin/brands/{id} with is_eligible=false hides brand from consumer endpoint",
+    "Backend: PUT /api/admin/brands/{id} with is_eligible=true re-shows brand on consumer endpoint",
+    "Backend: Admin brands endpoint returns is_eligible field",
+    "Backend: Admin brands endpoint returns floor data",
+    "Backend: Admin brands endpoint returns category data",
+    "Backend: Mall map requires authentication (401 without token)",
+    "Backend: Mall map returns floors with stores (brand_name fix verified)",
+    "Backend: Mall map stores have name field (from brand_name)",
+    "Backend: Home endpoint works",
+    "Backend: Wallet endpoint works",
+    "Backend: Stores endpoint works",
+    "Backend: Profile endpoint works",
+    "Backend: Logo URL normalization working",
+    "Frontend Consumer: /app/redeem-brands shows dark hero header with gradient background",
+    "Frontend Consumer: HOMELAND ADVANTAGE badge displayed",
+    "Frontend Consumer: 'Participating Brands' title with '102 brands where you can earn & redeem' subtitle",
+    "Frontend Consumer: Search bar present and functional (filters to 1 result for 'adidas')",
+    "Frontend Consumer: Floor dropdown filter present (All Floors, Ground Floor, First Floor)",
+    "Frontend Consumer: Category dropdown filter present (All Categories, Sports)",
+    "Frontend Consumer: Brand grid displays 102 brand cards with logos/initials",
+    "Frontend Admin: /brands page shows 'Brand & Store Management' title",
+    "Frontend Admin: 'Eligible' column with toggle icons for each brand (102 toggles)",
+    "Frontend Admin: Floor filter dropdown present and working",
+    "Frontend Admin: Category filter dropdown present and working",
+    "Frontend Admin: '102 eligible for redemption' counter shown below filters",
+    "Frontend Admin: Clicking eligibility toggle shows toast notification",
+    "Frontend Admin: Eligibility toggle changes brand status (disabled/enabled for redemption)",
+    "Regression: Mall Map page shows 3 floors (Ground Floor: 1 store, First Floor: 1 store, Other: 100 stores)",
+    "Regression: Consumer Home page working (points, banners, featured stores)",
+    "Regression: Consumer Wallet page working (balance, tier progress)",
+    "Regression: Consumer Stores page working (search, filters, store cards)"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration12_features.py",
+    "/app/test_reports/pytest/iteration12_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RedeemBrands.jsx properly implements dark/gold hero header matching CP67 website style",
+    "Consumer participating-brands endpoint correctly filters by is_eligible field (is_eligible !== false)",
+    "Admin Brands.jsx has Eligible column with ToggleRight/ToggleLeft icons for each brand",
+    "Admin floor/category filter dropdowns use unique values from brands data",
+    "Logo URL normalization in consumer.py uses BACKEND_PUBLIC_URL environment variable",
+    "All data-testid attributes properly implemented for testing"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration12_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 tests passed)",
+    "frontend": "100% (all UI components verified)"
+  },
+  "test_credentials": {
+    "consumer_phone": "9876543210",
+    "consumer_otp": "1234 (dev mode)",
+    "admin_username": "admin",
+    "admin_password": "CP67Admin@2025",
+    "api_base_url": "https://cp67-mall-app.preview.emergentagent.com"
+  },
+  "seed_data_creation": "None - using existing 102 brands in database",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 12 verified: 1) Consumer RedeemBrands page at /app/redeem-brands has dark/gold hero header matching CP67 website, HOMELAND ADVANTAGE badge, search/floor/category filters, 102 brand grid. 2) Admin Brands page has Eligible column with toggle per brand - toggling OFF hides brand from consumer endpoint. 3) Admin has floor/category filter dropdowns. 4) Logo URLs normalized to current BACKEND_PUBLIC_URL. 5) Mall Map uses brand_name field correctly. Adidas brand ID: 21110bec-0005-417c-adda-d0600b58fb2e. Only 2 brands have floor data (Adidas: Ground Floor, Aldo: First Floor).",
+  "features_verified": {
+    "consumer_redeem_brands_page": {
+      "route": "/app/redeem-brands",
+      "component": "RedeemBrands.jsx",
+      "features": [
+        "Dark/gold hero header with gradient background",
+        "HOMELAND ADVANTAGE badge with Award icon",
+        "Participating Brands title",
+        "102 brands subtitle",
+        "Search input for brand filtering",
+        "Floor dropdown filter",
+        "Category dropdown filter",
+        "3-column brand grid with logos/initials",
+        "Brand cards show name, floor, logo"
+      ],
+      "api": "GET /api/consumer/participating-brands",
+      "status": "Working"
+    },
+    "admin_brands_eligibility": {
+      "route": "/brands",
+      "component": "Brands.jsx",
+      "features": [
+        "Eligible column with toggle icons",
+        "Floor filter dropdown",
+        "Category filter dropdown",
+        "102 eligible for redemption counter",
+        "Toast notifications on toggle",
+        "Eligibility persists to database"
+      ],
+      "api": "PUT /api/admin/brands/{id}",
+      "status": "Working"
+    },
+    "eligibility_toggle_flow": {
+      "description": "When admin toggles brand eligibility OFF, brand is hidden from consumer participating-brands endpoint",
+      "tested_with": "Adidas brand (ID: 21110bec-0005-417c-adda-d0600b58fb2e)",
+      "status": "Working"
+    },
+    "logo_url_normalization": {
+      "description": "Logo URLs normalized to current BACKEND_PUBLIC_URL for cross-deployment compatibility",
+      "status": "Working"
+    },
+    "mall_map_regression": {
+      "description": "Mall map uses brand_name field correctly, shows 3 floors with stores",
+      "status": "Working"
+    }
+  }
+}

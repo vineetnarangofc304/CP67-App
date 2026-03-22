@@ -15,7 +15,7 @@ import {
 import { toast } from 'sonner';
 import { 
   Store, Plus, Edit, Trash2, Search, IndianRupee, TrendingUp, Upload, History,
-  FileSpreadsheet, RefreshCw, Image, MapPin, Clock, Star, QrCode, Smartphone, ArrowUpFromLine
+  FileSpreadsheet, RefreshCw, Image, MapPin, Clock, Star, QrCode, Smartphone, ArrowUpFromLine, ToggleLeft, ToggleRight, Filter
 } from 'lucide-react';
 
 const CATEGORIES = ['Fashion', 'Food & Beverage', 'Beauty', 'Electronics', 'Entertainment', 'Sports', 'Kids', 'Accessories', 'Home & Living', 'General'];
@@ -26,6 +26,8 @@ const Brands = () => {
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterFloor, setFilterFloor] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
@@ -131,6 +133,21 @@ const Brands = () => {
     setUploadingImage(null);
   };
 
+  const toggleEligibility = async (brand) => {
+    const newVal = brand.is_eligible === false ? true : false;
+    try {
+      const res = await fetch(`${API_URL}/admin/brands/${brand.id}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brand_name: brand.brand_name, is_eligible: newVal })
+      });
+      if (res.ok) {
+        toast.success(`${brand.brand_name} ${newVal ? 'enabled' : 'disabled'} for redemption`);
+        fetchBrands();
+      }
+    } catch { toast.error('Failed to update eligibility'); }
+  };
+
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -167,10 +184,18 @@ const Brands = () => {
     } catch {}
   };
 
-  const filteredBrands = brands.filter(b => b.brand_name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredBrands = brands.filter(b => {
+    if (searchQuery && !b.brand_name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (filterFloor && b.floor !== filterFloor) return false;
+    if (filterCategory && b.category !== filterCategory) return false;
+    return true;
+  });
   const totalAtv = brands.reduce((s, b) => s + (b.atv || 0), 0);
   const avgAtv = brands.length > 0 ? totalAtv / brands.length : 0;
   const appReadyCount = brands.filter(b => b.description).length;
+  const eligibleCount = brands.filter(b => b.is_eligible !== false).length;
+  const uniqueFloors = [...new Set(brands.map(b => b.floor).filter(Boolean))].sort();
+  const uniqueCategories = [...new Set(brands.map(b => b.category).filter(Boolean))].sort();
 
   return (
     <DashboardLayout>
@@ -240,11 +265,28 @@ const Brands = () => {
         {/* Table */}
         <Card className="border-slate-200 shadow-none">
           <CardHeader className="pb-4">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <CardTitle className="text-lg">All Brands ({filteredBrands.length})</CardTitle>
-              <div className="relative w-full sm:w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input placeholder="Search brands..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" data-testid="brand-search" />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <CardTitle className="text-lg">All Brands ({filteredBrands.length})</CardTitle>
+                <div className="relative w-full sm:w-64">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input placeholder="Search brands..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" data-testid="brand-search" />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <Filter className="h-4 w-4 text-slate-400" />
+                <select className="h-9 px-3 border rounded-md text-sm bg-white" value={filterFloor} onChange={e => setFilterFloor(e.target.value)} data-testid="admin-floor-filter">
+                  <option value="">All Floors</option>
+                  {uniqueFloors.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+                <select className="h-9 px-3 border rounded-md text-sm bg-white" value={filterCategory} onChange={e => setFilterCategory(e.target.value)} data-testid="admin-category-filter">
+                  <option value="">All Categories</option>
+                  {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                {(filterFloor || filterCategory) && (
+                  <Button variant="ghost" size="sm" onClick={() => { setFilterFloor(''); setFilterCategory(''); }} className="text-red-500 h-9">Clear Filters</Button>
+                )}
+                <span className="text-xs text-slate-400 ml-auto">{eligibleCount} eligible for redemption</span>
               </div>
             </div>
           </CardHeader>
@@ -261,6 +303,7 @@ const Brands = () => {
                       <TableHead className="text-right">ATV (₹)</TableHead>
                       <TableHead>Category</TableHead>
                       <TableHead>Floor</TableHead>
+                      <TableHead>Eligible</TableHead>
                       <TableHead>App</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -268,7 +311,7 @@ const Brands = () => {
                   </TableHeader>
                   <TableBody>
                     {filteredBrands.length === 0 ? (
-                      <TableRow><TableCell colSpan={8} className="text-center py-8 text-slate-500">{searchQuery ? 'No brands match' : 'No brands'}</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={9} className="text-center py-8 text-slate-500">{searchQuery ? 'No brands match' : 'No brands'}</TableCell></TableRow>
                     ) : filteredBrands.map((brand) => (
                       <TableRow key={brand.id} data-testid={`brand-row-${brand.id}`}>
                         <TableCell>
@@ -284,6 +327,15 @@ const Brands = () => {
                         <TableCell className="text-right font-mono">{brand.atv ? `₹${brand.atv.toLocaleString('en-IN')}` : '-'}</TableCell>
                         <TableCell>{brand.category || '-'}</TableCell>
                         <TableCell className="text-sm text-slate-500">{brand.floor || '-'}</TableCell>
+                        <TableCell>
+                          <button onClick={() => toggleEligibility(brand)} className="flex items-center" data-testid={`eligibility-${brand.id}`}>
+                            {brand.is_eligible !== false ? (
+                              <ToggleRight className="h-6 w-6 text-green-500" />
+                            ) : (
+                              <ToggleLeft className="h-6 w-6 text-slate-300" />
+                            )}
+                          </button>
+                        </TableCell>
                         <TableCell>
                           {brand.description ? (
                             <Badge className="bg-green-100 text-green-700 hover:bg-green-100">Live</Badge>

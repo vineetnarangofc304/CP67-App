@@ -1070,7 +1070,7 @@ async def get_participating_brands(
     category: str = "",
 ):
     """Get participating brands for redemption with search and filters"""
-    query = {"brand_name": {"$exists": True, "$ne": ""}}
+    query = {"brand_name": {"$exists": True, "$ne": ""}, "is_eligible": {"$ne": False}}
     if search:
         query["brand_name"] = {"$regex": search, "$options": "i"}
     if floor:
@@ -1078,21 +1078,26 @@ async def get_participating_brands(
     if category and category != "All":
         query["category"] = category
 
+    backend_url = os.environ.get("BACKEND_PUBLIC_URL", "")
+
     brands = []
     async for b in _db.brands.find(query, {"_id": 0}).sort("brand_name", 1):
+        logo = b.get("logo_url", "")
+        if logo and "/api/uploads/" in logo:
+            logo = backend_url + "/api/uploads/" + logo.split("/api/uploads/")[-1]
         brands.append({
             "id": b.get("id", ""),
             "name": b.get("brand_name", ""),
-            "category": b.get("category", "General"),
+            "category": b.get("category", ""),
             "floor": b.get("floor", ""),
-            "logo_url": b.get("logo_url", ""),
+            "logo_url": logo,
             "unit_no": b.get("unit_no", ""),
         })
 
     # Get unique floors and categories for filter dropdowns
     all_floors = []
     all_categories = []
-    async for b in _db.brands.find({"brand_name": {"$exists": True, "$ne": ""}}, {"_id": 0, "floor": 1, "category": 1}):
+    async for b in _db.brands.find({"brand_name": {"$exists": True, "$ne": ""}, "is_eligible": {"$ne": False}}, {"_id": 0, "floor": 1, "category": 1}):
         if b.get("floor") and b["floor"] not in all_floors:
             all_floors.append(b["floor"])
         if b.get("category") and b["category"] not in all_categories:

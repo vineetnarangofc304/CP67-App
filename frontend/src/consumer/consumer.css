@@ -3673,43 +3673,72 @@
 
 
 
-/* ==================== PARTICIPATING BRANDS (REDEMPTION) ==================== */
+/* ==================== PARTICIPATING BRANDS (REDEMPTION) — CP67 STYLE ==================== */
 
-.consumer-redeem-brands {
-  padding: 20px 16px;
-  padding-top: env(safe-area-inset-top, 20px);
+.redeem-brands-page {
+  background: var(--cp-bg);
 }
 
-.redeem-brands-header {
-  margin-bottom: 16px;
+.redeem-hero {
+  position: relative;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2319 50%, #1a1510 100%);
+  padding: 48px 20px 28px;
+  color: white;
 }
 
-.redeem-brands-title-row {
+.redeem-back-btn {
+  position: absolute;
+  top: 14px;
+  left: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  border: none;
+  color: white;
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
-.redeem-brands-icon {
-  color: var(--cp-gold);
-  margin-top: 3px;
-  flex-shrink: 0;
+.redeem-hero-content {
+  text-align: center;
 }
 
-.redeem-brands-header h1 {
+.redeem-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  background: rgba(200, 149, 108, 0.2);
+  border: 1px solid rgba(200, 149, 108, 0.3);
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--cp-gold-light);
+  margin-bottom: 14px;
+}
+
+.redeem-hero h1 {
   font-size: 24px;
   font-weight: 700;
-  color: var(--cp-text);
+  margin: 0 0 6px;
+  color: white;
+}
+
+.redeem-hero p {
+  font-size: 13px;
+  color: rgba(255,255,255,0.6);
   margin: 0;
 }
 
-.redeem-brands-header p {
-  font-size: 13px;
-  color: var(--cp-text-2);
-  margin-top: 3px;
+.redeem-body {
+  padding: 16px;
 }
 
-.redeem-brands-search {
+.redeem-search-bar {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -3720,7 +3749,7 @@
   margin-bottom: 10px;
 }
 
-.redeem-brands-search input {
+.redeem-search-bar input {
   flex: 1;
   border: none;
   outline: none;
@@ -3729,25 +3758,25 @@
   color: var(--cp-text);
 }
 
-.redeem-brands-search svg {
+.redeem-search-bar svg {
   color: var(--cp-text-3);
 }
 
-.redeem-brands-filters {
+.redeem-filters {
   display: flex;
   gap: 8px;
   margin-bottom: 16px;
   align-items: center;
 }
 
-.redeem-filter-select {
+.redeem-select-wrap {
   position: relative;
   flex: 1;
 }
 
-.redeem-filter-select select {
+.redeem-select-wrap select {
   width: 100%;
-  padding: 10px 32px 10px 12px;
+  padding: 10px 30px 10px 12px;
   border: 1px solid var(--cp-border);
   border-radius: var(--cp-radius-sm);
   background: var(--cp-card);
@@ -3759,11 +3788,11 @@
   outline: none;
 }
 
-.redeem-filter-select select:focus {
+.redeem-select-wrap select:focus {
   border-color: var(--cp-gold);
 }
 
-.select-chevron {
+.redeem-select-wrap svg {
   position: absolute;
   right: 10px;
   top: 50%;
@@ -3772,7 +3801,7 @@
   pointer-events: none;
 }
 
-.redeem-clear-btn {
+.redeem-clear {
   padding: 10px 14px;
   border: 1px solid var(--cp-border);
   border-radius: var(--cp-radius-sm);
@@ -3784,13 +3813,13 @@
   white-space: nowrap;
 }
 
-.redeem-brands-grid {
+.redeem-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 
-.redeem-brand-card {
+.redeem-card {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -3803,38 +3832,40 @@
   text-align: center;
 }
 
-.redeem-brand-card:active {
+.redeem-card:active {
   transform: scale(0.96);
   border-color: var(--cp-gold-light);
+  box-shadow: 0 2px 12px rgba(200, 149, 108, 0.15);
 }
 
-.redeem-brand-logo {
+.redeem-card-logo {
   width: 56px;
   height: 56px;
   border-radius: 14px;
   overflow: hidden;
-  background: var(--cp-bg);
+  background: #f8f5f0;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 8px;
   flex-shrink: 0;
+  border: 1px solid var(--cp-border);
 }
 
-.redeem-brand-logo img {
+.redeem-card-logo img {
   width: 100%;
   height: 100%;
   object-fit: contain;
   padding: 4px;
 }
 
-.redeem-brand-initial {
+.redeem-card-logo span {
   font-size: 22px;
   font-weight: 700;
   color: var(--cp-gold-dark);
 }
 
-.redeem-brand-name {
+.redeem-card-name {
   font-size: 12px;
   font-weight: 600;
   color: var(--cp-text);
@@ -3846,7 +3877,7 @@
   max-width: 100%;
 }
 
-.redeem-brand-floor {
+.redeem-card-floor {
   display: flex;
   align-items: center;
   gap: 3px;
@@ -3855,7 +3886,7 @@
   margin-top: 4px;
 }
 
-.redeem-brands-disclaimer {
+.redeem-disclaimer {
   margin-top: 20px;
   padding: 12px 16px;
   font-size: 11px;
@@ -3872,7 +3903,7 @@
   gap: 10px;
   width: 100%;
   padding: 14px 16px;
-  background: linear-gradient(135deg, var(--cp-dark), var(--cp-dark-2));
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2319 50%, #1a1510 100%);
   color: white;
   border: none;
   border-radius: var(--cp-radius);

@@ -1430,7 +1430,7 @@ async def update_brand(brand_id: str, data: dict, payload: dict = Depends(verify
     
     # Core fields
     for field in ["atv", "category", "is_active", "brand_name", "description",
-                  "floor", "timing", "unit_no", "tags", "is_featured", "contact_phone",
+                  "floor", "timing", "unit_no", "tags", "is_featured", "is_eligible", "contact_phone",
                   "contact_email", "website"]:
         if field in data:
             if field == "atv":
