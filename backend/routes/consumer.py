@@ -1085,8 +1085,9 @@ async def get_participating_brands(
     brands = []
     async for b in _db.brands.find(query, {"_id": 0}).sort("brand_name", 1):
         logo = b.get("logo_url", "")
-        if logo and "/api/uploads/" in logo:
-            logo = backend_url + "/api/uploads/" + logo.split("/api/uploads/")[-1]
+        # Normalize local paths to absolute URLs
+        if logo and logo.startswith("/api/uploads/"):
+            logo = backend_url + logo
         brands.append({
             "id": b.get("id", ""),
             "name": b.get("brand_name", ""),
