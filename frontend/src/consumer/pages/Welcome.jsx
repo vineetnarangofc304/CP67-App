@@ -26,10 +26,7 @@ export default function Welcome() {
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
         >
-          <div className="welcome-logo-ring">
-            <span>CP67</span>
-          </div>
-          <p className="welcome-tagline">MALL &middot; MOHALI</p>
+          <img src="/homeland-advantage-logo.jpeg" alt="Homeland Advantage" className="welcome-ha-logo" />
         </motion.div>
 
         <motion.div

@@ -26,6 +26,13 @@ export default function HelpSupport() {
       <div className="help-section" data-testid="help-contacts">
         <h2>Contact Us</h2>
         <div className="help-contact-cards">
+          <a href="https://wa.me/917347576767" target="_blank" rel="noopener noreferrer" className="help-contact-card whatsapp-primary" data-testid="contact-whatsapp">
+            <MessageCircle size={22} />
+            <div>
+              <h4>WhatsApp Support</h4>
+              <p>73475 76767 - Chat with us</p>
+            </div>
+          </a>
           <a href="mailto:advantage@homelandgroup.org" className="help-contact-card" data-testid="contact-email">
             <Mail size={22} />
             <div>
@@ -47,13 +54,6 @@ export default function HelpSupport() {
               <p>Ground Floor, CP67 Mall, Mohali</p>
             </div>
           </div>
-          <a href="https://wa.me/919729676767" className="help-contact-card" data-testid="contact-whatsapp">
-            <MessageCircle size={22} />
-            <div>
-              <h4>WhatsApp</h4>
-              <p>Chat with us on WhatsApp</p>
-            </div>
-          </a>
         </div>
       </div>
 

@@ -79,11 +79,9 @@ export default function Login() {
       </div>
 
       <div className="login-body">
-        <div className="login-icon-wrap">
-          {step === 'phone' ? <Phone size={28} /> : <Shield size={28} />}
-        </div>
+        <img src="/homeland-advantage-logo.jpeg" alt="Homeland Advantage" className="login-ha-logo" />
 
-        <h1>{step === 'phone' ? 'Welcome to CP67' : 'Verify OTP'}</h1>
+        <h1>{step === 'phone' ? 'Welcome' : 'Verify OTP'}</h1>
         <p className="login-subtitle">
           {step === 'phone'
             ? 'Enter your phone number to continue'

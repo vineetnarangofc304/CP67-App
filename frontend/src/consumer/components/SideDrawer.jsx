@@ -43,7 +43,7 @@ export default function SideDrawer({ isOpen, onClose }) {
             {/* Header */}
             <div className="drawer-header">
               <div className="drawer-user-info">
-                <div className="drawer-avatar">{(user?.name || 'U')[0]}</div>
+                <img src="/homeland-advantage-logo.jpeg" alt="Homeland Advantage" className="drawer-ha-logo" />
                 <div>
                   <h3>{user?.name || 'User'}</h3>
                   <p>{user?.phone || ''}</p>

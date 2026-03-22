@@ -166,29 +166,21 @@
   text-align: center;
 }
 
-.welcome-logo-ring {
-  width: 120px;
-  height: 120px;
-  border-radius: 50%;
-  border: 2px solid var(--cp-gold);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 12px;
+.welcome-ha-logo {
+  width: 160px;
+  height: auto;
+  border-radius: 20px;
+  margin: 0 auto 16px;
+  display: block;
+  object-fit: contain;
 }
 
-.welcome-logo-ring span {
-  font-size: 32px;
-  font-weight: 800;
-  color: white;
-  letter-spacing: 2px;
+.welcome-logo-ring {
+  display: none;
 }
 
 .welcome-tagline {
-  color: var(--cp-gold-light);
-  font-size: 12px;
-  letter-spacing: 4px;
-  font-weight: 500;
+  display: none;
 }
 
 .welcome-features {
@@ -399,6 +391,15 @@
   text-align: center;
   margin-top: 24px;
   line-height: 1.6;
+}
+
+.login-ha-logo {
+  width: 120px;
+  height: auto;
+  border-radius: 16px;
+  margin: 0 auto 16px;
+  display: block;
+  object-fit: contain;
 }
 
 /* === Onboarding === */
@@ -2309,6 +2310,7 @@
 
 /* === Hamburger Menu Button === */
 .home-greeting-row { display: flex; align-items: center; gap: 12px; }
+.home-ha-logo { width: 40px; height: 40px; border-radius: 10px; object-fit: contain; }
 .home-menu-btn {
   width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--cp-border);
   background: var(--cp-card); display: flex; align-items: center; justify-content: center;
@@ -2329,6 +2331,10 @@
   display: flex; align-items: flex-start; justify-content: space-between;
 }
 .drawer-user-info { display: flex; align-items: center; gap: 12px; }
+.drawer-ha-logo {
+  width: 48px; height: 48px; border-radius: 12px; object-fit: contain;
+  background: white; padding: 2px;
+}
 .drawer-avatar {
   width: 44px; height: 44px; border-radius: 50%; background: var(--cp-gold);
   display: flex; align-items: center; justify-content: center;
@@ -2526,6 +2532,12 @@
 .help-contact-card svg { color: var(--cp-gold); min-width: 22px; }
 .help-contact-card h4 { font-size: 14px; font-weight: 600; }
 .help-contact-card p { font-size: 13px; color: var(--cp-text-2); }
+.help-contact-card.whatsapp-primary {
+  background: #1FAD53; border-color: #1FAD53; color: white;
+}
+.help-contact-card.whatsapp-primary svg { color: white; }
+.help-contact-card.whatsapp-primary h4 { color: white; }
+.help-contact-card.whatsapp-primary p { color: rgba(255,255,255,0.85); }
 .help-faq-list { display: flex; flex-direction: column; gap: 8px; }
 .help-faq-item {
   background: var(--cp-card); border: 1px solid var(--cp-border);
