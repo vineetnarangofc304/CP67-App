@@ -77,6 +77,13 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - `offers`, `events`, `banners`, `notifications`
 - `redemptions`, `rewards`, `admin_users`, `qr_analytics`
 
+### Phase 6 - Floor Filter Bug Fix (Mar 24)
+- **Floor Filter Sync**: Fixed floor string consistency between Admin and Consumer pages
+- **Duplicate Brand Cleanup**: Removed duplicate "Lakmé Salon" entry (one with no floor)
+- **All 101 brands now have proper floor assignments**: Ground Floor (23), First Floor (28), Second Floor (27), Food Court (21), Lower Ground (2)
+- **Admin FLOORS dropdown**: Includes all valid options (Ground Floor, First Floor, Second Floor, Third Floor, Food Court, Lower Ground)
+- **Testing**: 100% pass rate on backend (20/20) and frontend floor filter tests (iteration 19)
+
 ## Known Issues
 - **Karix WhatsApp Image Delivery (BLOCKED):** Code correct but images not delivered (external issue)
 
@@ -86,11 +93,12 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - Consumer app: /app/welcome | Admin dashboard: /
 
 ## Upcoming Tasks
-- Campaign-aware bill processing (auto-apply multipliers)
-- PWA Install Guide modal for mall visitors
+- (P1) Campaign-aware bill processing (auto-apply multipliers during active campaigns)
+- (P1) PWA Install Guide modal for mall visitors (iOS & Android instructions)
 
 ## Future Tasks (P2-P3)
 - Refactor monolithic server.py (5000+ lines) into /routes, /services, /models
+- Automate Footfall Data via Email Parser
 - Brand/Store Dashboard (separate brand login)
 - Advanced Analytics (RFM, CLV, cohort)
 - AI Mall Concierge, Push Notifications, CMS
