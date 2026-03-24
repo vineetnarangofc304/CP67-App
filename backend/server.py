@@ -3565,6 +3565,21 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
         if not message:
             return {"status": "ok", "message": "No message content"}
         
+        # ===== DEDUPLICATION: Prevent double messages from Karix =====
+        # Karix can send duplicate webhooks for the same button click
+        dedup_key = f"{phone}:{message}:{message_type}"
+        recent_dup = await db.whatsapp_dedup.find_one({"key": dedup_key})
+        if recent_dup:
+            age_seconds = (datetime.now(timezone.utc) - datetime.fromisoformat(recent_dup["ts"])).total_seconds()
+            if age_seconds < 10:
+                logger.info(f"Dedup: Ignoring duplicate webhook for {phone} action={message} (age={age_seconds:.1f}s)")
+                return {"status": "ok", "message": "Duplicate ignored"}
+        await db.whatsapp_dedup.update_one(
+            {"key": dedup_key},
+            {"$set": {"key": dedup_key, "ts": datetime.now(timezone.utc).isoformat()}},
+            upsert=True
+        )
+        
         # Parse source code
         source_code = parse_source_code(message)
         clean_message = message.split('|')[0].strip() if '|' in message else message

@@ -6,7 +6,6 @@ import { useConsumerAuth } from '../ConsumerApp';
 
 const menuItems = [
   { path: '/app/profile', icon: User, label: 'My Profile' },
-  { path: '/app/rewards', icon: Gift, label: 'My Rewards' },
   { path: '/app/redeem-brands', icon: Award, label: 'Redeem at Brands' },
   { path: '/app/tier-journey', icon: Crown, label: 'Tier Journey' },
   { path: '/app/transactions', icon: Receipt, label: 'Transactions' },
