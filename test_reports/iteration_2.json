@@ -70,7 +70,7 @@
     "qr_codes": "5 QR codes with proper source attribution",
     "users_page": "Search and filter functionality working",
     "bills_page": "Pending review and all bills tabs working",
-    "whatsapp_webhook": "https://explore-loyalty.preview.emergentagent.com/api/whatsapp/webhook - Working",
+    "whatsapp_webhook": "https://brand-sync-staging.preview.emergentagent.com/api/whatsapp/webhook - Working",
     "analytics": "Charts and metrics displaying correctly"
   }
 }

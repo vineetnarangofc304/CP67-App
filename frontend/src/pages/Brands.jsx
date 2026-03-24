@@ -18,8 +18,8 @@ import {
   FileSpreadsheet, RefreshCw, Image, MapPin, Clock, Star, QrCode, Smartphone, ArrowUpFromLine, ToggleLeft, ToggleRight, Filter
 } from 'lucide-react';
 
-const CATEGORIES = ['Fashion', 'Food & Beverage', 'Beauty', 'Electronics', 'Entertainment', 'Sports', 'Kids', 'Accessories', 'Home & Living', 'General'];
-const FLOORS = ['Ground Floor', 'First Floor', 'Second Floor', 'Third Floor', 'Lower Ground'];
+const CATEGORIES = ['Fashion', 'Food & Beverage', 'Beauty', 'Electronics', 'Entertainment', 'Sports', 'Kids', 'Accessories', 'Footwear', 'Home & Living', 'Lifestyle', 'Jewellery', 'Grooming', 'Fragrance', 'Department Store', 'Supermarket', 'Cafe', 'General'];
+const FLOORS = ['Ground Floor', 'First Floor', 'Second Floor', 'Third Floor', 'Food Court', 'Lower Ground'];
 
 const Brands = () => {
   const { token, API_URL } = useAuth();
