@@ -45,7 +45,7 @@ export default function Wallet() {
         <div className="wallet-card-content">
           <p className="wallet-label">Available Balance</p>
           <h2 className="wallet-balance" data-testid="wallet-balance">{(wallet?.balance || 0).toLocaleString()}</h2>
-          <p className="wallet-conversion">= Rs {(wallet?.balance || 0).toLocaleString()}</p>
+          <p className="wallet-conversion">Points</p>
           <div className="wallet-tier-section" onClick={() => navigate('/app/tier-journey')} style={{ cursor: 'pointer' }}>
             <span className={`tier-badge tier-${(tier.name || 'bronze').toLowerCase()}`} data-testid="tier-badge">{tier.name || 'Bronze'} Member</span>
             <ChevronRight size={16} style={{ color: 'rgba(255,255,255,0.7)', marginLeft: 4 }} />
