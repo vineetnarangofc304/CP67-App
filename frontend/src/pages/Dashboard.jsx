@@ -10,7 +10,11 @@ import {
   TrendingUp,
   Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Footprints,
+  UserPlus,
+  FileText,
+  Plus
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -33,6 +37,9 @@ const Dashboard = () => {
   const [dailyStats, setDailyStats] = useState([]);
   const [funnelData, setFunnelData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [footfallDate, setFootfallDate] = useState(new Date().toISOString().split('T')[0]);
+  const [footfallCount, setFootfallCount] = useState('');
+  const [showFootfallInput, setShowFootfallInput] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -66,6 +73,20 @@ const Dashboard = () => {
   };
 
   const COLORS = ['#0F172A', '#334155', '#64748B', '#D4AF37', '#34C759'];
+
+  const submitFootfall = async () => {
+    if (!footfallCount || parseInt(footfallCount) <= 0) return;
+    try {
+      await fetch(`${API_URL}/admin/footfall`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: footfallDate, count: parseInt(footfallCount) })
+      });
+      setFootfallCount('');
+      setShowFootfallInput(false);
+      fetchDashboardData();
+    } catch { }
+  };
 
   const billStatusData = stats ? [
     { name: 'Auto Approved', value: stats.bills.auto_approved, color: '#34C759' },
@@ -186,6 +207,77 @@ const Dashboard = () => {
               </div>
               <div className="w-12 h-12 bg-[#D4AF37]/20 rounded-xl flex items-center justify-center">
                 <span className="text-[#D4AF37] text-xl font-bold">★</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Footfall & Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Card className="metric-card border-slate-200 shadow-none" data-testid="metric-footfall">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Total Footfall</p>
+                <p className="text-3xl font-bold text-slate-900 font-['Manrope'] mt-1">
+                  {(stats?.footfall?.total || 0).toLocaleString()}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">Last 30 days</p>
+              </div>
+              <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+                <Footprints className="h-6 w-6 text-amber-600" />
+              </div>
+            </div>
+            {!showFootfallInput ? (
+              <button onClick={() => setShowFootfallInput(true)} className="mt-3 flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800">
+                <Plus className="h-3 w-3" /> Add daily count
+              </button>
+            ) : (
+              <div className="mt-3 flex gap-2 items-center">
+                <input type="date" value={footfallDate} onChange={e => setFootfallDate(e.target.value)} className="border rounded px-2 py-1 text-xs w-28" />
+                <input type="number" value={footfallCount} onChange={e => setFootfallCount(e.target.value)} placeholder="Count" className="border rounded px-2 py-1 text-xs w-20" data-testid="footfall-count-input" />
+                <button onClick={submitFootfall} className="bg-slate-900 text-white text-xs px-3 py-1 rounded" data-testid="submit-footfall-btn">Save</button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="metric-card border-slate-200 shadow-none" data-testid="metric-registrations">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Total Registrations</p>
+                <p className="text-3xl font-bold text-slate-900 font-['Manrope'] mt-1">
+                  {stats?.users?.total || 0}
+                </p>
+                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                  <TrendingUp className="h-3 w-3" />
+                  +{stats?.users?.today || 0} today
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <UserPlus className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="metric-card border-slate-200 shadow-none" data-testid="metric-bill-uploads">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Total Bill Uploads</p>
+                <p className="text-3xl font-bold text-slate-900 font-['Manrope'] mt-1">
+                  {stats?.bills?.total || 0}
+                </p>
+                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                  <TrendingUp className="h-3 w-3" />
+                  +{stats?.bills?.today || 0} today
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                <FileText className="h-6 w-6 text-emerald-600" />
               </div>
             </div>
           </CardContent>

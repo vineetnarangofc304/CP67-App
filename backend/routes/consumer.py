@@ -1430,34 +1430,38 @@ async def get_amenities():
     """Get mall amenities list"""
     amenities = [
         {"category": "Restrooms", "items": [
-            {"name": "Restroom - Ground Floor", "location": "Near Entrance A", "floor": "Ground Floor"},
-            {"name": "Restroom - First Floor", "location": "Near Food Court", "floor": "First Floor"},
-            {"name": "Restroom - Second Floor", "location": "Near Elevator B", "floor": "Second Floor"},
+            {"name": "Washroom - Ground Floor", "location": "Zone 4", "floor": "Ground Floor"},
+            {"name": "Washroom - First Floor", "location": "Zone 4", "floor": "First Floor"},
+            {"name": "Washroom - Second Floor", "location": "Zone 2 & Zone 4", "floor": "Second Floor"},
+            {"name": "Washroom - Third Floor", "location": "Zone 1 & Zone 4", "floor": "Third Floor"},
+            {"name": "Washroom - 4th Floor", "location": "Zone 4", "floor": "4th Floor"},
         ]},
         {"category": "ATMs & Banking", "items": [
-            {"name": "HDFC ATM", "location": "Ground Floor, Main Lobby", "floor": "Ground Floor"},
-            {"name": "SBI ATM", "location": "Lower Ground, Near Parking", "floor": "Lower Ground"},
-            {"name": "ICICI ATM", "location": "Ground Floor, East Wing", "floor": "Ground Floor"},
+            {"name": "ATM / Banking Services", "location": "Not Available", "floor": "-"},
         ]},
         {"category": "Services", "items": [
-            {"name": "Customer Service Desk", "location": "Ground Floor, Main Entrance", "floor": "Ground Floor"},
+            {"name": "Customer Help Desk", "location": "Ground Floor", "floor": "Ground Floor"},
             {"name": "Lost & Found", "location": "Ground Floor, Security Office", "floor": "Ground Floor"},
-            {"name": "Wheelchair Access", "location": "All Floors via Elevator", "floor": "All Floors"},
-            {"name": "Baby Care Room", "location": "First Floor, Near Restroom", "floor": "First Floor"},
+            {"name": "Wheelchairs", "location": "Available on request at Help Desk", "floor": "Ground Floor"},
+            {"name": "Baby Prams", "location": "Available on request at Help Desk", "floor": "Ground Floor"},
+            {"name": "Cold Towel Service", "location": "Available on request", "floor": "Ground Floor"},
+            {"name": "Baby Care Room", "location": "Available on request", "floor": "Ground Floor"},
+            {"name": "Handicap Washrooms", "location": "Available on all floors", "floor": "All Floors"},
+            {"name": "Drinking Water Spouts", "location": "Available on all floors", "floor": "All Floors"},
+            {"name": "Free EV Car Parking", "location": "Basement Levels", "floor": "Basement"},
+            {"name": "Free EV Charging Points", "location": "Basement Levels", "floor": "Basement"},
         ]},
         {"category": "Connectivity", "items": [
-            {"name": "Free WiFi", "location": "Available throughout mall", "floor": "All Floors"},
-            {"name": "Mobile Charging Station", "location": "Food Court & Ground Floor", "floor": "Multiple"},
+            {"name": "Free WiFi", "location": "Available throughout the mall", "floor": "All Floors"},
+            {"name": "Mobile Charging Ports", "location": "Available on multiple floors", "floor": "All Floors"},
         ]},
-        {"category": "Parking & Transport", "items": [
+        {"category": "Parking & EV Services", "items": [
             {"name": "Basement Parking", "location": "B1 & B2 Levels", "floor": "Basement"},
             {"name": "Valet Parking", "location": "Main Entrance", "floor": "Ground Floor"},
-            {"name": "EV Charging", "location": "B1 Level, Section C", "floor": "Basement"},
+            {"name": "EV Charging Station", "location": "Basement Levels", "floor": "Basement"},
         ]},
         {"category": "Emergency", "items": [
             {"name": "First Aid", "location": "Ground Floor, Security Office", "floor": "Ground Floor"},
-            {"name": "Fire Exit A", "location": "East Wing, All Floors", "floor": "All Floors"},
-            {"name": "Fire Exit B", "location": "West Wing, All Floors", "floor": "All Floors"},
         ]},
     ]
     return {"amenities": amenities}

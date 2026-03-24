@@ -8,7 +8,7 @@ const CATEGORY_ICONS = {
   'ATMs & Banking': CreditCard,
   'Services': HelpCircle,
   'Connectivity': Wifi,
-  'Parking & Transport': Car,
+  'Parking & EV Services': Car,
   'Emergency': AlertTriangle,
 };
 
@@ -17,7 +17,7 @@ const CATEGORY_COLORS = {
   'ATMs & Banking': '#22c55e',
   'Services': '#C68939',
   'Connectivity': '#8b5cf6',
-  'Parking & Transport': '#f59e0b',
+  'Parking & EV Services': '#f59e0b',
   'Emergency': '#ef4444',
 };
 

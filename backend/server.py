@@ -2797,19 +2797,13 @@ async def process_new_user_registration(phone: str, profile_name: str, source_co
             )
     
     # EXACT Registration Success Message (per revised flow document)
-    welcome_msg = f"""Hi {profile_name or 'there'}! Congratulations!
+    welcome_msg = f"""Hi {profile_name or 'there'}! Congratulations on joining Homeland Advantage.
 
-You are now successfully registered as a valued member of Homeland Advantage – CP67 Mall's exclusive Loyalty Program.
+You are now part of CP67 Mall's exclusive loyalty program, and your 1000 joining bonus points have been credited.
 
-Mobile: {mobile_10}
-Name: {profile_name or 'Customer'}
-Current Points: {balance_points}
+Enjoy exclusive rewards, special benefits, and personalized offers every time you shop.
 
-Enjoy special privileges, exciting rewards & personalized offers every time you shop with us.
-
-Shop • Earn • Redeem • Repeat
-
-Welcome to a world of advantage & experiences crafted just for you!"""
+Shop - Earn - Redeem - Repeat"""
     
     menu_options = [
         {"id": "upload_bill", "title": "Upload Bill", "description": "Upload your shopping bill to earn points"},
@@ -2879,13 +2873,11 @@ We're scanning your bill now. Please wait a moment..."""
         if not image_base64:
             logger.error("No image data available - sending manual review message")
             # Send unclear image response
-            unclear_msg = """We noticed that the bill image you uploaded is not clear enough to process automatically.
+            unclear_msg = """Your uploaded bill image is unclear for automatic processing.
 
-Don't worry - your bill has been submitted to our backend team.
+No worries — it has been submitted for manual review. Verification will be completed within 24-48 hours, and points will be credited after approval.
 
-We will manually verify it within 24-48 hours, and your points will be credited once validation is complete.
-
-Thank you for your patience and for being a valued member of Homeland Advantage."""
+Thank you for being a valued Homeland Advantage member."""
             
             buttons = [
                 {"id": "upload_bill", "title": "Upload Bill"},
@@ -2924,13 +2916,11 @@ Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards."""
         
         if not ocr_result.get("success"):
             # OCR failed - manual review
-            unclear_msg = """We noticed that the bill image you uploaded is not clear enough to process automatically 
+            unclear_msg = """Your uploaded bill image is unclear for automatic processing.
 
- Don't worry — your bill has been submitted to our backend team.
+No worries — it has been submitted for manual review. Verification will be completed within 24-48 hours, and points will be credited after approval.
 
-We will manually verify it within 24–48 hours, and your points will be credited once validation is complete 
-
-Thank you for your patience and for being a valued member of Homeland Advantage """
+Thank you for being a valued Homeland Advantage member."""
             
             # Save for manual review
             bill_data = BillData(
@@ -3114,13 +3104,11 @@ Processing your rewards... ⏳"""
             
             reject_msg = f"""Bill Cannot Be Processed
 
-Unfortunately, this bill is not eligible for processing.
-
-This bill is not eligible under Homeland Advantage program.
+This bill is not eligible under the Homeland Advantage program.
 
 Only bills from shops inside CP67 Mall are eligible for rewards.
 
-Please upload a valid CP67 Mall bill to earn points!"""
+Please upload a valid CP67 Mall bill to earn points."""
             
             # Save as rejected/pending for backend review
             bill_data = BillData(
@@ -3170,13 +3158,11 @@ Please upload a valid CP67 Mall bill to earn points!"""
         
         # Check if image is unclear or tampered
         if image_quality == "poor" or confidence < 0.5 or tampering or not is_valid:
-            unclear_msg = """We noticed that the bill image you uploaded is not clear enough to process automatically.
+            unclear_msg = """Your uploaded bill image is unclear for automatic processing.
 
-Don't worry - your bill has been submitted to our backend team.
+No worries — it has been submitted for manual review. Verification will be completed within 24-48 hours, and points will be credited after approval.
 
-We will manually verify it within 24-48 hours, and your points will be credited once validation is complete.
-
-Thank you for your patience and for being a valued member of Homeland Advantage."""
+Thank you for being a valued Homeland Advantage member."""
             
             # Save for manual review
             bill_data = BillData(
@@ -3264,19 +3250,17 @@ Please review in the admin dashboard."""
         if brand_config and brand_config.get("atv", 0) > 0:
             brand_atv = brand_config["atv"]
             if amount > brand_atv:
-                atv_exceed_msg = f""" *Bill Received - Under Review*
+                atv_exceed_msg = f"""Bill Received - Under Review
 
-Thank you for shopping at *{store_name}*!
+Thank you for shopping at {store_name}!
 
- *Bill No:* {bill_no}
- *Date:* {bill_date}
- *Amount:* ₹{amount:,.0f}
+Bill No: {bill_no}
+Date: {bill_date}
+Amount: Rs.{amount:,.0f}
 
-⏳ Your bill is under review for validation by our team.
+Your bill is under review for validation by our team. It will be reviewed within 24-48 hours and points will be credited once approved.
 
-Your bill will be reviewed within 24-48 hours and points will be credited once approved 
-
-Thank you for your patience! """
+Thank you for your patience!"""
                 
                 # Save as pending_review
                 bill_data = BillData(
@@ -3469,15 +3453,12 @@ Thank you for shopping at CP67 Mall!"""
         
         # Success Message (per revised flow document)
         store_display2 = store_name if store_name and store_name != "None" else "CP67 Mall"
-        success_msg = f"""Thank you for uploading your bill of {store_display2} with Homeland Advantage.
+        success_msg = f"""Thank you for uploading your bill from {store_display2} with Homeland Advantage.
 
 Points Credited: {points_earned}
 Total Balance: {total_balance}
 
-Earn more rewards every time you shop at CP67.
-
-Download the CP67 App:
-{os.environ.get('BACKEND_PUBLIC_URL', '')}/app/welcome
+Earn more rewards every time you shop at CP67 Mall.
 
 Happy Shopping!"""
         
@@ -3680,11 +3661,11 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
                 # Update local DB
                 await db.users.update_one({"id": user["id"]}, {"$set": {"balance_points": balance}})
                 
-                points_msg = f"""Your Loyalty Points Summary:
+                points_msg = f"""Homeland Advantage Loyalty Points Summary:
 
-Total Earned Points: {total_earned}
-Redeemed Points: {redeemed}
-Available Balance: {balance}"""
+Points Earned: {total_earned}
+Points Redeemed: {redeemed}
+Available Points: {balance}"""
                 
                 buttons = [
                     {"id": "know_more", "title": "Know More"},
@@ -3711,9 +3692,9 @@ Available Balance: {balance}"""
                 
                 await db.users.update_one({"id": user["id"]}, {"$set": {"balance_points": balance}})
                 
-                redeem_msg = f"""Your available points: {balance}
+                redeem_msg = f"""Redeem your points at Participating Brands and Enjoy Instant Discounts.
 
-Redeem these points directly at participating Brands, and get instant discounts."""
+Your available points: {balance}"""
                 
                 buttons = [
                     {"id": "know_more", "title": "Know More"},
@@ -3732,13 +3713,12 @@ Redeem these points directly at participating Brands, and get instant discounts.
                 background_tasks.add_task(send_whatsapp_buttons, phone, redeem_msg, buttons)
             
             elif message == "know_more" or "know more" in msg_lower:
-                # KNOW MORE - Send landing page link (per revised flow document)
-                program_url = f"{os.environ.get('BACKEND_PUBLIC_URL', '')}/app/program"
-                know_more_msg = f"""Homeland Advantage - CP67 Mall's Loyalty Program
+                # KNOW MORE (per revised flow document)
+                know_more_msg = """Explore Homeland Advantage, CP67 Mall's Loyalty Program.
 
-Learn about participating brands, how to earn & redeem points, and program terms:
+Check participating brands, points earning and redemption, and program terms.
 
-{program_url}"""
+https://cp67.co.in/homelandadvantage"""
                 
                 buttons = [
                     {"id": "upload_bill", "title": "Upload Bill"},
@@ -3758,17 +3738,11 @@ Learn about participating brands, how to earn & redeem points, and program terms
             
             elif message == "customer_support" or "support" in msg_lower or "help" in msg_lower or "contact" in msg_lower or msg_lower.strip() == "4":
                 # HELP / SUPPORT (per revised flow document)
-                support_msg = """Customer Support
+                support_msg = """Need help? Contact us here:
 
-We're here to help! Reach out to us through any of these channels:
-
-Email: advantage@homelandgroup.org
-
-Mobile: 97296 76767
-
-Support Desk: Reach out to our customer support desk for more enquiries at Ground Floor
-
-Our team is happy to assist you with any questions!"""
+Email : advantage@homelandgroup.org
+Mobile : 97296 76767
+Support Desk: Ground Floor"""
                 
                 buttons = [
                     {"id": "know_more", "title": "Know More"},
@@ -3788,17 +3762,13 @@ Our team is happy to assist you with any questions!"""
                 
             elif message == "upload_bill" or "upload" in msg_lower or msg_lower.strip() == "1" or ("bill" in msg_lower and "upload" in msg_lower):
                 # UPLOAD BILL PROMPT (per revised flow document)
-                upload_msg = """Great choice!
+                upload_msg = """Great Choice! Tap the Camera icon.
 
-Just share your shopping bill here and we'll credit your Homeland Advantage loyalty points instantly.
+Upload your CP67 Shopping Bill using Camera or Gallery. Share it with us.
 
-More bills = More points = More rewards
-(E bills Accepted via screenshots)
+Earn your Homeland Advantage Loyalty points instantly!
 
-Follow these steps:
-1. Take a picture of bill - Open camera - Share
-OR
-2. Upload from Gallery - Open gallery to select the bill picture and share."""
+More Bills = More Points = More Rewards"""
                 
                 outbound_log = WhatsAppLog(
                     user_id=user["id"],
@@ -3817,8 +3787,7 @@ OR
                 
             else:
                 # DEFAULT MENU (per revised flow document)
-                menu_msg = f"""Hi {display_name}!
-Welcome back to Homeland Advantage - CP67 Mall!
+                menu_msg = f"""Hi {display_name}! Welcome back to CP67's Loyalty Program - Homeland Advantage.
 
 What would you like to do today?"""
                 
@@ -4116,13 +4085,11 @@ Thank you for your patience!
 2 Redeem Points"""
             elif data.get("image_quality") == "poor" or bill_data.ocr_confidence < 0.6:
                 bill_data.status = "manual_review"
-                response_message = """We noticed that the bill image you uploaded is not clear enough to process automatically 
+                response_message = """Your uploaded bill image is unclear for automatic processing.
 
- Don't worry — your bill has been submitted to our backend team.
+No worries — it has been submitted for manual review. Verification will be completed within 24-48 hours, and points will be credited after approval.
 
-We will manually verify it within 24–48 hours, and your points will be credited once validation is complete 
-
-Thank you for your patience and for being a valued member of Homeland Advantage 
+Thank you for being a valued Homeland Advantage member.
 
 1 Upload Bill
 2 Redeem Points"""
@@ -4590,8 +4557,43 @@ async def get_dashboard_stats(payload: dict = Depends(verify_jwt_token)):
             "total_messages": total_messages,
             "inbound": inbound,
             "outbound": outbound
-        }
+        },
+        "footfall": await _get_footfall_stats()
     }
+
+
+async def _get_footfall_stats():
+    """Get footfall summary"""
+    total = 0
+    entries = []
+    async for f in db.footfall.find({}, {"_id": 0}).sort("date", -1).limit(30):
+        total += f.get("count", 0)
+        entries.append(f)
+    return {"total": total, "recent": entries}
+
+
+@api_router.post("/admin/footfall")
+async def add_footfall(data: dict, payload: dict = Depends(verify_jwt_token)):
+    """Add daily footfall entry"""
+    date = data.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    count = int(data.get("count", 0))
+    existing = await db.footfall.find_one({"date": date})
+    if existing:
+        await db.footfall.update_one({"date": date}, {"$set": {"count": count, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    else:
+        await db.footfall.insert_one({"date": date, "count": count, "created_at": datetime.now(timezone.utc).isoformat()})
+    return {"success": True, "date": date, "count": count}
+
+
+@api_router.get("/admin/footfall")
+async def get_footfall(payload: dict = Depends(verify_jwt_token)):
+    """Get footfall history"""
+    entries = []
+    async for f in db.footfall.find({}, {"_id": 0}).sort("date", -1).limit(90):
+        entries.append(f)
+    total = sum(f.get("count", 0) for f in entries)
+    return {"total": total, "entries": entries}
+
 
 @api_router.get("/analytics/qr-performance")
 async def get_qr_performance(payload: dict = Depends(verify_jwt_token)):

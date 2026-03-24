@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Award, ChevronRight, Star, Crown, Shield, Gem } from 'lucide-react';
+import { ArrowLeft, Award, ChevronRight, ChevronDown, ChevronUp, Star, Crown, Shield, Gem, TrendingUp } from 'lucide-react';
 import { useConsumerAuth, API } from '../ConsumerApp';
 
 const TIER_ICONS = {
@@ -18,9 +18,20 @@ const TIER_COLORS = {
   Platinum: { bg: '#6B5CE7', gradient: 'linear-gradient(135deg, #6B5CE7 0%, #8B5CF6 100%)', light: '#EDE9FE' },
 };
 
+const EARNING_SLABS = [
+  { range: '0 - 10,000', retail: '10%', jewellery: '5%' },
+  { range: '10,001 - 25,000', retail: '15%', jewellery: '7.5%' },
+  { range: '25,001 - 75,000', retail: '20%', jewellery: '10%' },
+  { range: '75,001 - 1,50,000', retail: '25%', jewellery: '12.5%' },
+  { range: '1,50,001 - 3,00,000', retail: '30%', jewellery: '15%' },
+  { range: '3,00,001 - 5,00,000', retail: '32.5%', jewellery: '16.25%' },
+  { range: '5,00,001 & Above', retail: '35%', jewellery: '17.5%' },
+];
+
 export default function TierJourney() {
   const [tierData, setTierData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showSlabs, setShowSlabs] = useState(false);
   const { token } = useConsumerAuth();
   const navigate = useNavigate();
 
@@ -128,6 +139,35 @@ export default function TierJourney() {
             </div>
           );
         })}
+      </div>
+
+      {/* Points Earning Slab */}
+      <div className="wallet-earning-slab" style={{ margin: '16px 20px' }} data-testid="tier-earning-slab">
+        <div className="earning-slab-conversion">
+          <TrendingUp size={16} />
+          <span>10 Points = INR 1</span>
+          <span className="earning-slab-sub">Earn & redeem across 100+ brands at CP67</span>
+        </div>
+        <button className="earning-slab-toggle" onClick={() => setShowSlabs(!showSlabs)} data-testid="tier-toggle-slabs">
+          Points Earning Slab
+          {showSlabs ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+        {showSlabs && (
+          <div className="earning-slab-table">
+            <div className="slab-row slab-header">
+              <span>Purchase (INR)</span>
+              <span>Retail</span>
+              <span>Jewellery & Electronics</span>
+            </div>
+            {EARNING_SLABS.map((s, i) => (
+              <div key={i} className="slab-row">
+                <span>{s.range}</span>
+                <span className="slab-retail">{s.retail}</span>
+                <span className="slab-jewel">{s.jewellery}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="home-spacer" />
