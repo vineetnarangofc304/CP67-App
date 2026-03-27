@@ -15,6 +15,7 @@ import ParkingReport from './pages/ParkingReport';
 import Brands from './pages/Brands';
 import Reports from './pages/Reports';
 import Campaigns from './pages/Campaigns';
+import Banners from './pages/Banners';
 import ConsumerApp from './consumer/ConsumerApp';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -119,6 +120,7 @@ function App() {
           <Route path="/admin-users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
           <Route path="/brands" element={<ProtectedRoute><Brands /></ProtectedRoute>} />
           <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
+          <Route path="/banners" element={<ProtectedRoute><Banners /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           {/* Consumer App */}
           <Route path="/app/*" element={<ConsumerApp />} />

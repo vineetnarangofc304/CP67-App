@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, ChevronRight, ShieldCheck, Phone, Mail, Heart, User, Calendar, MapPin, Users, Bell } from 'lucide-react';
+import { LogOut, ChevronRight, Phone, Mail, Heart, User, Calendar, MapPin, Users, Bell } from 'lucide-react';
 import { useConsumerAuth, API } from '../ConsumerApp';
 import { toast } from 'sonner';
 
@@ -120,13 +120,6 @@ export default function Profile() {
           </div>
         </div>
       )}
-
-      <div className="profile-section">
-        <h2><ShieldCheck size={16} /> Referral Code</h2>
-        <div className="profile-referral">
-          <span data-testid="referral-code">{profile?.referral_code || 'N/A'}</span>
-        </div>
-      </div>
 
       <div className="profile-section">
         <button className="profile-nav-btn" onClick={() => navigate('/app/notification-settings')} data-testid="notif-settings-btn">

@@ -99,8 +99,8 @@ export default function Wallet() {
         <button className="wallet-action-btn primary" onClick={() => navigate('/app/upload')} data-testid="wallet-scan-btn">
           <Receipt size={18} /> Scan Bill
         </button>
-        <button className="wallet-action-btn" onClick={() => navigate('/app/rewards')} data-testid="wallet-rewards-btn">
-          <Gift size={18} /> Rewards
+        <button className="wallet-action-btn" onClick={() => navigate('/app/redeem')} data-testid="wallet-rewards-btn">
+          <Gift size={18} /> Redeem
         </button>
       </div>
 

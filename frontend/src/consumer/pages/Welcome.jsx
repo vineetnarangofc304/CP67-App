@@ -26,7 +26,7 @@ export default function Welcome() {
           animate={{ scale: 1, opacity: 1 }}
           transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
         >
-          <img src="/homeland-advantage-logo.jpeg" alt="Homeland Advantage" className="welcome-ha-logo" />
+          <img src="/ha-logo-white.png" alt="Homeland Advantage" className="welcome-ha-logo" />
         </motion.div>
 
         <motion.div

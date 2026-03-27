@@ -36,7 +36,7 @@ export default function Home({ onMenuOpen }) {
       <div className="home-top">
         <div className="home-greeting-row">
           <button className="home-menu-btn" onClick={onMenuOpen} data-testid="menu-btn"><Menu size={22} /></button>
-          <img src="/homeland-advantage-logo.jpeg" alt="Homeland Advantage" className="home-ha-logo" />
+          <img src="/ha-logo-white.png" alt="Homeland Advantage" className="home-ha-logo" />
           <div className="home-greeting">
             <p className="home-greeting-sub">Welcome back,</p>
             <h1 data-testid="home-user-name">{firstName}</h1>

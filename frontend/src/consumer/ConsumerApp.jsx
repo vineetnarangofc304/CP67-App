@@ -132,6 +132,7 @@ export default function ConsumerApp() {
             <Route path="amenities" element={<ProtectedConsumer><Amenities /></ProtectedConsumer>} />
             <Route path="referrals" element={<ProtectedConsumer><Referrals /></ProtectedConsumer>} />
             <Route path="redeem-brands" element={<ProtectedConsumer><RedeemBrands /></ProtectedConsumer>} />
+            <Route path="redeem" element={<ProtectedConsumer><RedeemBrands /></ProtectedConsumer>} />
             <Route path="tier-journey" element={<ProtectedConsumer><TierJourney /></ProtectedConsumer>} />
             <Route path="program" element={<ProgramInfo />} />
             <Route path="" element={<Navigate to="/app/welcome" replace />} />

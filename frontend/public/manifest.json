@@ -4,14 +4,14 @@
   "description": "Earn rewards, discover brands, and enjoy exclusive offers at CP67 Mall, Mohali",
   "icons": [
     {
-      "src": "/homeland-advantage-logo.jpeg",
+      "src": "/ha-logo-white.png",
       "sizes": "192x192",
-      "type": "image/jpeg"
+      "type": "image/png"
     },
     {
-      "src": "/homeland-advantage-logo.jpeg",
+      "src": "/ha-logo-white.png",
       "sizes": "512x512",
-      "type": "image/jpeg"
+      "type": "image/png"
     }
   ],
   "start_url": "/app/welcome",

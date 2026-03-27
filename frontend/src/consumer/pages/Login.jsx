@@ -17,51 +17,65 @@ export default function Login() {
     if (phone.length < 10) { setError('Enter a valid 10-digit phone number'); return; }
     setLoading(true);
     setError('');
-    try {
-      const res = await fetch(`${API}/auth/send-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.replace(/\D/g, '').slice(-10) })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setStep('otp');
+    
+    // Use XMLHttpRequest to avoid fetch body stream issues
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API}/auth/send-otp`, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch { /* ignore */ }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (data.success) {
+          setStep('otp');
+        } else {
+          setError(data.detail || 'Failed to send OTP');
+        }
       } else {
         setError(data.detail || 'Failed to send OTP');
       }
-    } catch {
+      setLoading(false);
+    };
+    xhr.onerror = function() {
       setError('Network error. Please try again.');
-    }
-    setLoading(false);
+      setLoading(false);
+    };
+    xhr.send(JSON.stringify({ phone: phone.replace(/\D/g, '').slice(-10) }));
   };
 
   const verifyOTP = async () => {
     if (otp.length < 4) { setError('Enter valid OTP'); return; }
     setLoading(true);
     setError('');
-    try {
-      const res = await fetch(`${API}/auth/verify-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.replace(/\D/g, '').slice(-10), otp })
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        setError(err.detail || 'Invalid OTP');
-        setLoading(false);
-        return;
-      }
-      const data = await res.json();
-      login(data.token, data.user);
-      if (data.is_new || !data.user.onboarding_complete) {
-        navigate('/app/onboarding', { replace: true });
+    
+    // Use XMLHttpRequest to avoid fetch body stream issues
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API}/auth/verify-otp`, true);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onload = function() {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText); } catch { /* ignore */ }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        if (data.success && data.token) {
+          login(data.token, data.user);
+          if (data.is_new || !data.user.onboarding_complete) {
+            navigate('/app/onboarding', { replace: true });
+          } else {
+            navigate('/app/home', { replace: true });
+          }
+        } else {
+          setError(data.detail || 'Invalid OTP');
+        }
       } else {
-        navigate('/app/home', { replace: true });
+        setError(data.detail || 'Invalid OTP');
       }
-    } catch {
+      setLoading(false);
+    };
+    xhr.onerror = function() {
       setError('Network error. Please try again.');
-    }
-    setLoading(false);
+      setLoading(false);
+    };
+    xhr.send(JSON.stringify({ phone: phone.replace(/\D/g, '').slice(-10), otp }));
   };
 
   return (
@@ -79,7 +93,7 @@ export default function Login() {
       </div>
 
       <div className="login-body">
-        <img src="/homeland-advantage-logo.jpeg" alt="Homeland Advantage" className="login-ha-logo" />
+        <img src="/ha-logo-white.png" alt="Homeland Advantage" className="login-ha-logo" />
 
         <h1>{step === 'phone' ? 'Welcome' : 'Verify OTP'}</h1>
         <p className="login-subtitle">

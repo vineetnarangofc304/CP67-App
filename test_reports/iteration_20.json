@@ -1,0 +1,110 @@
+{
+  "summary": "Iteration 20: Tested CP67 Mall multiple feature changes. Backend: 14/14 tests passed. Frontend: All features verified. Fixed Login.jsx error handling bug (fetch body stream issue) by switching to XMLHttpRequest. Added /app/redeem route alias.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "API: POST /api/consumer/auth/send-otp with blocked phone 8146141325 returns 403 with 'not eligible' message",
+    "API: POST /api/consumer/auth/verify-otp with blocked phone 8146141325 returns 403",
+    "API: POST /api/consumer/auth/send-otp with normal phone 9876543210 succeeds",
+    "API: POST /api/consumer/auth/verify-otp with normal phone 9876543210 and OTP 1234 succeeds",
+    "API: GET /api/consumer/stores excludes 'Food Court' and 'Third Floor' from floors array",
+    "API: GET /api/consumer/participating-brands excludes 'Food Court' and 'Third Floor' from filters.floors",
+    "API: GET /api/consumer/home returns 2 banners (Vipul Goyal, Vivek Samtani) with valid image_url",
+    "API: GET /api/admin/banners returns banners list (2 banners)",
+    "API: POST /api/admin/banners creates new banner",
+    "API: Admin login with correct credentials succeeds",
+    "API: Admin login with wrong credentials returns 401",
+    "API: Banner images accessible (vipul-goyal.jpeg, vivek-samtani.jpg, ha-logo-white.png)",
+    "Frontend: Login page shows HA logo with white background (/ha-logo-white.png)",
+    "Frontend: Blocked phone shows proper error message 'This number is not eligible for the Homeland Advantage loyalty program.'",
+    "Frontend: Normal phone login flow works (send OTP -> verify OTP -> redirect to home)",
+    "Frontend: Wallet page shows 'Redeem' button (not 'Rewards')",
+    "Frontend: Profile page does NOT show Referral Code section",
+    "Frontend: Admin Banner Management page shows 2 banners with edit/delete controls",
+    "Frontend: Admin sidebar has 'Banners' link"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration20_features.py",
+    "/app/test_reports/pytest/iteration20_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fixed Login.jsx: Changed from fetch() to XMLHttpRequest to avoid 'body stream already read' error in Playwright/browser context",
+    "Added /app/redeem route alias in ConsumerApp.jsx to support Wallet button navigation",
+    "Blocked phones collection (blocked_phones) has 1050 phone numbers for brand staff",
+    "Floor filter exclusion (Food Court, Third Floor) implemented in consumer.py lines 628-631 and 1386-1391"
+  ],
+  "updated_files": [
+    "/app/frontend/src/consumer/pages/Login.jsx",
+    "/app/frontend/src/consumer/ConsumerApp.jsx",
+    "/app/backend/tests/test_iteration20_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "consumer_phone": "9876543210",
+    "consumer_otp": "1234 (dev mode)",
+    "blocked_phone_example": "8146141325",
+    "admin_username": "admin",
+    "admin_password": "CP67Admin@2025",
+    "api_base_url": "https://brand-sync-staging.preview.emergentagent.com"
+  },
+  "seed_data_creation": "None - using existing blocked_phones collection with 1050 numbers",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 20 verified all requested features: blocked phone numbers (1050 brand staff contacts), banner updates (Vipul Goyal, Vivek Samtani events), floor filter exclusions (Food Court, Third Floor removed), Wallet Redeem button, Profile without Referral Code, HA logo with white background, Admin banner management. Login.jsx uses XMLHttpRequest instead of fetch due to browser body stream issue. TagnPay API may return mock defaults in preview environment.",
+  "features_verified": {
+    "blocked_phones": {
+      "endpoint_send_otp": "POST /api/consumer/auth/send-otp",
+      "endpoint_verify_otp": "POST /api/consumer/auth/verify-otp",
+      "blocked_phone_example": "8146141325",
+      "expected_status": 403,
+      "expected_message": "This number is not eligible for the Homeland Advantage loyalty program.",
+      "status": "Working"
+    },
+    "floor_filter_exclusions": {
+      "excluded_floors": ["Food Court", "Third Floor"],
+      "remaining_floors": ["Ground Floor", "First Floor", "Second Floor", "Lower Ground"],
+      "endpoints_affected": ["/api/consumer/stores", "/api/consumer/participating-brands"],
+      "status": "Working"
+    },
+    "banners": {
+      "banner_1": {"title": "Vipul Goyal Live", "image": "/banner-vipul-goyal.jpeg"},
+      "banner_2": {"title": "Vivek Samtani Live", "image": "/banner-vivek-samtani.jpg"},
+      "admin_endpoint": "GET /api/admin/banners",
+      "status": "Working"
+    },
+    "wallet_redeem_button": {
+      "button_text": "Redeem",
+      "link_target": "/app/redeem",
+      "status": "Working"
+    },
+    "profile_no_referral": {
+      "referral_code_section": "Removed",
+      "status": "Working"
+    },
+    "ha_logo_white": {
+      "image_path": "/ha-logo-white.png",
+      "used_in": "Login page",
+      "status": "Working"
+    },
+    "admin_banner_management": {
+      "page_route": "/banners",
+      "sidebar_link": "Present",
+      "crud_operations": "Working",
+      "status": "Working"
+    }
+  },
+  "mocked_apis": {
+    "TagnPay_loyalty_API": "May return mock defaults in preview environment"
+  }
+}

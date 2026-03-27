@@ -17,7 +17,8 @@ import {
   ScanLine,
   Store,
   Download,
-  Megaphone
+  Megaphone,
+  ImageIcon
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -28,6 +29,7 @@ const navItems = [
   { path: '/bills', label: 'Bills', icon: Receipt },
   { path: '/brands', label: 'Brands & ATV', icon: Store },
   { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
+  { path: '/banners', label: 'Banners', icon: ImageIcon },
   { path: '/reports', label: 'Export Reports', icon: Download },
   { path: '/parking-scanner', label: 'Parking Scanner', icon: ScanLine },
   { path: '/parking-report', label: 'Parking Report', icon: Car },

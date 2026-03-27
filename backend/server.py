@@ -1577,6 +1577,77 @@ async def delete_brand(brand_id: str, payload: dict = Depends(verify_jwt_token))
         raise HTTPException(status_code=404, detail="Brand not found")
     return {"success": True, "message": "Brand deleted"}
 
+
+# ==================== ADMIN BANNER MANAGEMENT ====================
+
+@api_router.get("/admin/banners")
+async def get_admin_banners(payload: dict = Depends(verify_jwt_token)):
+    """Get all banners for admin management"""
+    banners = await db.banners.find({}, {"_id": 0}).sort("position", 1).to_list(50)
+    return {"banners": banners}
+
+@api_router.post("/admin/banners")
+async def create_banner(data: dict, payload: dict = Depends(verify_jwt_token)):
+    """Create a new banner"""
+    banner = {
+        "id": str(uuid.uuid4()),
+        "title": data.get("title", ""),
+        "subtitle": data.get("subtitle", ""),
+        "image_url": data.get("image_url", ""),
+        "link_type": data.get("link_type", "none"),
+        "link_id": data.get("link_id"),
+        "position": data.get("position", 99),
+        "is_active": data.get("is_active", True),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.banners.insert_one(banner)
+    return {"success": True, "banner": {k: v for k, v in banner.items() if k != "_id"}}
+
+@api_router.put("/admin/banners/{banner_id}")
+async def update_banner(banner_id: str, data: dict, payload: dict = Depends(verify_jwt_token)):
+    """Update a banner"""
+    updates = {}
+    for field in ["title", "subtitle", "image_url", "link_type", "link_id", "position", "is_active"]:
+        if field in data:
+            updates[field] = data[field]
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    result = await db.banners.update_one({"id": banner_id}, {"$set": updates})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    return {"success": True, "message": "Banner updated"}
+
+@api_router.delete("/admin/banners/{banner_id}")
+async def delete_banner(banner_id: str, payload: dict = Depends(verify_jwt_token)):
+    """Delete a banner"""
+    result = await db.banners.delete_one({"id": banner_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    return {"success": True, "message": "Banner deleted"}
+
+@api_router.post("/admin/banners/{banner_id}/upload-image")
+async def upload_banner_image(
+    banner_id: str,
+    file: UploadFile = File(...),
+    payload: dict = Depends(verify_jwt_token)
+):
+    """Upload image for a banner"""
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image too large. Max 5MB.")
+    ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
+    if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
+        ext = "jpg"
+    os.makedirs(os.path.join("uploads", "banners"), exist_ok=True)
+    filename = f"banner_{banner_id}.{ext}"
+    filepath = os.path.join("uploads", "banners", filename)
+    with open(filepath, "wb") as f:
+        f.write(contents)
+    backend_url = os.environ.get("BACKEND_PUBLIC_URL", "")
+    image_url = f"{backend_url}/api/uploads/banners/{filename}"
+    await db.banners.update_one({"id": banner_id}, {"$set": {"image_url": image_url, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"success": True, "image_url": image_url}
+
+
 @api_router.post("/admin/brands/import")
 async def import_brands(data: dict, payload: dict = Depends(verify_jwt_token)):
     """Import brands with ATV from a list"""

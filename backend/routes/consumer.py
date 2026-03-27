@@ -367,6 +367,11 @@ async def send_otp(request: SendOTPRequest):
         phone = "91" + phone
     phone_10 = phone[-10:]
 
+    # Check if phone is blocked (brand staff)
+    blocked = await _db.blocked_phones.find_one({"phone": phone_10})
+    if blocked:
+        raise HTTPException(status_code=403, detail="This number is not eligible for the Homeland Advantage loyalty program.")
+
     # Try sending OTP via TagnPay
     result = await _tagnpay_client.send_login_otp(phone_10)
 
@@ -385,6 +390,11 @@ async def verify_otp(request: VerifyOTPRequest):
     if not phone.startswith("91"):
         phone = "91" + phone
     phone_10 = phone[-10:]
+
+    # Check if phone is blocked (brand staff)
+    blocked = await _db.blocked_phones.find_one({"phone": phone_10})
+    if blocked:
+        raise HTTPException(status_code=403, detail="This number is not eligible for the Homeland Advantage loyalty program.")
 
     # Dev mode: accept 1234 for testing
     is_dev = request.otp == "1234"
@@ -615,8 +625,9 @@ async def list_stores(category: str = None, search: str = None, floor: str = Non
             "is_active": True
         })
 
+    EXCLUDED_FLOORS = {"Food Court", "Third Floor"}
     categories = sorted([c for c in await _db.brands.distinct("category", {"is_active": {"$ne": False}, "brand_name": {"$exists": True, "$ne": ""}}) if c])
-    floors_list = sorted([f for f in await _db.brands.distinct("floor", {"is_active": {"$ne": False}, "brand_name": {"$exists": True, "$ne": ""}}) if f])
+    floors_list = sorted([f for f in await _db.brands.distinct("floor", {"is_active": {"$ne": False}, "brand_name": {"$exists": True, "$ne": ""}}) if f and f not in EXCLUDED_FLOORS])
 
     return {"stores": stores, "categories": categories, "floors": floors_list}
 
@@ -1372,15 +1383,16 @@ async def get_participating_brands(
         })
 
     # Get unique floors and categories for filter dropdowns
+    EXCLUDED_FLOORS = {"Food Court", "Third Floor"}
     all_floors = []
     all_categories = []
     async for b in _db.brands.find({"brand_name": {"$exists": True, "$ne": ""}, "is_eligible": {"$ne": False}}, {"_id": 0, "floor": 1, "category": 1}):
-        if b.get("floor") and b["floor"] not in all_floors:
+        if b.get("floor") and b["floor"] not in all_floors and b["floor"] not in EXCLUDED_FLOORS:
             all_floors.append(b["floor"])
         if b.get("category") and b["category"] not in all_categories:
             all_categories.append(b["category"])
 
-    floor_order = ["Lower Ground", "Ground Floor", "First Floor", "Second Floor", "Third Floor", "Food Court"]
+    floor_order = ["Lower Ground", "Ground Floor", "First Floor", "Second Floor"]
     all_floors.sort(key=lambda f: floor_order.index(f) if f in floor_order else 99)
     all_categories.sort()
 
