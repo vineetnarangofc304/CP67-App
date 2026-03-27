@@ -84,8 +84,24 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - **Admin FLOORS dropdown**: Includes all valid options (Ground Floor, First Floor, Second Floor, Third Floor, Food Court, Lower Ground)
 - **Testing**: 100% pass rate on backend (20/20) and frontend floor filter tests (iteration 19)
 
+### Phase 7 - Security, Banners & UI Updates (Mar 27)
+- **Brand Staff Blocking**: 1050 phone numbers from xlsx blocked from loyalty registration (403 on send-otp & verify-otp)
+- **Event Banners**: Vipul Goyal & Vivek Samtani comedy show banners added to home carousel and events
+- **Admin Banner Management**: Full CRUD page at /banners with image upload support
+- **Wallet Button**: "Rewards" renamed to "Redeem", now navigates to /app/redeem (Redeem at Brand section)
+- **Floor Filter Cleanup**: Removed "Food Court" and "Third Floor" from consumer floor dropdowns
+- **Profile Cleanup**: Removed Referral Code section
+- **HA Logo Update**: New white-background logo placed across Login, Welcome, Home, SideDrawer, PWA manifest
+- **Testing**: 100% pass rate on backend (14/14) and frontend (iteration 20)
+
 ## Known Issues
 - **Karix WhatsApp Image Delivery (BLOCKED):** Code correct but images not delivered (external issue)
+
+## Database Collections
+- `users`, `bills`, `brands`, `campaigns`, `footfall`
+- `offers`, `events`, `banners`, `notifications`
+- `redemptions`, `rewards`, `admin_users`, `qr_analytics`
+- `blocked_phones` (1050 brand staff numbers, indexed on phone)
 
 ## Credentials
 - Admin: admin / CP67Admin@2025
