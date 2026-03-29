@@ -3848,9 +3848,13 @@ Support Desk: Ground Floor"""
                 
             elif message == "upload_bill" or "upload" in msg_lower or msg_lower.strip() == "1" or ("bill" in msg_lower and "upload" in msg_lower):
                 # UPLOAD BILL PROMPT (per revised flow document)
-                upload_msg = """*Great Choice!* Tap the Camera icon.
+                upload_msg = """*Great Choice!*
 
-Upload your CP67 Shopping Bill using Camera or Gallery. Share it with us.
+• Tap the Camera icon. (Camera Icon)
+
+• Upload your CP67 Shopping Bill using Camera or Gallery.
+
+• Share it with us.
 
 Earn your Homeland Advantage Loyalty points instantly!
 
