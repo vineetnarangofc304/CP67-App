@@ -64,7 +64,7 @@ export default function Stores() {
   return (
     <motion.div className="consumer-stores" initial={{ opacity: 0 }} animate={{ opacity: 1 }} data-testid="stores-screen">
       <div className="stores-header">
-        <h1>Explore Stores</h1>
+        <h1 style={{ fontFamily: 'Playfair Display, serif', letterSpacing: '-0.02em' }}>Explore Stores</h1>
         <p className="stores-count">{stores.length} brands at CP67 Mall</p>
         <div className="stores-search">
           <Search size={18} />
@@ -105,8 +105,17 @@ export default function Stores() {
         <div className="consumer-loading"><div className="consumer-spinner" /></div>
       ) : (
         <div className="stores-grid" data-testid="stores-grid">
-          {displayed.map(s => (
-            <div key={s.id} className="store-grid-card" onClick={() => navigate(`/app/stores/${s.id}`)} data-testid={`store-${s.id}`}>
+          {displayed.map((s, idx) => (
+            <motion.div
+              key={s.id}
+              className="store-grid-card"
+              onClick={() => navigate(`/app/stores/${s.id}`)}
+              data-testid={`store-${s.id}`}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: Math.min(idx * 0.03, 0.5), type: 'spring', damping: 20 }}
+              whileTap={{ scale: 0.97 }}
+            >
               <div className="store-grid-img">
                 {s.logo_url ? (
                   <img src={s.logo_url} alt={s.name} loading="lazy" className="store-logo-img" />
@@ -126,7 +135,7 @@ export default function Stores() {
                 {s.category && <span className="store-cat">{s.category}</span>}
                 {s.timing && <p className="store-timing"><Clock size={12} /> {s.timing}</p>}
               </div>
-            </div>
+            </motion.div>
           ))}
           {displayed.length === 0 && <p className="no-results">{showFavOnly ? 'No favorite stores yet' : 'No stores found'}</p>}
         </div>

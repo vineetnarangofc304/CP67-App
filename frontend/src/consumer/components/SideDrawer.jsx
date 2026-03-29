@@ -39,13 +39,13 @@ export default function SideDrawer({ isOpen, onClose }) {
           <motion.div className="drawer-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
             exit={{ opacity: 0 }} onClick={onClose} data-testid="drawer-overlay" />
           <motion.div className="drawer-panel" initial={{ x: '-100%' }} animate={{ x: 0 }}
-            exit={{ x: '-100%' }} transition={{ type: 'tween', duration: 0.25 }} data-testid="side-drawer">
+            exit={{ x: '-100%' }} transition={{ type: 'spring', damping: 24, stiffness: 200 }} data-testid="side-drawer">
             {/* Header */}
             <div className="drawer-header">
               <div className="drawer-user-info">
                 <img src="/ha-logo-white.png" alt="Homeland Advantage" className="drawer-ha-logo" />
                 <div>
-                  <h3>{user?.name || 'User'}</h3>
+                  <h3 style={{ fontFamily: 'Playfair Display, serif' }}>{user?.name || 'User'}</h3>
                   <p>{user?.phone || ''}</p>
                 </div>
               </div>
@@ -54,13 +54,21 @@ export default function SideDrawer({ isOpen, onClose }) {
 
             {/* Menu Items */}
             <nav className="drawer-nav">
-              {menuItems.map(item => (
-                <button key={item.path} className="drawer-nav-item" onClick={() => handleNav(item.path)}
-                  data-testid={`drawer-${item.label.toLowerCase().replace(/\s+/g, '-')}`}>
+              {menuItems.map((item, idx) => (
+                <motion.button
+                  key={item.path}
+                  className="drawer-nav-item"
+                  onClick={() => handleNav(item.path)}
+                  data-testid={`drawer-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                  initial={{ x: -30, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: 0.1 + idx * 0.04, type: 'spring', damping: 20 }}
+                  whileTap={{ scale: 0.97, x: 4 }}
+                >
                   <item.icon size={20} />
                   <span>{item.label}</span>
                   <ChevronRight size={16} className="drawer-chevron" />
-                </button>
+                </motion.button>
               ))}
             </nav>
 

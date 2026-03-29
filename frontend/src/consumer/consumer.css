@@ -1,5 +1,5 @@
 /* ============================================
-   CP67 Consumer App — Premium Mobile-First CSS
+   CP67 Consumer App — Kinetic Luxury CSS
    ============================================ */
 
 /* === CSS Variables === */
@@ -7,13 +7,15 @@
   --cp-gold: #C68939;
   --cp-gold-light: #E0AF6D;
   --cp-gold-dark: #a07030;
+  --cp-flash-gold: #FFDF73;
+  --cp-amber: #FF5B00;
   --cp-dark: #2E2219;
   --cp-dark-2: #1A1A1A;
   --cp-dark-3: #3d2e1f;
   --cp-bg: #FAF8F5;
   --cp-card: #ffffff;
-  --cp-text: #1A1A1A;
-  --cp-text-2: #666666;
+  --cp-text: #2E2219;
+  --cp-text-2: #7A6B5D;
   --cp-text-3: #999999;
   --cp-border: #e8e4de;
   --cp-success: #1FAD53;
@@ -24,6 +26,44 @@
   --cp-cream: #F8F6F2;
   --cp-gold-bg: rgba(198, 137, 57, 0.08);
   --cp-gold-border: rgba(198, 137, 57, 0.2);
+  --font-heading: 'Playfair Display', serif;
+  --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* === Premium Animations === */
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes coinDrop {
+  0% { transform: translateY(-40px) rotate(0deg); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateY(0) rotate(360deg); opacity: 1; }
+}
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(198, 137, 57, 0.3); }
+  50% { box-shadow: 0 0 20px 4px rgba(198, 137, 57, 0.15); }
+}
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes fadeScale {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg, var(--cp-gold-dark), var(--cp-flash-gold), var(--cp-gold));
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 3s ease-in-out infinite;
 }
 
 /* === App Shell === */
@@ -34,7 +74,7 @@
   background: var(--cp-bg);
   position: relative;
   overflow-x: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -58,26 +98,28 @@
 
 .spin { animation: spin 0.7s linear infinite; }
 
-.home-spacer { height: calc(var(--cp-nav-height) + 20px); }
+.home-spacer { height: calc(var(--cp-nav-height) + 28px); }
 .no-results { text-align: center; color: var(--cp-text-2); padding: 40px 20px; }
 
-/* === Bottom Nav === */
+/* === Bottom Nav — Floating Pill === */
 .consumer-bottom-nav {
   position: fixed;
-  bottom: 0;
+  bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  height: var(--cp-nav-height);
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid var(--cp-border);
+  width: calc(100% - 32px);
+  max-width: 448px;
+  height: 64px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 8px 32px rgba(46, 34, 25, 0.12), 0 2px 8px rgba(0,0,0,0.06);
+  border-radius: 22px;
   display: flex;
   align-items: center;
   justify-content: space-around;
-  padding: 0 8px;
+  padding: 0 4px;
   z-index: 100;
 }
 
@@ -85,14 +127,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   background: none;
   border: none;
   color: var(--cp-text-3);
   font-size: 10px;
   font-weight: 500;
+  font-family: var(--font-body);
   cursor: pointer;
   padding: 8px 12px;
+  position: relative;
   transition: color 0.2s;
 }
 
@@ -101,34 +145,22 @@
 }
 
 .consumer-nav-center-btn {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  border-radius: 18px;
   background: linear-gradient(135deg, var(--cp-gold), var(--cp-gold-dark));
-  border: 3px solid var(--cp-bg);
+  border: none;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
   cursor: pointer;
-  box-shadow: 0 4px 24px rgba(198, 137, 57, 0.45);
-  margin-top: -28px;
-  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 20px rgba(198, 137, 57, 0.4);
+  margin-top: -8px;
   color: white;
 }
 
 .consumer-nav-center-btn svg {
   color: white;
-}
-
-.center-btn-label {
-  font-size: 8px;
-  font-weight: 700;
-  color: white;
-  letter-spacing: 0.3px;
-  line-height: 1;
-  white-space: nowrap;
 }
 
 .consumer-nav-center-btn:active {
@@ -227,13 +259,14 @@
   color: white;
   font-size: 16px;
   font-weight: 600;
+  font-family: var(--font-body);
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  transition: opacity 0.2s;
+  letter-spacing: 0.02em;
 }
 
 .welcome-cta:active { opacity: 0.85; }

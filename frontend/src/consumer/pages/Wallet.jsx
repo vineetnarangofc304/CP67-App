@@ -14,6 +14,24 @@ const EARNING_SLABS = [
   { range: '5,00,001 & Above', retail: '35%', jewellery: '17.5%' },
 ];
 
+function AnimatedCounter({ value, duration = 1.2 }) {
+  const [display, setDisplay] = React.useState(0);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const end = parseInt(value) || 0;
+    if (end === 0) { setDisplay(0); return; }
+    const step = Math.ceil(end / (duration * 60));
+    let current = 0;
+    const timer = setInterval(() => {
+      current += step;
+      if (current >= end) { setDisplay(end); clearInterval(timer); }
+      else setDisplay(current);
+    }, 1000 / 60);
+    return () => clearInterval(timer);
+  }, [value, duration]);
+  return <span ref={ref}>{display.toLocaleString()}</span>;
+}
+
 export default function Wallet() {
   const [wallet, setWallet] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,21 +55,43 @@ export default function Wallet() {
 
   return (
     <motion.div className="consumer-wallet" initial={{ opacity: 0 }} animate={{ opacity: 1 }} data-testid="wallet-screen">
-      <div className="wallet-header"><h1>My Wallet</h1></div>
+      <div className="wallet-header"><h1 style={{ fontFamily: 'Playfair Display, serif', letterSpacing: '-0.02em' }}>My Wallet</h1></div>
 
       {/* Points Card */}
-      <div className="wallet-card" data-testid="wallet-card">
+      <motion.div
+        className="wallet-card"
+        data-testid="wallet-card"
+        initial={{ y: -40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: 'spring', damping: 14 }}
+      >
         <div className="wallet-card-bg" />
+        {/* Shimmer sweep */}
+        <motion.div style={{ position: 'absolute', inset: 0, borderRadius: 'var(--cp-radius)', overflow: 'hidden', zIndex: 1, pointerEvents: 'none' }}>
+          <motion.div
+            style={{ width: '40%', height: '100%', background: 'linear-gradient(90deg, transparent, rgba(255,223,115,0.1), transparent)' }}
+            animate={{ x: ['-100%', '350%'] }}
+            transition={{ duration: 3, repeat: Infinity, repeatDelay: 5, ease: 'easeInOut' }}
+          />
+        </motion.div>
         <div className="wallet-card-content">
           <p className="wallet-label">Available Balance</p>
-          <h2 className="wallet-balance" data-testid="wallet-balance">{(wallet?.balance || 0).toLocaleString()}</h2>
+          <h2 className="wallet-balance" data-testid="wallet-balance"><AnimatedCounter value={wallet?.balance || 0} /></h2>
           <p className="wallet-conversion">Points</p>
           <div className="wallet-tier-section" onClick={() => navigate('/app/tier-journey')} style={{ cursor: 'pointer' }}>
-            <span className={`tier-badge tier-${(tier.name || 'bronze').toLowerCase()}`} data-testid="tier-badge">{tier.name || 'Bronze'} Member</span>
+            <motion.span
+              className={`tier-badge tier-${(tier.name || 'bronze').toLowerCase()}`}
+              data-testid="tier-badge"
+              whileTap={{ scale: 0.95 }}
+              animate={{ scale: [1, 1.04, 1] }}
+              transition={{ duration: 2.5, repeat: Infinity }}
+            >
+              {tier.name || 'Bronze'} Member
+            </motion.span>
             <ChevronRight size={16} style={{ color: 'rgba(255,255,255,0.7)', marginLeft: 4 }} />
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Points Breakdown */}
       <div className="wallet-breakdown" data-testid="points-breakdown">
@@ -96,12 +136,12 @@ export default function Wallet() {
 
       {/* Quick Actions */}
       <div className="wallet-actions" data-testid="wallet-actions">
-        <button className="wallet-action-btn primary" onClick={() => navigate('/app/upload')} data-testid="wallet-scan-btn">
+        <motion.button className="wallet-action-btn primary" onClick={() => navigate('/app/upload')} data-testid="wallet-scan-btn" whileTap={{ scale: 0.95 }}>
           <Receipt size={18} /> Scan Bill
-        </button>
-        <button className="wallet-action-btn" onClick={() => navigate('/app/redeem')} data-testid="wallet-rewards-btn">
+        </motion.button>
+        <motion.button className="wallet-action-btn" onClick={() => navigate('/app/redeem')} data-testid="wallet-rewards-btn" whileTap={{ scale: 0.95 }}>
           <Gift size={18} /> Redeem
-        </button>
+        </motion.button>
       </div>
 
       {/* Quick Nav */}
