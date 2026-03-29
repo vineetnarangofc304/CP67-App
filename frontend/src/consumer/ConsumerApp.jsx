@@ -126,7 +126,7 @@ export default function ConsumerApp() {
             <Route path="bill-history" element={<ProtectedConsumer><BillHistory /></ProtectedConsumer>} />
             <Route path="rewards" element={<ProtectedConsumer><Rewards /></ProtectedConsumer>} />
             <Route path="help" element={<ProtectedConsumer><HelpSupport /></ProtectedConsumer>} />
-            <Route path="legal" element={<ProtectedConsumer><Legal /></ProtectedConsumer>} />
+            <Route path="legal" element={<Legal />} />
             <Route path="notification-settings" element={<ProtectedConsumer><NotificationPrefs /></ProtectedConsumer>} />
             <Route path="mall-map" element={<ProtectedConsumer><MallMap /></ProtectedConsumer>} />
             <Route path="amenities" element={<ProtectedConsumer><Amenities /></ProtectedConsumer>} />

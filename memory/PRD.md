@@ -89,10 +89,17 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - **Event Banners**: Vipul Goyal & Vivek Samtani comedy show banners added to home carousel and events
 - **Admin Banner Management**: Full CRUD page at /banners with image upload support
 - **Wallet Button**: "Rewards" renamed to "Redeem", now navigates to /app/redeem (Redeem at Brand section)
-- **Floor Filter Cleanup**: Removed "Food Court" and "Third Floor" from consumer floor dropdowns
+- **Floor Filter Cleanup**: Removed "Food Court" from consumer floor dropdowns
 - **Profile Cleanup**: Removed Referral Code section
 - **HA Logo Update**: New white-background logo placed across Login, Welcome, Home, SideDrawer, PWA manifest
-- **Testing**: 100% pass rate on backend (14/14) and frontend (iteration 20)
+
+### Phase 8 - Home, Tiers, T&C & WhatsApp Updates (Mar 29)
+- **Home Header**: Removed "Welcome back,". Shows "Homeland Advantage" as program name. Customer name shown inside points card.
+- **7-Tier System**: Updated from 4 tiers to 7: Bronze, Silver, Gold, Platinum, Titanium, Diamond, Privilege
+- **Third Floor**: Added back to floor dropdown filter (Food Court remains excluded)
+- **Login T&C Link**: "Terms of Service" is now clickable, navigates to Legal page (made public route)
+- **WhatsApp Bot**: Bold first lines (*text*) for Redeem Points, My Points, Know More, Upload Bill responses
+- **Testing**: Backend 12/12, Frontend 19/20 (iteration 21)
 
 ## Known Issues
 - **Karix WhatsApp Image Delivery (BLOCKED):** Code correct but images not delivered (external issue)
