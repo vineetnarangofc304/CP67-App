@@ -99,7 +99,17 @@ A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, 
 - **Third Floor**: Added back to floor dropdown filter (Food Court remains excluded)
 - **Login T&C Link**: "Terms of Service" is now clickable, navigates to Legal page (made public route)
 - **WhatsApp Bot**: Bold first lines (*text*) for Redeem Points, My Points, Know More, Upload Bill responses
-- **Testing**: Backend 12/12, Frontend 19/20 (iteration 21)
+### Phase 9 - Kinetic Luxury UI Overhaul (Mar 29)
+- **Welcome Splash**: Animated opening with spring-loaded logo drop, floating gold coin particles, staggered feature reveals, shimmer CTA button
+- **Home Page**: Animated points counter, shimmer sweep on cards, staggered quick actions, auto-rotating banner carousel with crossfade, Playfair Display heading typography
+- **Tier Journey Ladder**: Vertical progress ladder with connected line, current tier pulse/glow, locked tier icons, expandable benefits on tap, animated progress bar, Points Earning Slab
+- **Floating Pill Nav**: Glassmorphism bottom nav (12px from bottom, blur(24px)), gold camera scan button, layout-animated active tab indicator
+- **Wallet**: AnimatedCounter for points, shimmer card sweep, spring entrance
+- **Stores**: Staggered card entrance animations, whileTap scale feedback
+- **SideDrawer**: Spring transition, staggered menu item reveals
+- **Typography**: Playfair Display for headings, Outfit for body (Google Fonts)
+- **Micro-interactions**: whileTap scale on all buttons/cards, hover rotations on icons
+- **Testing**: 100% pass — Backend 9/9, Frontend 27/27 (iteration 22)
 
 ## Known Issues
 - **Karix WhatsApp Image Delivery (BLOCKED):** Code correct but images not delivered (external issue)
