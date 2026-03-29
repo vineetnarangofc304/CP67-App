@@ -293,27 +293,37 @@ export default function TierJourney() {
         }}>
           10 Points = INR 1
         </div>
+        {/* Slab table header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '2px solid var(--cp-border)', marginBottom: 4 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cp-text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', flex: 1.2 }}>Purchase (INR)</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cp-text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', flex: 0.7, textAlign: 'center' }}>Retail</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cp-text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', flex: 1, textAlign: 'right' }}>Jewellery & Electronics</span>
+        </div>
         {[
-          { range: 'INR 1 – 4,999', points: '10 pts / INR 100' },
-          { range: 'INR 5,000 – 9,999', points: '15 pts / INR 100' },
-          { range: 'INR 10,000 – 24,999', points: '20 pts / INR 100' },
-          { range: 'INR 25,000+', points: '25 pts / INR 100' },
+          { range: '0 - 10,000', retail: '10%', jewellery: '5%' },
+          { range: '10,001 - 25,000', retail: '15%', jewellery: '7.5%' },
+          { range: '25,001 - 75,000', retail: '20%', jewellery: '10%' },
+          { range: '75,001 - 1,50,000', retail: '25%', jewellery: '12.5%' },
+          { range: '1,50,001 - 3,00,000', retail: '30%', jewellery: '15%' },
+          { range: '3,00,001 - 5,00,000', retail: '32.5%', jewellery: '16.25%' },
+          { range: '5,00,001 & Above', retail: '35%', jewellery: '17.5%' },
         ].map((slab, i) => (
           <motion.div
             key={slab.range}
             initial={{ x: -20, opacity: 0 }}
             whileInView={{ x: 0, opacity: 1 }}
             viewport={{ once: true }}
-            transition={{ delay: i * 0.1 }}
+            transition={{ delay: i * 0.06 }}
             style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               padding: '10px 0',
-              borderBottom: i < 3 ? '1px solid var(--cp-border)' : 'none',
+              borderBottom: i < 6 ? '1px solid var(--cp-border)' : 'none',
               fontSize: 13,
             }}
           >
-            <span style={{ color: 'var(--cp-text)' }}>{slab.range}</span>
-            <span style={{ color: 'var(--cp-gold)', fontWeight: 600 }}>{slab.points}</span>
+            <span style={{ color: 'var(--cp-text)', flex: 1.2 }}>{slab.range}</span>
+            <span style={{ color: 'var(--cp-gold)', fontWeight: 600, flex: 0.7, textAlign: 'center' }}>{slab.retail}</span>
+            <span style={{ color: 'var(--cp-gold)', fontWeight: 600, flex: 1, textAlign: 'right' }}>{slab.jewellery}</span>
           </motion.div>
         ))}
       </motion.div>
