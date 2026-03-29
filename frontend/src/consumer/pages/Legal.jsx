@@ -13,6 +13,10 @@ export default function Legal() {
         <h1>Legal</h1>
       </div>
 
+      <div className="legal-section" data-testid="points-value-section" style={{ background: 'linear-gradient(135deg, #2c1810, #5D3A1A)', color: '#fff', borderRadius: 12, padding: '16px 20px', margin: '0 16px 16px' }}>
+        <p style={{ fontSize: 16, fontWeight: 700, textAlign: 'center', margin: 0 }}>10 Points = INR 1</p>
+      </div>
+
       <div className="legal-section" data-testid="terms-section">
         <div className="legal-header">
           <FileText size={22} />
