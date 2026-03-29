@@ -222,8 +222,29 @@ export default function BillUpload() {
               <div className="capture-icon">
                 <Camera size={40} />
               </div>
-              <h2>Scan your bill</h2>
-              <p>Take a photo or select from gallery</p>
+              <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Great Choice!</h2>
+
+              <div style={{ textAlign: 'left', padding: '0 8px', marginBottom: 16, color: 'var(--cp-text)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 15 }}>
+                  <span style={{ color: 'var(--cp-gold)', fontWeight: 600 }}>-</span>
+                  <span>Tap the Camera icon. <Camera size={16} style={{ display: 'inline', verticalAlign: 'middle', color: 'var(--cp-gold)' }} /></span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10, fontSize: 15 }}>
+                  <span style={{ color: 'var(--cp-gold)', fontWeight: 600 }}>-</span>
+                  <span>Upload your CP67 Shopping Bill using Camera or Gallery.</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 15 }}>
+                  <span style={{ color: 'var(--cp-gold)', fontWeight: 600 }}>-</span>
+                  <span>Share it with us.</span>
+                </div>
+              </div>
+
+              <p style={{ fontSize: 15, fontWeight: 600, color: 'var(--cp-text)', marginBottom: 4 }}>
+                Earn your Homeland Advantage Loyalty points instantly!
+              </p>
+              <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--cp-gold)', letterSpacing: '0.02em' }}>
+                More Bills = More Points = More Rewards
+              </p>
 
               {cameraError && (
                 <div className="camera-error" data-testid="camera-error">
@@ -242,16 +263,6 @@ export default function BillUpload() {
               </div>
 
               <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} hidden />
-            </div>
-
-            <div className="bill-tips">
-              <h3>Tips for best results</h3>
-              <ul>
-                <li>Ensure the entire bill is visible</li>
-                <li>Avoid glare and shadows</li>
-                <li>Bill should be from CP67 Mall stores</li>
-                <li>Bill should not be older than 15 days</li>
-              </ul>
             </div>
           </motion.div>
         )}
