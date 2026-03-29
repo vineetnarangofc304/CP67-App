@@ -3747,7 +3747,7 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
                 # Update local DB
                 await db.users.update_one({"id": user["id"]}, {"$set": {"balance_points": balance}})
                 
-                points_msg = f"""Homeland Advantage Loyalty Points Summary:
+                points_msg = f"""*Homeland Advantage Loyalty Points Summary:*
 
 Points Earned: {total_earned}
 Points Redeemed: {redeemed}
@@ -3778,9 +3778,9 @@ Available Points: {balance}"""
                 
                 await db.users.update_one({"id": user["id"]}, {"$set": {"balance_points": balance}})
                 
-                redeem_msg = f"""Redeem your points at Participating Brands and Enjoy Instant Discounts.
+                redeem_msg = f"""*You have {balance} Homeland Advantage Points.*
 
-Your available points: {balance}"""
+Redeem your points at Participating Brands and Enjoy Instant Discounts."""
                 
                 buttons = [
                     {"id": "know_more", "title": "Know More"},
@@ -3800,7 +3800,7 @@ Your available points: {balance}"""
             
             elif message == "know_more" or "know more" in msg_lower:
                 # KNOW MORE (per revised flow document)
-                know_more_msg = """Explore Homeland Advantage, CP67 Mall's Loyalty Program.
+                know_more_msg = """*Explore Homeland Advantage, CP67 Mall's Loyalty Program.*
 
 Check participating brands, points earning and redemption, and program terms.
 
@@ -3848,7 +3848,7 @@ Support Desk: Ground Floor"""
                 
             elif message == "upload_bill" or "upload" in msg_lower or msg_lower.strip() == "1" or ("bill" in msg_lower and "upload" in msg_lower):
                 # UPLOAD BILL PROMPT (per revised flow document)
-                upload_msg = """Great Choice! Tap the Camera icon.
+                upload_msg = """*Great Choice!* Tap the Camera icon.
 
 Upload your CP67 Shopping Bill using Camera or Gallery. Share it with us.
 

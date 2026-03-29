@@ -409,6 +409,13 @@
   line-height: 1.6;
 }
 
+.login-terms-link {
+  color: var(--cp-brown);
+  text-decoration: underline;
+  cursor: pointer;
+  font-weight: 500;
+}
+
 .login-ha-logo {
   width: 120px;
   height: auto;
@@ -593,6 +600,14 @@
   font-weight: 800;
   color: white;
   margin-top: 2px;
+}
+
+.points-card-name {
+  font-size: 14px;
+  color: var(--cp-gold-light);
+  font-weight: 600;
+  margin-top: 4px;
+  letter-spacing: 0.3px;
 }
 
 .points-card-right {

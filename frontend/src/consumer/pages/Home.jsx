@@ -38,8 +38,7 @@ export default function Home({ onMenuOpen }) {
           <button className="home-menu-btn" onClick={onMenuOpen} data-testid="menu-btn"><Menu size={22} /></button>
           <img src="/ha-logo-white.png" alt="Homeland Advantage" className="home-ha-logo" />
           <div className="home-greeting">
-            <p className="home-greeting-sub">Welcome back,</p>
-            <h1 data-testid="home-user-name">{firstName}</h1>
+            <h1 data-testid="home-user-name">Homeland Advantage</h1>
           </div>
         </div>
         <button className="home-bell" onClick={() => navigate('/app/notifications')} data-testid="notifications-btn">
@@ -54,6 +53,7 @@ export default function Home({ onMenuOpen }) {
           <div className="points-card-left">
             <span className="points-label">CP67 Points</span>
             <h2 className="points-value">{(u.balance_points || 0).toLocaleString()}</h2>
+            <span className="points-card-name">{firstName}</span>
           </div>
           <div className="points-card-right">
             <span className={`tier-badge tier-${(u.tier || 'Bronze').toLowerCase()}`}>{u.tier || 'Bronze'}</span>

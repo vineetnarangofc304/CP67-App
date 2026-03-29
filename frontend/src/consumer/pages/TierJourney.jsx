@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Award, ChevronRight, ChevronDown, ChevronUp, Star, Crown, Shield, Gem, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Award, ChevronRight, ChevronDown, ChevronUp, Star, Crown, Shield, Gem, TrendingUp, Diamond, Zap, Trophy } from 'lucide-react';
 import { useConsumerAuth, API } from '../ConsumerApp';
 
 const TIER_ICONS = {
@@ -9,13 +9,19 @@ const TIER_ICONS = {
   Silver: Star,
   Gold: Crown,
   Platinum: Gem,
+  Titanium: Zap,
+  Diamond: Diamond,
+  Privilege: Trophy,
 };
 
 const TIER_COLORS = {
   Bronze: { bg: '#CD7F32', gradient: 'linear-gradient(135deg, #CD7F32 0%, #A0522D 100%)', light: '#F5E6D3' },
   Silver: { bg: '#C0C0C0', gradient: 'linear-gradient(135deg, #C0C0C0 0%, #A8A8A8 100%)', light: '#F0F0F0' },
   Gold: { bg: '#D4AF37', gradient: 'linear-gradient(135deg, #D4AF37 0%, #B8960C 100%)', light: '#FFF8E1' },
-  Platinum: { bg: '#6B5CE7', gradient: 'linear-gradient(135deg, #6B5CE7 0%, #8B5CF6 100%)', light: '#EDE9FE' },
+  Platinum: { bg: '#E5E4E2', gradient: 'linear-gradient(135deg, #E5E4E2 0%, #B0AFA8 100%)', light: '#F5F5F4' },
+  Titanium: { bg: '#878681', gradient: 'linear-gradient(135deg, #878681 0%, #5A5A56 100%)', light: '#EDEDEC' },
+  Diamond: { bg: '#4FC3F7', gradient: 'linear-gradient(135deg, #4FC3F7 0%, #0288D1 100%)', light: '#E1F5FE' },
+  Privilege: { bg: '#2c1810', gradient: 'linear-gradient(135deg, #2c1810 0%, #5D3A1A 100%)', light: '#F5E6D3' },
 };
 
 const EARNING_SLABS = [

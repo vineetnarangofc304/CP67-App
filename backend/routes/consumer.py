@@ -625,9 +625,14 @@ async def list_stores(category: str = None, search: str = None, floor: str = Non
             "is_active": True
         })
 
-    EXCLUDED_FLOORS = {"Food Court", "Third Floor"}
+    EXCLUDED_FLOORS = {"Food Court"}
     categories = sorted([c for c in await _db.brands.distinct("category", {"is_active": {"$ne": False}, "brand_name": {"$exists": True, "$ne": ""}}) if c])
     floors_list = sorted([f for f in await _db.brands.distinct("floor", {"is_active": {"$ne": False}, "brand_name": {"$exists": True, "$ne": ""}}) if f and f not in EXCLUDED_FLOORS])
+    # Ensure Third Floor is always available
+    if "Third Floor" not in floors_list:
+        floors_list.append("Third Floor")
+    floor_order = ["First Floor", "Ground Floor", "Lower Ground", "Second Floor", "Third Floor"]
+    floors_list.sort(key=lambda f: floor_order.index(f) if f in floor_order else 99)
 
     return {"stores": stores, "categories": categories, "floors": floors_list}
 
@@ -760,10 +765,13 @@ async def get_wallet(current_user=Depends(get_current_consumer)):
 
 def calculate_tier(total_points):
     tiers = [
-        {"name": "Bronze", "min": 0, "max": 1999, "color": "#CD7F32", "next": "Silver", "next_at": 2000},
-        {"name": "Silver", "min": 2000, "max": 4999, "color": "#C0C0C0", "next": "Gold", "next_at": 5000},
-        {"name": "Gold", "min": 5000, "max": 9999, "color": "#FFD700", "next": "Platinum", "next_at": 10000},
-        {"name": "Platinum", "min": 10000, "max": 999999, "color": "#E5E4E2", "next": None, "next_at": None},
+        {"name": "Bronze", "min": 0, "max": 2499, "color": "#CD7F32", "next": "Silver", "next_at": 2500},
+        {"name": "Silver", "min": 2500, "max": 9999, "color": "#C0C0C0", "next": "Gold", "next_at": 10000},
+        {"name": "Gold", "min": 10000, "max": 24999, "color": "#FFD700", "next": "Platinum", "next_at": 25000},
+        {"name": "Platinum", "min": 25000, "max": 49999, "color": "#E5E4E2", "next": "Titanium", "next_at": 50000},
+        {"name": "Titanium", "min": 50000, "max": 99999, "color": "#878681", "next": "Diamond", "next_at": 100000},
+        {"name": "Diamond", "min": 100000, "max": 249999, "color": "#B9F2FF", "next": "Privilege", "next_at": 250000},
+        {"name": "Privilege", "min": 250000, "max": 999999, "color": "#2c1810", "next": None, "next_at": None},
     ]
     for t in tiers:
         if t["min"] <= total_points <= t["max"]:
@@ -1383,7 +1391,7 @@ async def get_participating_brands(
         })
 
     # Get unique floors and categories for filter dropdowns
-    EXCLUDED_FLOORS = {"Food Court", "Third Floor"}
+    EXCLUDED_FLOORS = {"Food Court"}
     all_floors = []
     all_categories = []
     async for b in _db.brands.find({"brand_name": {"$exists": True, "$ne": ""}, "is_eligible": {"$ne": False}}, {"_id": 0, "floor": 1, "category": 1}):
@@ -1392,8 +1400,11 @@ async def get_participating_brands(
         if b.get("category") and b["category"] not in all_categories:
             all_categories.append(b["category"])
 
-    floor_order = ["Lower Ground", "Ground Floor", "First Floor", "Second Floor"]
+    floor_order = ["Lower Ground", "Ground Floor", "First Floor", "Second Floor", "Third Floor"]
     all_floors.sort(key=lambda f: floor_order.index(f) if f in floor_order else 99)
+    # Ensure Third Floor is always available
+    if "Third Floor" not in all_floors:
+        all_floors.append("Third Floor")
     all_categories.sort()
 
     return {
@@ -1559,13 +1570,34 @@ async def get_tier_info(current_user=Depends(get_current_consumer)):
             "Exclusive Gold member events",
             "Early access to sales",
         ]},
-        {"name": "Platinum", "min_points": 25000, "color": "#8B5CF6", "benefits": [
+        {"name": "Platinum", "min_points": 25000, "color": "#E5E4E2", "benefits": [
             "All Gold benefits",
             "3x points multiplier",
             "Free valet parking (anytime)",
             "Personal shopping concierge",
             "Platinum-only lounge access",
-            "Anniversary bonus rewards",
+        ]},
+        {"name": "Titanium", "min_points": 50000, "color": "#878681", "benefits": [
+            "All Platinum benefits",
+            "4x points multiplier",
+            "Dedicated relationship manager",
+            "Exclusive Titanium member events",
+            "Priority mall services",
+        ]},
+        {"name": "Diamond", "min_points": 100000, "color": "#B9F2FF", "benefits": [
+            "All Titanium benefits",
+            "5x points multiplier",
+            "VIP lounge & concierge",
+            "Complimentary gift wrapping",
+            "Exclusive Diamond previews",
+        ]},
+        {"name": "Privilege", "min_points": 250000, "color": "#2c1810", "benefits": [
+            "All Diamond benefits",
+            "Maximum points multiplier",
+            "Personal stylist service",
+            "All-access VIP privileges",
+            "Exclusive invitation-only events",
+            "Anniversary luxury rewards",
         ]},
     ]
 

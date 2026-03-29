@@ -170,7 +170,7 @@ export default function Login() {
         )}
 
         <p className="login-terms">
-          By continuing, you agree to CP67's Terms of Service and Privacy Policy
+          By continuing, you agree to CP67's <span className="login-terms-link" onClick={() => navigate('/app/legal')} data-testid="terms-link">Terms of Service</span> and Privacy Policy
         </p>
       </div>
     </motion.div>
