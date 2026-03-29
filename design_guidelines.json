@@ -1,177 +1,126 @@
 {
-  "identity": {
-    "name": "E1",
-    "role": "Anti-AI Designer",
-    "principles": [
-      "Fusion over Imitation",
-      "Emotion First",
-      "Content is King",
-      "Zoom In",
-      "Negative Space",
-      "Contrast"
-    ]
-  },
+  "theme": "Kinetic Luxury (Old Money Tech + Gen Z Energy)",
   "typography": {
-    "primary_font": "Manrope",
-    "secondary_font": "IBM Plex Sans",
-    "import_url": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Manrope:wght@300;400;500;600;700;800&display=swap",
-    "usage": {
-      "headings": "font-family: 'Manrope', sans-serif;",
-      "body": "font-family: 'IBM Plex Sans', sans-serif;"
+    "headings": {
+      "family": "Playfair Display, serif",
+      "weights": ["400", "700", "900"],
+      "usage": "Use tight letter spacing (tracking-tighter) for large headings > 32px. Never use Inter or Roboto for headings."
     },
-    "rules": [
-      "Headings (h1-h3) must use Manrope, weight 600 or 700.",
-      "Body text, tables, and inputs must use IBM Plex Sans.",
-      "Use tracking-tight (-0.02em) for headings larger than 24px.",
-      "Use tracking-wide (0.05em) for uppercase labels (e.g., table headers, badges)."
-    ]
+    "body": {
+      "family": "Outfit, sans-serif",
+      "weights": ["300", "400", "500", "600"],
+      "usage": "Use geometric sans for data, UI elements, and reading text."
+    },
+    "labels": {
+      "style": "Uppercase, tiny text (text-[10px] to text-xs), wide tracking (tracking-[0.2em])",
+      "usage": "Use for overlines, tier names, and metadata."
+    }
   },
   "colors": {
-    "theme": "light",
-    "palette": {
-      "primary": {
-        "name": "CP67 Navy",
-        "hex": "#0F172A",
-        "tailwind": "bg-slate-900 text-white"
-      },
-      "secondary": {
-        "name": "CP67 Gold",
-        "hex": "#D4AF37",
-        "tailwind": "text-[#D4AF37] border-[#D4AF37]"
-      },
-      "fundle_accents": {
-        "red": "#FF3B30",
-        "green": "#34C759",
-        "purple": "#AF52DE",
-        "yellow": "#FFCC00",
-        "black": "#1A1A1A"
-      },
-      "backgrounds": {
-        "app_bg": "#F8FAFC",
-        "card_bg": "#FFFFFF",
-        "sidebar_bg": "#FFFFFF"
-      },
-      "text": {
-        "primary": "#0F172A",
-        "secondary": "#64748B",
-        "muted": "#94A3B8"
-      }
+    "background": {
+      "light": "#FAF8F5",
+      "dark": "#120D0A",
+      "card_light": "#FFFFFF",
+      "card_dark": "#1A1410"
     },
-    "css_variables": {
-      "--background": "210 40% 98%",
-      "--foreground": "222 47% 11%",
-      "--card": "0 0% 100%",
-      "--card-foreground": "222 47% 11%",
-      "--popover": "0 0% 100%",
-      "--popover-foreground": "222 47% 11%",
-      "--primary": "222 47% 11%",
-      "--primary-foreground": "210 40% 98%",
-      "--secondary": "210 40% 96.1%",
-      "--secondary-foreground": "222 47% 11%",
-      "--muted": "210 40% 96.1%",
-      "--muted-foreground": "215.4 16.3% 46.9%",
-      "--accent": "210 40% 96.1%",
-      "--accent-foreground": "222 47% 11%",
-      "--destructive": "0 84.2% 60.2%",
-      "--destructive-foreground": "210 40% 98%",
-      "--border": "214.3 31.8% 91.4%",
-      "--input": "214.3 31.8% 91.4%",
-      "--ring": "222 47% 11%",
-      "--radius": "0.5rem"
-    }
-  },
-  "layout": {
-    "grid_system": "Bento Grid Mode B (High Density)",
-    "spacing": {
-      "container_padding": "p-6 md:p-8 lg:p-12",
-      "element_gap": "gap-4 md:gap-6",
-      "internal_padding": "p-4 or p-6"
+    "brand": {
+      "cp_gold": "#C68939",
+      "cp_dark": "#2E2219",
+      "flash_gold": "#FFDF73",
+      "electric_amber": "#FF5B00"
+    },
+    "text": {
+      "primary": "#2E2219",
+      "secondary": "#7A6B5D",
+      "inverse": "#FAF8F5",
+      "gold_accent": "#C68939"
+    },
+    "tiers": {
+      "bronze": "#CD7F32",
+      "silver": "#C0C0C0",
+      "gold": "#FFD700",
+      "platinum": "#E5E4E2",
+      "titanium": "#878681",
+      "diamond": "#B9F2FF",
+      "privilege": "#1A1410"
     },
     "rules": [
-      "Dashboard must use a dense grid (grid-cols-1 md:grid-cols-3 lg:grid-cols-4).",
-      "Widgets must stretch to fill height (h-full).",
-      "Sidebar must be fixed on the left (w-64) for desktop.",
-      "Main content area must have a subtle background color (#F8FAFC) to differentiate from white cards."
+      "No pure black or pure white. Always tint neutrals with brown/gold.",
+      "Use Electric Amber strictly for gamified notification dots, urgent CTAs, and confetti/coin bursts.",
+      "Use CP Gold as the primary anchor for premium structural elements."
     ]
   },
-  "components": {
-    "cards": {
-      "style": "Flat, 1px border, no shadow",
-      "classes": "bg-white border border-slate-200 rounded-lg shadow-none hover:border-slate-300 transition-colors"
-    },
-    "buttons": {
-      "primary": "bg-slate-900 text-white hover:bg-slate-800 rounded-md px-4 py-2 font-medium transition-all active:scale-95",
-      "secondary": "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 rounded-md px-4 py-2 font-medium transition-all",
-      "accent": "bg-[#D4AF37] text-white hover:bg-[#C5A028] rounded-md px-4 py-2 font-medium"
-    },
-    "inputs": {
-      "style": "Minimalist, focus ring",
-      "classes": "bg-white border-slate-200 focus:ring-2 focus:ring-slate-900 focus:border-transparent rounded-md"
-    },
-    "status_badges": {
-      "pending": "bg-yellow-100 text-yellow-800 border border-yellow-200",
-      "approved": "bg-green-100 text-green-800 border border-green-200",
-      "rejected": "bg-red-100 text-red-800 border border-red-200",
-      "processing": "bg-blue-100 text-blue-800 border border-blue-200"
-    }
-  },
-  "assets": {
-    "images": {
-      "login_background": {
-        "url": "https://images.unsplash.com/photo-1761333485882-c60907725574?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MDV8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMjBzaG9wcGluZyUyMG1hbGwlMjBpbnRlcmlvcnxlbnwwfHx8fDE3NjkyNDgzNzN8MA&ixlib=rb-4.1.0&q=85",
-        "alt": "Modern Mall Atrium",
-        "usage": "Full screen background for Login page with overlay"
-      },
-      "qr_illustration": {
-        "url": "https://images.pexels.com/photos/15467758/pexels-photo-15467758.jpeg",
-        "alt": "Scanning QR Code",
-        "usage": "Hero image for QR Management section or empty state"
-      },
-      "bill_processing": {
-        "url": "https://images.unsplash.com/photo-1634733988138-bf2c3a2a13fa?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NjZ8MHwxfHNlYXJjaHwxfHxyZXRhaWwlMjByZWNlaXB0JTIwcGFwZXJ8ZW58MHx8fHwxNzY5MjQ4Mzc2fDA&ixlib=rb-4.1.0&q=85",
-        "alt": "Receipt Roll",
-        "usage": "Visual for Bill Upload/Processing section"
-      }
-    },
-    "icons": {
-      "library": "lucide-react",
-      "preferred_icons": [
-        "LayoutDashboard",
-        "QrCode",
-        "Users",
-        "Receipt",
-        "MessageCircle",
-        "BarChart3",
-        "Settings",
-        "LogOut"
-      ]
-    }
-  },
   "visual_enhancers": {
-    "glassmorphism": "backdrop-blur-md bg-white/80 border-b border-white/20 (Use only for sticky headers)",
-    "texture": "Add a subtle noise texture to the sidebar background to reduce sterility.",
-    "animation": "Use 'framer-motion' for page transitions and list entrance animations (staggerChildren)."
+    "surfaces": {
+      "glass": "backdrop-blur-2xl bg-white/70 border border-white/40 shadow-[0_8px_32px_rgba(46,34,25,0.08)]",
+      "dark_glass": "backdrop-blur-2xl bg-[#1A1410]/80 border border-white/10 shadow-2xl",
+      "neumorphic_emboss": "bg-[#FAF8F5] shadow-[inset_0_2px_4px_rgba(255,255,255,0.8),_0_4px_8px_rgba(46,34,25,0.05)]"
+    },
+    "textures": [
+      "Subtle noise overlay (opacity-5) over dark sections to remove digital flatness.",
+      "Gold foil reflections using sweeping linear gradients animated on hover."
+    ]
+  },
+  "grids_and_layouts": {
+    "spacing": "Generous. Use p-6, p-8. Elements should breathe.",
+    "patterns": {
+      "home_bento": "Asymmetric bento grid for home. 1 tall hero banner (col-span-full row-span-2), followed by 2 small square cards (col-span-1) side by side.",
+      "bottom_nav": "Floating pill shape instead of full-width docked bar. Use Glassmorphism. Leave mb-6 gap from the bottom of the screen.",
+      "tier_ladder": "Vertical masonry or overlapping staggered cards. Next tier should peek out from the top, enticing the user to scroll."
+    }
+  },
+  "motion": {
+    "splash_screen": "Elements must 'drop from top' with heavy spring physics (type: 'spring', damping: 12, stiffness: 100). Logo draws in or drops with staggered text.",
+    "staggered_reveals": "Lists (Explore Stores, Wallet Transactions) must stagger in (0.05s delay per item) from bottom-up.",
+    "gamification": "Number counters ticking up dynamically for points. Coin drop animations on bill scan success using Framer Motion.",
+    "micro_interactions": "Scale down to 0.95 on tap (whileTap / whilePressed) for all interactive cards and buttons."
+  },
+  "accessibility": {
+    "testing": "All interactive elements MUST include data-testid attributes (e.g., data-testid='home-banner-card').",
+    "contrast": "Ensure CP Gold text is readable against Cream bg. If not, darken it for text, use it purely as background with white text."
+  },
+  "image_urls": {
+    "home_banners": [
+      {
+        "url": "https://images.pexels.com/photos/36712930/pexels-photo-36712930.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Two young women happily carrying colorful shopping bags in a bright mall.",
+        "usage": "Hero banner for 'Explore New Spring Collections'"
+      },
+      {
+        "url": "https://images.pexels.com/photos/4983474/pexels-photo-4983474.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Stylish young woman window shopping in a modern mall.",
+        "usage": "Secondary banner for 'Premium Brands Directory'"
+      }
+    ],
+    "textures_and_gamification": [
+      {
+        "url": "https://images.pexels.com/photos/14331332/pexels-photo-14331332.png?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Abstract golden textured wall background.",
+        "usage": "Background overlay for the Platinum/Diamond Tier cards to give them a premium physical feel."
+      },
+      {
+        "url": "https://images.pexels.com/photos/12198525/pexels-photo-12198525.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "3D rendering of golden coins stacked.",
+        "usage": "Graphic element for 'Points Balance' or 'Rewards Wallet' section to emphasize gamification."
+      }
+    ]
   },
   "instructions_to_main_agent": [
-    "1. INSTALL FONTS: Add the Google Fonts import to public/index.html or src/index.css immediately.",
-    "2. SETUP THEME: Update tailwind.config.js and src/index.css with the provided CSS variables and colors.",
-    "3. LAYOUT: Create a 'DashboardLayout' component that includes the Sidebar and Topbar. Use the 'Bento Grid' philosophy for the main content area.",
-    "4. WHATSAPP SIMULATOR: Build this as a split-screen view. Left side: Chat Interface (mimic WhatsApp UI). Right side: Debug/Context panel (showing JSON data, user state).",
-    "5. BILL PROCESSING: Create a 'Queue' view. Left: List of pending bills. Right: Detail view with the bill image and OCR data fields side-by-side.",
-    "6. USE SHADCN: Use Shadcn components for all interactive elements (Forms, Dialogs, Dropdowns) but override their default styling to match the 'Flat & Clean' aesthetic defined in 'components'.",
-    "7. DATA-TESTID: Ensure every button, input, and link has a unique data-testid attribute."
+    "Write code using standard .js and .jsx files. Do not use TypeScript (.tsx).",
+    "Use framer-motion heavily for all entrance animations, specifically the requested 'dropping from top' effect on the splash screen.",
+    "Rewrite the App's structural layout to enforce a strict max-w-[480px] mobile-first container centered on desktop screens, mimicking a physical phone view.",
+    "Do NOT use pure transparent backgrounds for the bottom navigation or sticky headers. Use the provided glassmorphism rules.",
+    "Implement the 7-tier journey (Bronze, Silver, Gold, Platinum, Titanium, Diamond, Privilege) as a vertical, overlapping 'ladder' using scroll-linked animations in Framer Motion.",
+    "Add gamification micro-animations: animated number counters for points, and a confetti/coin burst effect when scanning a bill.",
+    "Convert existing styles to Tailwind CSS where possible, gradually replacing the 4300+ line consumer.css. Use Shadcn components for complex logic but strip their default borders/radii to match the 'Kinetic Luxury' bento aesthetic.",
+    "Ensure all interactive elements have data-testid attributes for testing.",
+    "Use lucide-react for all icons, keeping a consistent stroke width of 1.5 for elegance.",
+    "Toasts must use 'sonner' for modern, stacked notifications."
   ],
-  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
-    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
-    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
-    "Create depth through layered design elements with z-index hierarchy.",
-    "Use glass-morphism effects with backdrop filters (12-24px blur) for overlays.",
-    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms.",
-    "You MUST NOT center align the app container.",
-    "Always use modern button styles like pill-shaped, or sharp button with interaction animations.",
-    "NEVER use AI assistant Emoji characters for icons.",
-    "Every interaction needs micro-animations - hover states, transitions.",
-    "Use 2-3x more spacing than feels comfortable.",
-    "Use 'sonner' for toasts."
+  "universal_guidelines": [
+    "Never center align the entire app container (no .App { text-align: center; }).",
+    "Avoid the 'AI slop' aesthetic. Create depth with layered z-indexes and dramatic scale contrasts in typography.",
+    "Do not use generic assistant emojis for icons.",
+    "Every interaction needs a micro-animation (hover, tap, press)."
   ]
 }
