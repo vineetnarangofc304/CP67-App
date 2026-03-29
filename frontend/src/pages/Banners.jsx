@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../App';
 import { toast } from 'sonner';
-import { Plus, Trash2, Edit, Image, ToggleLeft, ToggleRight, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Edit, Image, ToggleLeft, ToggleRight, Upload } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -11,8 +11,11 @@ export default function Banners() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editBanner, setEditBanner] = useState(null);
-  const [form, setForm] = useState({ title: '', subtitle: '', image_url: '', position: 1, is_active: true });
-  const [uploading, setUploading] = useState(false);
+  const [form, setForm] = useState({ title: '', subtitle: '', position: 1, is_active: true });
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const fileRef = useRef(null);
 
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -29,20 +32,58 @@ export default function Banners() {
 
   useEffect(() => { fetchBanners(); }, [fetchBanners]);
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error('Image must be under 5MB'); return; }
+    setSelectedFile(file);
+    setPreview(URL.createObjectURL(file));
+  };
+
+  const uploadImage = async (bannerId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_URL}/admin/banners/${bannerId}/upload-image`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    return res.ok;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const url = editBanner ? `${API_URL}/admin/banners/${editBanner.id}` : `${API_URL}/admin/banners`;
-    const method = editBanner ? 'PUT' : 'POST';
+    if (!editBanner && !selectedFile) { toast.error('Please select an image'); return; }
+    setSaving(true);
     try {
-      const res = await fetch(url, { method, headers, body: JSON.stringify(form) });
-      if (res.ok) {
-        toast.success(editBanner ? 'Banner updated!' : 'Banner created!');
-        setShowForm(false);
-        setEditBanner(null);
-        setForm({ title: '', subtitle: '', image_url: '', position: 1, is_active: true });
-        fetchBanners();
+      if (editBanner) {
+        const res = await fetch(`${API_URL}/admin/banners/${editBanner.id}`, {
+          method: 'PUT', headers, body: JSON.stringify(form)
+        });
+        if (!res.ok) throw new Error();
+        if (selectedFile) await uploadImage(editBanner.id, selectedFile);
+        toast.success('Banner updated!');
+      } else {
+        const res = await fetch(`${API_URL}/admin/banners`, {
+          method: 'POST', headers, body: JSON.stringify(form)
+        });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        if (selectedFile) await uploadImage(data.banner.id, selectedFile);
+        toast.success('Banner created!');
       }
+      resetForm();
+      fetchBanners();
     } catch { toast.error('Failed to save banner'); }
+    setSaving(false);
+  };
+
+  const resetForm = () => {
+    setShowForm(false);
+    setEditBanner(null);
+    setForm({ title: '', subtitle: '', position: 1, is_active: true });
+    setSelectedFile(null);
+    setPreview(null);
   };
 
   const deleteBanner = async (id) => {
@@ -64,27 +105,11 @@ export default function Banners() {
     } catch { /* */ }
   };
 
-  const handleImageUpload = async (bannerId, file) => {
-    setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-    try {
-      const res = await fetch(`${API_URL}/admin/banners/${bannerId}/upload-image`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-      if (res.ok) {
-        toast.success('Image uploaded!');
-        fetchBanners();
-      }
-    } catch { toast.error('Upload failed'); }
-    setUploading(false);
-  };
-
   const openEdit = (b) => {
     setEditBanner(b);
-    setForm({ title: b.title, subtitle: b.subtitle, image_url: b.image_url, position: b.position, is_active: b.is_active });
+    setForm({ title: b.title, subtitle: b.subtitle, position: b.position, is_active: b.is_active });
+    setSelectedFile(null);
+    setPreview(b.image_url || null);
     setShowForm(true);
   };
 
@@ -95,7 +120,7 @@ export default function Banners() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700 }}>Banner Management</h1>
         <button
-          onClick={() => { setShowForm(true); setEditBanner(null); setForm({ title: '', subtitle: '', image_url: '', position: banners.length + 1, is_active: true }); }}
+          onClick={() => { setShowForm(true); setEditBanner(null); setForm({ title: '', subtitle: '', position: banners.length + 1, is_active: true }); setSelectedFile(null); setPreview(null); }}
           style={{ background: '#2c1810', color: '#fff', padding: '10px 20px', borderRadius: 8, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
           data-testid="add-banner-btn"
         >
@@ -111,26 +136,44 @@ export default function Banners() {
               <div>
                 <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Title</label>
                 <input value={form.title} onChange={e => setForm(f => ({...f, title: e.target.value}))}
-                  style={{ width: '100%', padding: 10, border: '1px solid #d1d5db', borderRadius: 8 }}
+                  style={{ width: '100%', padding: 10, border: '1px solid #d1d5db', borderRadius: 8, boxSizing: 'border-box' }}
                   placeholder="Banner title" data-testid="banner-title-input" />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Position</label>
                 <input type="number" value={form.position} onChange={e => setForm(f => ({...f, position: parseInt(e.target.value) || 1}))}
-                  style={{ width: '100%', padding: 10, border: '1px solid #d1d5db', borderRadius: 8 }}
+                  style={{ width: '100%', padding: 10, border: '1px solid #d1d5db', borderRadius: 8, boxSizing: 'border-box' }}
                   data-testid="banner-position-input" />
               </div>
               <div style={{ gridColumn: '1/3' }}>
                 <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Subtitle</label>
                 <input value={form.subtitle} onChange={e => setForm(f => ({...f, subtitle: e.target.value}))}
-                  style={{ width: '100%', padding: 10, border: '1px solid #d1d5db', borderRadius: 8 }}
+                  style={{ width: '100%', padding: 10, border: '1px solid #d1d5db', borderRadius: 8, boxSizing: 'border-box' }}
                   placeholder="Banner subtitle" data-testid="banner-subtitle-input" />
               </div>
               <div style={{ gridColumn: '1/3' }}>
-                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Image URL (or upload after creating)</label>
-                <input value={form.image_url} onChange={e => setForm(f => ({...f, image_url: e.target.value}))}
-                  style={{ width: '100%', padding: 10, border: '1px solid #d1d5db', borderRadius: 8 }}
-                  placeholder="https://..." data-testid="banner-image-url-input" />
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Banner Image {!editBanner && <span style={{ color: '#ef4444' }}>*</span>}</label>
+                <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileSelect} data-testid="banner-file-input" />
+                <div
+                  onClick={() => fileRef.current?.click()}
+                  style={{
+                    border: '2px dashed #d1d5db', borderRadius: 12, padding: preview ? 0 : 32,
+                    textAlign: 'center', cursor: 'pointer', background: '#fafafa',
+                    overflow: 'hidden', position: 'relative', minHeight: 140
+                  }}
+                  data-testid="banner-upload-zone"
+                >
+                  {preview ? (
+                    <img src={preview} alt="Preview" style={{ width: '100%', height: 180, objectFit: 'cover', display: 'block' }} />
+                  ) : (
+                    <>
+                      <Upload size={32} color="#9ca3af" />
+                      <p style={{ color: '#6b7280', marginTop: 8, fontSize: 14 }}>Click to upload image</p>
+                      <p style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>JPG, PNG, WebP (Max 5MB)</p>
+                    </>
+                  )}
+                </div>
+                {selectedFile && <p style={{ fontSize: 12, color: '#22c55e', marginTop: 4 }}>{selectedFile.name}</p>}
               </div>
               <div>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
@@ -140,11 +183,12 @@ export default function Banners() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
-              <button type="submit" style={{ background: '#2c1810', color: '#fff', padding: '10px 24px', borderRadius: 8, border: 'none', cursor: 'pointer' }}
+              <button type="submit" disabled={saving}
+                style={{ background: '#2c1810', color: '#fff', padding: '10px 24px', borderRadius: 8, border: 'none', cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1 }}
                 data-testid="save-banner-btn">
-                {editBanner ? 'Update' : 'Create'}
+                {saving ? 'Saving...' : editBanner ? 'Update' : 'Create'}
               </button>
-              <button type="button" onClick={() => { setShowForm(false); setEditBanner(null); }}
+              <button type="button" onClick={resetForm}
                 style={{ padding: '10px 24px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer' }}>
                 Cancel
               </button>
@@ -157,7 +201,7 @@ export default function Banners() {
         {banners.map(b => (
           <div key={b.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', display: 'flex', opacity: b.is_active ? 1 : 0.6 }}
             data-testid={`banner-card-${b.id}`}>
-            <div style={{ width: 200, height: 120, flexShrink: 0, background: '#f3f4f6', position: 'relative' }}>
+            <div style={{ width: 200, height: 120, flexShrink: 0, background: '#f3f4f6' }}>
               {b.image_url ? (
                 <img src={b.image_url} alt={b.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
@@ -173,11 +217,6 @@ export default function Banners() {
                 <span style={{ fontSize: 12, color: '#9ca3af' }}>Position: {b.position}</span>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <label style={{ cursor: 'pointer' }}>
-                  <input type="file" accept="image/*" style={{ display: 'none' }}
-                    onChange={e => e.target.files[0] && handleImageUpload(b.id, e.target.files[0])} />
-                  <Image size={18} color="#6b7280" title="Upload image" />
-                </label>
                 <button onClick={() => toggleActive(b)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}
                   title={b.is_active ? 'Deactivate' : 'Activate'} data-testid={`toggle-banner-${b.id}`}>
                   {b.is_active ? <ToggleRight size={22} color="#22c55e" /> : <ToggleLeft size={22} color="#9ca3af" />}
