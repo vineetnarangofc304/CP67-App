@@ -1,39 +1,27 @@
 {
-  "theme": "Kinetic Luxury (Old Money Tech + Gen Z Energy)",
-  "typography": {
-    "headings": {
-      "family": "Playfair Display, serif",
-      "weights": ["400", "700", "900"],
-      "usage": "Use tight letter spacing (tracking-tighter) for large headings > 32px. Never use Inter or Roboto for headings."
-    },
-    "body": {
-      "family": "Outfit, sans-serif",
-      "weights": ["300", "400", "500", "600"],
-      "usage": "Use geometric sans for data, UI elements, and reading text."
-    },
-    "labels": {
-      "style": "Uppercase, tiny text (text-[10px] to text-xs), wide tracking (tracking-[0.2em])",
-      "usage": "Use for overlines, tier names, and metadata."
-    }
+  "theme_archetype": {
+    "name": "Archetype 5: Jewel & Luxury (Dark Theme)",
+    "rationale": "The app is a premium mall loyalty PWA. The splash screen established a 'Kinetic Luxury' aesthetic with dark chocolate and gold. To fix the 'jarring transition' to plain inner pages, we must carry this luxurious, deep, dark theme across all screens, utilizing glassmorphism, metallic accents, and fluid motion."
   },
   "colors": {
     "background": {
-      "light": "#FAF8F5",
-      "dark": "#120D0A",
-      "card_light": "#FFFFFF",
-      "card_dark": "#1A1410"
+      "base": "#140B00",
+      "surface": "#1A0F00",
+      "surface_elevated": "#261700"
     },
     "brand": {
-      "cp_gold": "#C68939",
-      "cp_dark": "#2E2219",
-      "flash_gold": "#FFDF73",
-      "electric_amber": "#FF5B00"
+      "primary": "#C9A55A",
+      "primary_light": "#E3C584",
+      "primary_dark": "#8F7233"
     },
     "text": {
-      "primary": "#2E2219",
-      "secondary": "#7A6B5D",
-      "inverse": "#FAF8F5",
-      "gold_accent": "#C68939"
+      "primary": "#F5F0E8",
+      "secondary": "#A3988B",
+      "disabled": "#5C5346"
+    },
+    "borders": {
+      "subtle": "rgba(245, 240, 232, 0.1)",
+      "gold": "rgba(201, 165, 90, 0.4)"
     },
     "tiers": {
       "bronze": "#CD7F32",
@@ -42,85 +30,91 @@
       "platinum": "#E5E4E2",
       "titanium": "#878681",
       "diamond": "#B9F2FF",
-      "privilege": "#1A1410"
-    },
-    "rules": [
-      "No pure black or pure white. Always tint neutrals with brown/gold.",
-      "Use Electric Amber strictly for gamified notification dots, urgent CTAs, and confetti/coin bursts.",
-      "Use CP Gold as the primary anchor for premium structural elements."
-    ]
-  },
-  "visual_enhancers": {
-    "surfaces": {
-      "glass": "backdrop-blur-2xl bg-white/70 border border-white/40 shadow-[0_8px_32px_rgba(46,34,25,0.08)]",
-      "dark_glass": "backdrop-blur-2xl bg-[#1A1410]/80 border border-white/10 shadow-2xl",
-      "neumorphic_emboss": "bg-[#FAF8F5] shadow-[inset_0_2px_4px_rgba(255,255,255,0.8),_0_4px_8px_rgba(46,34,25,0.05)]"
-    },
-    "textures": [
-      "Subtle noise overlay (opacity-5) over dark sections to remove digital flatness.",
-      "Gold foil reflections using sweeping linear gradients animated on hover."
-    ]
-  },
-  "grids_and_layouts": {
-    "spacing": "Generous. Use p-6, p-8. Elements should breathe.",
-    "patterns": {
-      "home_bento": "Asymmetric bento grid for home. 1 tall hero banner (col-span-full row-span-2), followed by 2 small square cards (col-span-1) side by side.",
-      "bottom_nav": "Floating pill shape instead of full-width docked bar. Use Glassmorphism. Leave mb-6 gap from the bottom of the screen.",
-      "tier_ladder": "Vertical masonry or overlapping staggered cards. Next tier should peek out from the top, enticing the user to scroll."
+      "privilege": "#8A2BE2"
     }
   },
-  "motion": {
-    "splash_screen": "Elements must 'drop from top' with heavy spring physics (type: 'spring', damping: 12, stiffness: 100). Logo draws in or drops with staggered text.",
-    "staggered_reveals": "Lists (Explore Stores, Wallet Transactions) must stagger in (0.05s delay per item) from bottom-up.",
-    "gamification": "Number counters ticking up dynamically for points. Coin drop animations on bill scan success using Framer Motion.",
-    "micro_interactions": "Scale down to 0.95 on tap (whileTap / whilePressed) for all interactive cards and buttons."
+  "typography": {
+    "headings": {
+      "font_family": "Playfair Display, serif",
+      "weights": ["400", "600"],
+      "tracking": "tracking-tight"
+    },
+    "body": {
+      "font_family": "Outfit, sans-serif",
+      "weights": ["300", "400", "500"]
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-semibold text-[#C9A55A]",
+      "h2": "text-2xl sm:text-3xl font-medium text-[#C9A55A]",
+      "h3": "text-xl font-medium text-[#F5F0E8]",
+      "body": "text-base font-light text-[#A3988B]",
+      "caption": "text-xs tracking-wider uppercase text-[#A3988B]"
+    }
   },
-  "accessibility": {
-    "testing": "All interactive elements MUST include data-testid attributes (e.g., data-testid='home-banner-card').",
-    "contrast": "Ensure CP Gold text is readable against Cream bg. If not, darken it for text, use it purely as background with white text."
+  "surfaces_and_textures": {
+    "glass_panel": "bg-black/40 backdrop-blur-xl border border-white/10 shadow-lg",
+    "gold_panel": "bg-gradient-to-br from-[#8F7233]/20 to-black/60 border border-[#C9A55A]/30",
+    "shimmer_effect": "relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/10 before:to-transparent",
+    "card_hover": "hover:bg-white/5 hover:border-[#C9A55A]/50 transition-all duration-300"
   },
-  "image_urls": {
-    "home_banners": [
-      {
-        "url": "https://images.pexels.com/photos/36712930/pexels-photo-36712930.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-        "description": "Two young women happily carrying colorful shopping bags in a bright mall.",
-        "usage": "Hero banner for 'Explore New Spring Collections'"
+  "motion_and_interactions": {
+    "page_transition": {
+      "initial": { "opacity": 0, "y": 15 },
+      "animate": { "opacity": 1, "y": 0 },
+      "exit": { "opacity": 0, "y": -15 },
+      "transition": { "duration": 0.4, "ease": [0.22, 1, 0.36, 1] }
+    },
+    "stagger_children": {
+      "container": {
+        "hidden": { "opacity": 0 },
+        "show": {
+          "opacity": 1,
+          "transition": { "staggerChildren": 0.1 }
+        }
       },
-      {
-        "url": "https://images.pexels.com/photos/4983474/pexels-photo-4983474.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-        "description": "Stylish young woman window shopping in a modern mall.",
-        "usage": "Secondary banner for 'Premium Brands Directory'"
+      "item": {
+        "hidden": { "opacity": 0, "y": 20 },
+        "show": { "opacity": 1, "y": 0, "transition": { "type": "spring", "stiffness": 300, "damping": 24 } }
       }
-    ],
-    "textures_and_gamification": [
-      {
-        "url": "https://images.pexels.com/photos/14331332/pexels-photo-14331332.png?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-        "description": "Abstract golden textured wall background.",
-        "usage": "Background overlay for the Platinum/Diamond Tier cards to give them a premium physical feel."
-      },
-      {
-        "url": "https://images.pexels.com/photos/12198525/pexels-photo-12198525.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-        "description": "3D rendering of golden coins stacked.",
-        "usage": "Graphic element for 'Points Balance' or 'Rewards Wallet' section to emphasize gamification."
-      }
-    ]
+    },
+    "tap_scale": "whileTap={{ scale: 0.95 }}",
+    "kinetic_tilt": "Apply framer-motion useMotionValue and useTransform to create a subtle 3D tilt effect on the Home Points Card and Wallet Balance Card based on touch coordinates."
   },
-  "instructions_to_main_agent": [
-    "Write code using standard .js and .jsx files. Do not use TypeScript (.tsx).",
-    "Use framer-motion heavily for all entrance animations, specifically the requested 'dropping from top' effect on the splash screen.",
-    "Rewrite the App's structural layout to enforce a strict max-w-[480px] mobile-first container centered on desktop screens, mimicking a physical phone view.",
-    "Do NOT use pure transparent backgrounds for the bottom navigation or sticky headers. Use the provided glassmorphism rules.",
-    "Implement the 7-tier journey (Bronze, Silver, Gold, Platinum, Titanium, Diamond, Privilege) as a vertical, overlapping 'ladder' using scroll-linked animations in Framer Motion.",
-    "Add gamification micro-animations: animated number counters for points, and a confetti/coin burst effect when scanning a bill.",
-    "Convert existing styles to Tailwind CSS where possible, gradually replacing the 4300+ line consumer.css. Use Shadcn components for complex logic but strip their default borders/radii to match the 'Kinetic Luxury' bento aesthetic.",
-    "Ensure all interactive elements have data-testid attributes for testing.",
-    "Use lucide-react for all icons, keeping a consistent stroke width of 1.5 for elegance.",
-    "Toasts must use 'sonner' for modern, stacked notifications."
-  ],
-  "universal_guidelines": [
-    "Never center align the entire app container (no .App { text-align: center; }).",
-    "Avoid the 'AI slop' aesthetic. Create depth with layered z-indexes and dramatic scale contrasts in typography.",
-    "Do not use generic assistant emojis for icons.",
-    "Every interaction needs a micro-animation (hover, tap, press)."
-  ]
+  "page_specific_instructions": {
+    "home_page": {
+      "points_card": "Redesign as a premium 'physical' digital card. Use kinetic_tilt. Include a gold foil gradient background and a subtle shimmer. Data-testid: 'home-points-card'.",
+      "quick_actions": "Replace plain circles with glass_panel rounded-2xl squares. Icons should be gold and have a subtle hover lift. Data-testid: 'quick-action-btn'.",
+      "banner": "Use 'mall_luxury_banner' image with a bottom gradient fade into the dark background to avoid hard edges."
+    },
+    "wallet_page": {
+      "balance_card": "Centerpiece of the page. Should have a glowing aura behind it (e.g., div with blur-3xl bg-gold/20).",
+      "stats_row": "Use glassmorphism pills for Earned/Redeemed/Expired.",
+      "tier_progress": "A sleek, thin progress bar with a luminous gold fill and a glowing dot at the current position."
+    },
+    "explore_stores": {
+      "search_bar": "Glassmorphism input with gold focus ring. Data-testid: 'store-search-input'.",
+      "category_pills": "Horizontal scrollable list. Active pill is border-[#C9A55A] text-[#C9A55A], inactive is border-white/10 text-[#A3988B].",
+      "store_cards": "Bento-style grid. Cards must use glass_panel with the store image acting as a background layer heavily dimmed (bg-black/60) so text is readable. Data-testid: 'explore-store-card'."
+    },
+    "tier_journey": {
+      "layout": "Vertical timeline ladder. Each tier is a card that reveals on scroll.",
+      "visuals": "Use 'diamond_tier_reward' image for the top tier. Apply respective tier colors (bronze, silver, gold, platinum, titanium, diamond, privilege) as subtle glows or text gradients. Active tier has a gold_panel. Data-testid: 'tier-journey-card'."
+    },
+    "profile": {
+      "header": "Avatar surrounded by a gold ring. Member since and points clearly visible.",
+      "info_card": "A stacked list inside a glass_panel. Each row separated by a subtle border-b border-white/10."
+    }
+  },
+  "media_assets": {
+    "mall_luxury_banner": "https://images.pexels.com/photos/8337785/pexels-photo-8337785.jpeg",
+    "diamond_tier_reward": "https://images.pexels.com/photos/6532369/pexels-photo-6532369.jpeg",
+    "abstract_gold_bg": "https://images.pexels.com/photos/21031387/pexels-photo-21031387.jpeg",
+    "store_fashion_1": "https://images.pexels.com/photos/11911863/pexels-photo-11911863.jpeg",
+    "store_fashion_2": "https://images.pexels.com/photos/35045845/pexels-photo-35045845.jpeg"
+  },
+  "component_usage": {
+    "icons": "Use lucide-react (already installed) with minimal strokeWidth (e.g., 1.5) for elegance.",
+    "buttons": "Primary buttons: solid gold (#C9A55A) background, dark chocolate text (#1A0F00), rounded-full, with tap_scale animation.",
+    "testing": "All interactive elements MUST have data-testid. e.g., 'scan-bill-btn', 'redeem-btn'."
+  }
 }
