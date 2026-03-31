@@ -1,137 +1,93 @@
-# CP67 Mall - Homeland Advantage - Complete Project Documentation
+# CP67 Mall - Homeland Advantage PWA
 
-## Project Overview
-A comprehensive mall engagement, loyalty, and discovery platform for CP67 Mall, Mohali. The system consists of:
-1. **Consumer Mobile PWA** - Premium mobile-first app for shoppers (at `/app/*`)
-2. **Admin Dashboard** - Mall management backend (at `/`)
-3. **WhatsApp Integration** - Bill upload and loyalty via WhatsApp (Karix)
-4. **Fundle/TagnPay Integration** - Points and loyalty engine
+## Product Overview
+A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of a consumer mobile PWA, an admin backend, a brand/store dashboard, and an AI/analytics engine.
 
-## Architecture
+## Core Requirements
+- Consumer PWA: Loyalty wallet, bill upload (OCR), tier journey, store directory, referrals, events, mall maps, amenities
+- Admin Dashboard: Brand management, bill review, campaign engine, banner management, analytics
+- WhatsApp Bot (Karix): OTP, bill upload instructions, points check, redeem, know more, support
+- Backend: FastAPI, MongoDB, TagnPay/Fundle loyalty, Gemini Vision OCR, Karix WhatsApp
+
+## Tech Stack
+- Frontend: React, PWA, framer-motion, Tailwind-adjacent CSS, Google Fonts (Playfair Display + Outfit)
+- Backend: FastAPI (Python), Motor AsyncIOMotorClient (MongoDB)
+- Database: MongoDB (DB_NAME: test_database)
+- Integrations: TagnPay/Fundle (Loyalty), Karix (WhatsApp), Gemini Vision (OCR)
+
+## Design Theme
+- **Kinetic Luxury Dark Theme**: Dark chocolate (#140B00) backgrounds, gold (#C9A55A) accents, glassmorphism panels, Playfair Display headings, Outfit body font, framer-motion animations, shimmer effects, grain texture overlay
+
+## What's Been Implemented
+
+### Phase 1-8 (Previous Sessions)
+- Full consumer PWA with all pages (Home, Wallet, Stores, Profile, Tier Journey, Bill Upload, Events, Offers, Rewards, Help, Legal, Mall Map, Amenities, Referrals)
+- Admin Dashboard (Brands, Bills, Campaigns, Banners, Dashboard stats)
+- WhatsApp Bot (Karix webhooks) with deduplication
+- TagnPay loyalty integration
+- OCR bill parsing with Gemini Vision
+- 1050 brand staff phone numbers blocked
+
+### Phase 9 (Previous Session)
+- Kinetic Luxury UI Overhaul (Welcome splash, animated logo, floating particles)
+- Banner admin direct image upload
+- Bill upload instructions
+- T&C and earning slabs (10 Points = INR 1)
+- WhatsApp webhook formatting fixes
+
+### Phase 10 (Current Session - March 31, 2026)
+- **WhatsApp Bot Formatting Verified**: All 4 responses (My Points, Redeem Points, Know More, Help/Support) confirmed working correctly - no bullets, proper line breaks, Karix 200 Accepted
+- **Brand Staff Excel Analyzed**: New file has 1049 valid phones, same as existing 1050 blocked - no new numbers needed
+- **Dark Luxury Theme Overhaul (ALL Inner Pages)**: Complete CSS overhaul from light cream (#FAF8F5) to dark chocolate (#140B00) for every consumer page:
+  - Home: Dark background, gold points card, glass quick actions, gold accents
+  - Wallet: Gold glow aura on balance card, glass stats, gold progress bar with luminous dot
+  - Stores: Glass search with gold focus ring, dark store cards, gold active category pills
+  - Profile: Gold avatar ring, glass personal info card, gold edit links
+  - Tier Journey: Full dark theme, tier-colored icon glows, gold progress line
+  - Login/Onboarding: Dark inputs, gold borders, gold gradient buttons
+  - Bill Upload: Dark capture zone, gold dashed border
+  - Events/Offers/Rewards/Help/Legal/Mall Map/Amenities/Referrals: All updated
+  - Bottom Nav: Dark glass pill with gold camera button
+  - Side Drawer: Dark background with gold accents
+- Testing: 100% pass rate (Iteration 23)
+
+## Pending Issues
+- Karix WhatsApp QR Image Not Being Delivered (BLOCKED - external Karix platform issue)
+
+## Upcoming Tasks (P1)
+- Campaign-aware bill processing: Auto-apply multipliers during active campaigns
+- PWA Installation Guide: Modal for mall visitors on "Add to Home Screen"
+
+## Future Tasks (P2)
+- Parking access flow (WhatsApp)
+- Automate Footfall Data via Email Parser
+- Refactor monolithic server.py (5200+ lines → modular /routes, /services, /models)
+- Brand/Store Dashboard (separate brand login)
+- Advanced Analytics (RFM, CLV, AI Concierge)
+
+## Key API Endpoints
+- POST /api/whatsapp/webhook - Karix WhatsApp entry point
+- POST /api/consumer/auth/send-otp & /api/consumer/auth/verify-otp - Consumer auth
+- POST /api/admin/banners/{banner_id}/upload-image - Direct banner upload
+- GET /api/consumer/home - Home page data
+- GET /api/consumer/stores - Store listing
+
+## Database Collections
+- brands, whatsapp_dedup (TTL), campaigns, blocked_phones, banners, users, bills, whatsapp_logs
+
+## Code Architecture
 ```
 /app/
 ├── backend/
-│   ├── server.py              # Admin APIs, WhatsApp, Campaign CRUD, Footfall, Analytics
-│   ├── routes/
-│   │   └── consumer.py        # Consumer app APIs (Map, Amenities, Referral, Wallet, Campaigns, Tiers)
-│   └── .env
+│   ├── routes/consumer.py
+│   ├── server.py (monolithic - 5200+ lines)
+│   └── tests/
 ├── frontend/
 │   ├── src/
-│   │   ├── consumer/           # Consumer PWA
-│   │   │   ├── ConsumerApp.jsx
-│   │   │   ├── consumer.css
-│   │   │   ├── components/     # BottomNav, SideDrawer
-│   │   │   └── pages/          # 20+ screens
-│   │   ├── pages/              # Admin dashboard (Campaigns.jsx, Dashboard.jsx, etc.)
+│   │   ├── consumer/ (PWA: components/, pages/, consumer.css)
+│   │   ├── pages/ (Admin dashboard)
 │   │   └── App.js
-│   └── public/
-│       ├── manifest.json       # PWA manifest
-│       └── homeland-advantage-logo.jpeg  # Updated app logo
-└── memory/PRD.md
+└── memory/
+    ├── PRD.md
+    └── test_credentials.md
 ```
-
-## What's Implemented
-
-### Phase 1 - Core PWA (Mar 17)
-- OTP login, Onboarding, Home, Store directory, Wallet, Bill upload + OCR, Events, Offers, Profile, Notifications
-
-### Phase 2 - Core Loyalty (Mar 21)
-- Enhanced Wallet, Transactions, Bill History, Rewards Catalog, Help & Support, Side Drawer, WhatsApp Bot
-
-### Phase 3 - Map, Amenities, Referrals (Mar 21-22)
-- Mall Map, Amenities, Referrals, Participating Brands, Admin brand eligibility toggles
-
-### Phase 4 - Campaign Engine & Tier System (Mar 22)
-- Campaign CRUD (4 types: multiplier, bonus, spend_threshold, first_visit)
-- Tier Journey page (Bronze→Silver→Gold→Platinum progression)
-- Explore/Stores fix (brands from DB with floor/category filters)
-- Root /health endpoint for production deployment
-
-### Phase 5 - Content & Dashboard Updates (Mar 24)
-- **Logo Updated**: New Homeland Advantage gift box logo
-- **Points Earning Slab**: 7-tier table (Retail vs Jewellery/Electronics %)
-- **10 Points = INR 1**: Conversion note in Wallet and TierJourney
-- **Terms & Conditions**: Full 11-clause T&C on Legal page
-- **Amenities Updated**: Real CP67 data (Restrooms by floor, Services, Parking & EV, etc.)
-- **WhatsApp Messages Updated**: All bot messages per Revised Doc
-- **Dashboard Stats**: Total Footfall, Registrations, Bill Uploads with footfall manual entry
-
-## Key API Endpoints
-
-### Consumer (/api/consumer/*)
-- Auth: `POST /auth/send-otp`, `POST /auth/verify-otp`
-- Content: `GET /home`, `GET /stores`, `GET /offers`, `GET /events`
-- Wallet: `GET /wallet`, `GET /wallet/detailed`, `GET /transactions`, `GET /rewards`
-- Bills: `POST /bills/upload`, `GET /bills`
-- Discovery: `GET /mall-map`, `GET /amenities`, `GET /participating-brands`
-- Tiers: `GET /tier-info`, `GET /campaigns`
-
-### Admin (/api/admin/*)
-- Brands: `GET/POST /brands`, `PUT/DELETE /brands/{id}`
-- Campaigns: `GET/POST /campaigns`, `PUT/DELETE /campaigns/{id}`, `PUT /campaigns/{id}/toggle`
-- Footfall: `GET/POST /admin/footfall`
-- Analytics: `GET /analytics/dashboard`
-
-## Database Collections
-- `users`, `bills`, `brands`, `campaigns`, `footfall`
-- `offers`, `events`, `banners`, `notifications`
-- `redemptions`, `rewards`, `admin_users`, `qr_analytics`
-
-### Phase 6 - Floor Filter Bug Fix (Mar 24)
-- **Floor Filter Sync**: Fixed floor string consistency between Admin and Consumer pages
-- **Duplicate Brand Cleanup**: Removed duplicate "Lakmé Salon" entry (one with no floor)
-- **All 101 brands now have proper floor assignments**: Ground Floor (23), First Floor (28), Second Floor (27), Food Court (21), Lower Ground (2)
-- **Admin FLOORS dropdown**: Includes all valid options (Ground Floor, First Floor, Second Floor, Third Floor, Food Court, Lower Ground)
-- **Testing**: 100% pass rate on backend (20/20) and frontend floor filter tests (iteration 19)
-
-### Phase 7 - Security, Banners & UI Updates (Mar 27)
-- **Brand Staff Blocking**: 1050 phone numbers from xlsx blocked from loyalty registration (403 on send-otp & verify-otp)
-- **Event Banners**: Vipul Goyal & Vivek Samtani comedy show banners added to home carousel and events
-- **Admin Banner Management**: Full CRUD page at /banners with image upload support
-- **Wallet Button**: "Rewards" renamed to "Redeem", now navigates to /app/redeem (Redeem at Brand section)
-- **Floor Filter Cleanup**: Removed "Food Court" from consumer floor dropdowns
-- **Profile Cleanup**: Removed Referral Code section
-- **HA Logo Update**: New white-background logo placed across Login, Welcome, Home, SideDrawer, PWA manifest
-
-### Phase 8 - Home, Tiers, T&C & WhatsApp Updates (Mar 29)
-- **Home Header**: Removed "Welcome back,". Shows "Homeland Advantage" as program name. Customer name shown inside points card.
-- **7-Tier System**: Updated from 4 tiers to 7: Bronze, Silver, Gold, Platinum, Titanium, Diamond, Privilege
-- **Third Floor**: Added back to floor dropdown filter (Food Court remains excluded)
-- **Login T&C Link**: "Terms of Service" is now clickable, navigates to Legal page (made public route)
-- **WhatsApp Bot**: Bold first lines (*text*) for Redeem Points, My Points, Know More, Upload Bill responses
-### Phase 9 - Kinetic Luxury UI Overhaul (Mar 29)
-- **Welcome Splash**: Animated opening with spring-loaded logo drop, floating gold coin particles, staggered feature reveals, shimmer CTA button
-- **Home Page**: Animated points counter, shimmer sweep on cards, staggered quick actions, auto-rotating banner carousel with crossfade, Playfair Display heading typography
-- **Tier Journey Ladder**: Vertical progress ladder with connected line, current tier pulse/glow, locked tier icons, expandable benefits on tap, animated progress bar, Points Earning Slab
-- **Floating Pill Nav**: Glassmorphism bottom nav (12px from bottom, blur(24px)), gold camera scan button, layout-animated active tab indicator
-- **Wallet**: AnimatedCounter for points, shimmer card sweep, spring entrance
-- **Stores**: Staggered card entrance animations, whileTap scale feedback
-- **SideDrawer**: Spring transition, staggered menu item reveals
-- **Typography**: Playfair Display for headings, Outfit for body (Google Fonts)
-- **Micro-interactions**: whileTap scale on all buttons/cards, hover rotations on icons
-- **Testing**: 100% pass — Backend 9/9, Frontend 27/27 (iteration 22)
-
-## Known Issues
-- **Karix WhatsApp Image Delivery (BLOCKED):** Code correct but images not delivered (external issue)
-
-## Database Collections
-- `users`, `bills`, `brands`, `campaigns`, `footfall`
-- `offers`, `events`, `banners`, `notifications`
-- `redemptions`, `rewards`, `admin_users`, `qr_analytics`
-- `blocked_phones` (1050 brand staff numbers, indexed on phone)
-
-## Credentials
-- Admin: admin / CP67Admin@2025
-- Dev OTP: 1234 (phone: 9876543210)
-- Consumer app: /app/welcome | Admin dashboard: /
-
-## Upcoming Tasks
-- (P1) Campaign-aware bill processing (auto-apply multipliers during active campaigns)
-- (P1) PWA Install Guide modal for mall visitors (iOS & Android instructions)
-
-## Future Tasks (P2-P3)
-- Refactor monolithic server.py (5000+ lines) into /routes, /services, /models
-- Automate Footfall Data via Email Parser
-- Brand/Store Dashboard (separate brand login)
-- Advanced Analytics (RFM, CLV, cohort)
-- AI Mall Concierge, Push Notifications, CMS
