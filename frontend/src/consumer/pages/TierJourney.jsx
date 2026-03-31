@@ -5,13 +5,13 @@ import { ArrowLeft, Award, Star, Crown, Shield, Gem, Zap, Diamond, Trophy, Lock,
 import { useConsumerAuth, API } from '../ConsumerApp';
 
 const TIER_META = {
-  Bronze: { icon: Shield, gradient: 'linear-gradient(135deg, #CD7F32 0%, #A0522D 100%)', light: '#F5E6D3' },
-  Silver: { icon: Star, gradient: 'linear-gradient(135deg, #D4D4D4 0%, #A8A8A8 100%)', light: '#F0F0F0' },
-  Gold: { icon: Crown, gradient: 'linear-gradient(135deg, #FFD700 0%, #B8960C 100%)', light: '#FFF8E1' },
-  Platinum: { icon: Gem, gradient: 'linear-gradient(135deg, #E8E8E0 0%, #B0AFA8 100%)', light: '#F5F5F4' },
-  Titanium: { icon: Zap, gradient: 'linear-gradient(135deg, #878681 0%, #5A5A56 100%)', light: '#EDEDEC' },
-  Diamond: { icon: Diamond, gradient: 'linear-gradient(135deg, #4FC3F7 0%, #0288D1 100%)', light: '#E1F5FE' },
-  Privilege: { icon: Trophy, gradient: 'linear-gradient(135deg, #2E2219 0%, #5D3A1A 100%)', light: '#F5E6D3' },
+  Bronze: { icon: Shield, gradient: 'linear-gradient(135deg, #CD7F32 0%, #A0522D 100%)', glow: 'rgba(205, 127, 50, 0.2)' },
+  Silver: { icon: Star, gradient: 'linear-gradient(135deg, #D4D4D4 0%, #A8A8A8 100%)', glow: 'rgba(192, 192, 192, 0.2)' },
+  Gold: { icon: Crown, gradient: 'linear-gradient(135deg, #FFD700 0%, #B8960C 100%)', glow: 'rgba(255, 215, 0, 0.2)' },
+  Platinum: { icon: Gem, gradient: 'linear-gradient(135deg, #E8E8E0 0%, #B0AFA8 100%)', glow: 'rgba(229, 228, 226, 0.2)' },
+  Titanium: { icon: Zap, gradient: 'linear-gradient(135deg, #878681 0%, #5A5A56 100%)', glow: 'rgba(135, 134, 129, 0.2)' },
+  Diamond: { icon: Diamond, gradient: 'linear-gradient(135deg, #4FC3F7 0%, #0288D1 100%)', glow: 'rgba(79, 195, 247, 0.2)' },
+  Privilege: { icon: Trophy, gradient: 'linear-gradient(135deg, #8A2BE2 0%, #5D1A9E 100%)', glow: 'rgba(138, 43, 226, 0.2)' },
 };
 
 function AnimatedProgress({ value, delay = 0 }) {
@@ -57,14 +57,16 @@ export default function TierJourney() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      style={{ padding: '0 0 100px', background: 'var(--cp-bg)', minHeight: '100vh' }}
+      style={{ padding: '0 0 100px', background: '#140B00', minHeight: '100vh' }}
       data-testid="tier-journey-screen"
     >
       {/* Header */}
       <div style={{
-        background: 'linear-gradient(135deg, #2E2219, #5D3A1A)',
+        background: 'linear-gradient(135deg, #1A0F00, #2A1A08)',
         padding: '16px 20px 32px',
         borderRadius: '0 0 24px 24px',
+        border: '1px solid rgba(201, 165, 90, 0.1)',
+        borderTop: 'none',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
           <motion.button
@@ -131,7 +133,7 @@ export default function TierJourney() {
       <div style={{ padding: '24px 20px', position: 'relative' }}>
         <h2 style={{
           fontFamily: 'Playfair Display, serif', fontSize: 20, fontWeight: 700,
-          color: 'var(--cp-text)', marginBottom: 24,
+          color: '#F5F0E8', marginBottom: 24,
         }}>
           Your Reward Ladder
         </h2>
@@ -142,8 +144,8 @@ export default function TierJourney() {
           left: 38,
           top: 90,
           bottom: 40,
-          width: 3,
-          background: 'linear-gradient(to bottom, var(--cp-gold), var(--cp-border))',
+          width: 2,
+          background: 'linear-gradient(to bottom, rgba(201,165,90,0.4), rgba(201,165,90,0.05))',
           borderRadius: 2,
           zIndex: 0,
         }} />
@@ -180,10 +182,11 @@ export default function TierJourney() {
                   <motion.div
                     style={{
                       width: 38, height: 38, borderRadius: 12, flexShrink: 0,
-                      background: isCurrentOrPast ? meta.gradient : '#e8e4de',
+                      background: isCurrentOrPast ? meta.gradient : 'rgba(255,255,255,0.06)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       border: isCurrent ? '3px solid var(--cp-flash-gold)' : '2px solid transparent',
                       position: 'relative',
+                      boxShadow: isCurrent ? `0 0 20px ${meta.glow || 'rgba(201,165,90,0.2)'}` : 'none',
                     }}
                     animate={isCurrent ? { scale: [1, 1.08, 1] } : {}}
                     transition={isCurrent ? { duration: 2, repeat: Infinity } : {}}
@@ -213,13 +216,13 @@ export default function TierJourney() {
                         <div style={{
                           fontSize: 16, fontWeight: 700,
                           fontFamily: 'Playfair Display, serif',
-                          color: isCurrentOrPast ? 'var(--cp-text)' : 'var(--cp-text-3)',
+                          color: isCurrentOrPast ? '#F5F0E8' : '#5C5346',
                         }}>
                           {tier.name}
                           {isCurrent && (
                             <span style={{
                               marginLeft: 8, fontSize: 10, fontFamily: 'var(--font-body)',
-                              background: 'var(--cp-gold)', color: '#fff',
+                              background: 'var(--cp-gold)', color: '#1A0F00',
                               padding: '2px 8px', borderRadius: 20, fontWeight: 600,
                               textTransform: 'uppercase', letterSpacing: '0.1em',
                             }}>
@@ -228,12 +231,12 @@ export default function TierJourney() {
                           )}
                         </div>
                         <div style={{
-                          fontSize: 12, color: 'var(--cp-text-2)', marginTop: 2,
+                          fontSize: 12, color: '#A3988B', marginTop: 2,
                         }}>
                           {tier.min_points.toLocaleString()}+ points
                         </div>
                       </div>
-                      {isExpanded ? <ChevronUp size={16} color="var(--cp-text-3)" /> : <ChevronDown size={16} color="var(--cp-text-3)" />}
+                      {isExpanded ? <ChevronUp size={16} color="#5C5346" /> : <ChevronDown size={16} color="#5C5346" />}
                     </div>
 
                     {/* Expanded benefits */}
@@ -245,21 +248,22 @@ export default function TierJourney() {
                     >
                       <div style={{
                         marginTop: 12, padding: 14, borderRadius: 12,
-                        background: isCurrentOrPast ? (meta.light || '#f5f5f5') : '#f5f5f5',
-                        border: isCurrent ? '1px solid var(--cp-gold-border)' : '1px solid var(--cp-border)',
+                        background: isCurrentOrPast ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)',
+                        border: isCurrent ? '1px solid rgba(201, 165, 90, 0.3)' : '1px solid rgba(255,255,255,0.06)',
+                        boxShadow: isCurrent ? `0 0 20px ${meta.glow || 'rgba(201,165,90,0.1)'}` : 'none',
                       }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--cp-text-2)', marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#A3988B', marginBottom: 8 }}>
                           Benefits
                         </div>
                         {tier.benefits?.map((b, bi) => (
                           <div key={bi} style={{
                             display: 'flex', alignItems: 'center', gap: 8,
-                            fontSize: 13, color: 'var(--cp-text)',
+                            fontSize: 13, color: '#F5F0E8',
                             padding: '4px 0',
                           }}>
                             <div style={{
                               width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
-                              background: isCurrentOrPast ? 'var(--cp-gold)' : 'var(--cp-text-3)',
+                              background: isCurrentOrPast ? 'var(--cp-gold)' : '#5C5346',
                             }} />
                             {b}
                           </div>
@@ -276,28 +280,28 @@ export default function TierJourney() {
 
       {/* Points Earning Slab */}
       <motion.div
-        style={{ margin: '0 20px 20px', padding: 20, borderRadius: 16, background: '#fff', border: '1px solid var(--cp-border)' }}
+        style={{ margin: '0 20px 20px', padding: 20, borderRadius: 16, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
         initial={{ opacity: 0, y: 20 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         data-testid="points-earning-slab"
       >
-        <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: 17, fontWeight: 700, marginBottom: 14, color: 'var(--cp-text)' }}>
+        <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: 17, fontWeight: 700, marginBottom: 14, color: '#F5F0E8' }}>
           Points Earning Slab
         </h3>
         <div style={{
-          background: 'linear-gradient(135deg, #2E2219, #5D3A1A)',
-          borderRadius: 12, padding: '14px 16px', color: '#FFDF73',
+          background: 'linear-gradient(135deg, #C9A55A, #8F7233)',
+          borderRadius: 12, padding: '14px 16px', color: '#1A0F00',
           fontSize: 15, fontWeight: 700, textAlign: 'center', marginBottom: 14,
           fontFamily: 'Playfair Display, serif',
         }}>
           10 Points = INR 1
         </div>
         {/* Slab table header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '2px solid var(--cp-border)', marginBottom: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cp-text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', flex: 1.2 }}>Purchase (INR)</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cp-text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', flex: 0.7, textAlign: 'center' }}>Retail</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--cp-text-2)', textTransform: 'uppercase', letterSpacing: '0.05em', flex: 1, textAlign: 'right' }}>Jewellery & Electronics</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '2px solid rgba(255,255,255,0.1)', marginBottom: 4 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#A3988B', textTransform: 'uppercase', letterSpacing: '0.05em', flex: 1.2 }}>Purchase (INR)</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#A3988B', textTransform: 'uppercase', letterSpacing: '0.05em', flex: 0.7, textAlign: 'center' }}>Retail</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#A3988B', textTransform: 'uppercase', letterSpacing: '0.05em', flex: 1, textAlign: 'right' }}>Jewellery & Electronics</span>
         </div>
         {[
           { range: '0 - 10,000', retail: '10%', jewellery: '5%' },
@@ -317,13 +321,13 @@ export default function TierJourney() {
             style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               padding: '10px 0',
-              borderBottom: i < 6 ? '1px solid var(--cp-border)' : 'none',
+              borderBottom: i < 6 ? '1px solid rgba(255,255,255,0.06)' : 'none',
               fontSize: 13,
             }}
           >
-            <span style={{ color: 'var(--cp-text)', flex: 1.2 }}>{slab.range}</span>
-            <span style={{ color: 'var(--cp-gold)', fontWeight: 600, flex: 0.7, textAlign: 'center' }}>{slab.retail}</span>
-            <span style={{ color: 'var(--cp-gold)', fontWeight: 600, flex: 1, textAlign: 'right' }}>{slab.jewellery}</span>
+            <span style={{ color: '#F5F0E8', flex: 1.2 }}>{slab.range}</span>
+            <span style={{ color: '#C9A55A', fontWeight: 600, flex: 0.7, textAlign: 'center' }}>{slab.retail}</span>
+            <span style={{ color: '#C9A55A', fontWeight: 600, flex: 1, textAlign: 'right' }}>{slab.jewellery}</span>
           </motion.div>
         ))}
       </motion.div>
