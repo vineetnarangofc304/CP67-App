@@ -56,7 +56,7 @@
     "blocked_phone_example": "8146141325",
     "admin_username": "admin",
     "admin_password": "CP67Admin@2025",
-    "api_base_url": "https://brand-sync-staging.preview.emergentagent.com"
+    "api_base_url": "https://mall-engage-preview.preview.emergentagent.com"
   },
   "seed_data_creation": "None - using existing blocked_phones collection with 1050 numbers",
   "retest_needed": false,

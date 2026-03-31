@@ -3749,11 +3749,9 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
                 
                 points_msg = f"""*Homeland Advantage Loyalty Points Summary:*
 
-• Points Earned: {total_earned}
-
-• Points Redeemed: {redeemed}
-
-• Available Points: {balance}"""
+Points Earned: {total_earned}
+Points Redeemed: {redeemed}
+Available Points: {balance}"""
                 
                 buttons = [
                     {"id": "know_more", "title": "Know More"},
@@ -3782,9 +3780,7 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
                 
                 redeem_msg = f"""*You have {balance} Homeland Advantage Points.*
 
-• Redeem your points at Participating Brands.
-
-• Enjoy Instant Discounts."""
+Redeem your points at Participating Brands and Enjoy Instant Discounts."""
                 
                 buttons = [
                     {"id": "know_more", "title": "Know More"},
@@ -3806,11 +3802,7 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
                 # KNOW MORE (per revised flow document)
                 know_more_msg = """*Explore Homeland Advantage, CP67 Mall's Loyalty Program.*
 
-• Check participating brands.
-
-• Points earning and redemption.
-
-• Program terms.
+Check participating brands, points earning and redemption, and program terms.
 
 https://cp67.co.in/homelandadvantage"""
                 
@@ -3834,11 +3826,9 @@ https://cp67.co.in/homelandadvantage"""
                 # HELP / SUPPORT (per revised flow document)
                 support_msg = """*Need help? Contact us here:*
 
-• Email : advantage@homelandgroup.org
-
-• Mobile : 97296 76767
-
-• Support Desk: Ground Floor"""
+Email: advantage@homelandgroup.org
+Mobile: 97296 76767
+Support Desk: Ground Floor"""
                 
                 buttons = [
                     {"id": "know_more", "title": "Know More"},
