@@ -208,6 +208,7 @@ export default function Home({ onMenuOpen }) {
       {/* Trending Offers */}
       {data?.trending_offers?.length > 0 && (
         <motion.div className="home-section" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
+          <div className="gold-divider" style={{ margin: '4px 20px 16px' }} />
           <div className="home-section-header">
             <h2 style={{ fontFamily: 'Playfair Display, serif' }}>
               <Sparkles size={16} style={{ display: 'inline', marginRight: 6, color: 'var(--cp-gold)' }} />
@@ -244,6 +245,7 @@ export default function Home({ onMenuOpen }) {
       {/* Featured Stores */}
       {data?.featured_stores?.length > 0 && (
         <motion.div className="home-section" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
+          <div className="gold-divider" style={{ margin: '4px 20px 16px' }} />
           <div className="home-section-header">
             <h2 style={{ fontFamily: 'Playfair Display, serif' }}>Featured Stores</h2>
             <button onClick={() => navigate('/app/stores')} data-testid="see-all-stores">See All <ChevronRight size={16} /></button>

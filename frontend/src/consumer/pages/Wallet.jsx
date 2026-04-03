@@ -94,6 +94,7 @@ export default function Wallet() {
       </motion.div>
 
       {/* Points Breakdown */}
+      <div className="gold-divider" style={{ margin: '0 20px 16px' }} />
       <div className="wallet-breakdown" data-testid="points-breakdown">
         <div className="breakdown-item">
           <div className="breakdown-icon earn"><ArrowUpRight size={18} /></div>
