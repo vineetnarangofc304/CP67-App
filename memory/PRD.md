@@ -57,6 +57,9 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **Scanner QR regex updated**: ParkingScanner now extracts both `PKG-` and `PARK-` prefixes from QR scans
 - **completed_today stats fixed**: Uses IST midnight for daily exit count
 - **Parking Staff Login**: Added `parking` / `Parking@2025` role with access restricted to only Parking Scanner and Parking Report. Auto-redirects to Parking Scanner on login. All other admin pages blocked.
+- **Existing customer free parking bug fixed**: `process_parking_registration` now checks Fundle API for existing customers and denies free parking (sends "already registered" message instead of coupon)
+- **Parking Report shows PARK- coupons**: Report now merges `parking_sessions` + `parking_coupons` collections, with Type column (Session / Free Coupon)
+- **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 
 ## Upcoming Tasks (P1)
 - Campaign-aware bill processing: Auto-apply multipliers during active campaigns

@@ -264,7 +264,7 @@ class TagnPayClient:
         
         return None
     
-    async def register_customer(self, mobile_number: str, name: str, pan_number: str, source: str = "WhatsApp") -> Dict:
+    async def register_customer(self, mobile_number: str, name: str, pan_number: str, source: str = "WhatsApp", location_code: str = None) -> Dict:
         """Register new customer"""
         token = await self.get_token(mobile_number)
         if not token:
@@ -282,7 +282,7 @@ class TagnPayClient:
                 payload = {
                     "mobileno": mobile_number,
                     "customer_name": clean_name,
-                    "loc_id": LOCATION_CODE,
+                    "loc_id": location_code or LOCATION_CODE,
                     "email": "",
                     "gender": "O",
                     "reg_source": source,
@@ -2934,32 +2934,65 @@ async def process_parking_registration(phone: str, profile_name: str, source_cod
         if imported_fundle_customer:
             is_existing_fundle_user = True
         
-        customer_type = "new"
+        # EXISTING Fundle customer should NOT get free parking
         if is_existing_fundle_user:
-            customer_type = "existing"
-            balance_points = points_result["data"].get("balance_points", 0) if points_result.get("data") else 0
+            logger.info(f"Existing Fundle customer {mobile_10} tried parking QR - denying free parking")
+            existing_msg = f"""Hi {profile_name or 'there'}!
+
+You are already registered with Homeland Advantage.
+
+Free parking is available only for new members who register via the parking QR code.
+
+Use the menu below to explore your rewards!"""
+            menu_options = [
+                {"id": "upload_bill", "title": "Upload Bill", "description": "Upload your shopping bill to earn points"},
+                {"id": "my_points", "title": "My Points", "description": "Check your loyalty points balance"},
+                {"id": "redeem_points", "title": "Redeem Points", "description": "Redeem points at participating brands"},
+            ]
+            outbound_log = WhatsAppLog(user_phone=phone, direction="outbound", message_type="interactive", content=existing_msg)
+            await db.whatsapp_logs.insert_one(outbound_log.model_dump())
+            await send_whatsapp_list(phone, existing_msg, menu_options, header_text="Homeland Advantage", button_text="Menu")
+            
+            # Still save them in local DB if not already present
+            local_user = await db.users.find_one({"phone": phone})
+            if not local_user:
+                balance_points = points_result["data"].get("balance_points", 0) if points_result.get("data") else 0
+                new_user = UserData(
+                    phone=phone,
+                    name=profile_name or "Customer",
+                    kyc_status=True,
+                    customer_type="existing",
+                    registration_time=datetime.now(timezone.utc).isoformat(),
+                    first_touch_source=source_code,
+                    first_touch_qr=qr_data["qr_code_id"] if qr_data else None,
+                    first_touch_message="Parking QR - Existing User",
+                    balance_points=balance_points
+                )
+                await db.users.insert_one(new_user.model_dump())
+            return
+        
+        # NEW USER - Register with Fundle using PK001 location code
+        reg_result = await tagnpay_client.register_customer(
+            mobile_number=mobile_10,
+            name=profile_name or "Customer",
+            pan_number="",
+            source="WhatsApp_Parking",
+            location_code="PK001"
+        )
+        if reg_result.get("success"):
             fundle_registered = True
-        else:
-            reg_result = await tagnpay_client.register_customer(
-                mobile_number=mobile_10,
-                name=profile_name or "Customer",
-                pan_number="",
-                source="WhatsApp_Parking"
-            )
-            if reg_result.get("success"):
-                fundle_registered = True
         
         # Create user in DB
         new_user = UserData(
             phone=phone,
             name=profile_name or "Customer",
             kyc_status=fundle_registered,
-            customer_type=customer_type,
+            customer_type="new",
             registration_time=datetime.now(timezone.utc).isoformat(),
             first_touch_source=source_code,
             first_touch_qr=qr_data["qr_code_id"] if qr_data else None,
             first_touch_message="Parking QR Registration",
-            balance_points=balance_points
+            balance_points=0
         )
         await db.users.insert_one(new_user.model_dump())
         
@@ -5453,16 +5486,51 @@ async def get_parking_sessions(
     status: Optional[str] = None,
     payload: dict = Depends(verify_jwt_token)
 ):
-    """Get parking sessions report"""
+    """Get parking sessions report - includes both PKG sessions and PARK coupons"""
     query = {}
     if status:
         query["status"] = status
     
-    total = await db.parking_sessions.count_documents(query)
-    sessions = await db.parking_sessions.find(query, {"_id": 0}).skip(skip).limit(limit).sort("entry_time", -1).to_list(limit)
+    # Get PKG parking sessions
+    pkg_sessions = await db.parking_sessions.find(query, {"_id": 0}).sort("entry_time", -1).to_list(500)
+    
+    # Get PARK coupons and normalize to same format
+    coupon_query = {}
+    if status == "active":
+        coupon_query = {"used": False, "status": {"$ne": "expired"}}
+    elif status == "completed":
+        coupon_query = {"used": True}
+    elif status == "expired":
+        coupon_query = {"status": "expired"}
+    
+    park_coupons = await db.parking_coupons.find(coupon_query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    
+    # Normalize coupons to session format
+    for c in park_coupons:
+        c["session_code"] = c.get("coupon_code", "")
+        c["user_phone"] = c.get("user_phone", "")
+        c["entry_time"] = c.get("created_at", "")
+        c["exit_time"] = c.get("used_at") if c.get("used") else None
+        c["status"] = "completed" if c.get("used") else ("expired" if c.get("status") == "expired" else "active")
+        c["duration_minutes"] = None
+        c["type"] = "coupon"
+        if c.get("used") and c.get("created_at") and c.get("used_at"):
+            try:
+                created = datetime.fromisoformat(c["created_at"].replace('Z', '+00:00'))
+                used = datetime.fromisoformat(c["used_at"].replace('Z', '+00:00'))
+                c["duration_minutes"] = int((used - created).total_seconds() / 60)
+            except Exception:
+                pass
+    
+    # Merge and sort by entry_time descending
+    all_sessions = pkg_sessions + park_coupons
+    all_sessions.sort(key=lambda x: x.get("entry_time", "") or "", reverse=True)
+    
+    total = len(all_sessions)
+    paginated = all_sessions[skip:skip + limit]
     
     # Convert entry/exit times to IST for display
-    for s in sessions:
+    for s in paginated:
         if s.get("entry_time"):
             try:
                 et = datetime.fromisoformat(s["entry_time"].replace('Z', '+00:00'))
@@ -5477,15 +5545,23 @@ async def get_parking_sessions(
                 pass
     
     # Calculate stats
-    active_count = await db.parking_sessions.count_documents({"status": "active"})
-    # IST midnight = UTC 18:30 previous day
+    active_pkg = await db.parking_sessions.count_documents({"status": "active"})
+    active_coupons = await db.parking_coupons.count_documents({"used": False, "status": {"$ne": "expired"}})
+    active_count = active_pkg + active_coupons
+    
+    # IST midnight
     now_ist = datetime.now(IST)
     ist_midnight = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
     ist_midnight_utc = ist_midnight.astimezone(timezone.utc)
-    completed_today = await db.parking_sessions.count_documents({
+    completed_pkg_today = await db.parking_sessions.count_documents({
         "status": "completed",
         "exit_time": {"$gte": ist_midnight_utc.isoformat()}
     })
+    completed_coupons_today = await db.parking_coupons.count_documents({
+        "used": True,
+        "used_at": {"$gte": ist_midnight_utc.isoformat()}
+    })
+    completed_today = completed_pkg_today + completed_coupons_today
     
     # Average duration
     avg_pipeline = [
@@ -5496,7 +5572,7 @@ async def get_parking_sessions(
     avg_duration = round(avg_result[0]["avg_duration"]) if avg_result else 0
     
     return {
-        "sessions": sessions,
+        "sessions": paginated,
         "total": total,
         "skip": skip,
         "limit": limit,

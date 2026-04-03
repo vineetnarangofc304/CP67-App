@@ -186,6 +186,7 @@ const ParkingReport = () => {
                     <TableRow>
                       <TableHead>Session Code</TableHead>
                       <TableHead>Phone</TableHead>
+                      <TableHead>Type</TableHead>
                       <TableHead>Entry Time</TableHead>
                       <TableHead>Exit Time</TableHead>
                       <TableHead>Duration</TableHead>
@@ -193,10 +194,17 @@ const ParkingReport = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sessions.map((session) => (
-                      <TableRow key={session.id} data-testid={`session-row-${session.id}`}>
+                    {sessions.map((session, idx) => (
+                      <TableRow key={session.id || session.session_code || idx} data-testid={`session-row-${session.id || idx}`}>
                         <TableCell className="font-mono font-medium">{session.session_code}</TableCell>
                         <TableCell>{session.user_phone || '-'}</TableCell>
+                        <TableCell>
+                          {session.session_code?.startsWith('PARK-') ? (
+                            <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Free Coupon</Badge>
+                          ) : (
+                            <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-100">Session</Badge>
+                          )}
+                        </TableCell>
                         <TableCell>{formatDateTime(session.entry_time)}</TableCell>
                         <TableCell>{formatDateTime(session.exit_time)}</TableCell>
                         <TableCell>
