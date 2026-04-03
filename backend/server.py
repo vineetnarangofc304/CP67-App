@@ -5249,6 +5249,74 @@ Thank you for visiting CP67 Mall! """
 @api_router.post("/parking/validate/{session_code}")
 async def validate_parking(session_code: str, scanned_by: Optional[str] = None, background_tasks: BackgroundTasks = None):
     """Validate parking QR code at exit - PUBLIC endpoint for scanner app"""
+    
+    # ===== CHECK PARKING COUPONS (PARK-XXXX) =====
+    if session_code.startswith("PARK-"):
+        coupon = await db.parking_coupons.find_one({"coupon_code": session_code}, {"_id": 0})
+        
+        if not coupon:
+            return {
+                "valid": False,
+                "error": "Invalid parking code",
+                "message": "This parking code does not exist in our system."
+            }
+        
+        if coupon.get("used"):
+            return {
+                "valid": False,
+                "error": "Already used",
+                "message": "This parking coupon has already been used.",
+                "exit_time": coupon.get("used_at")
+            }
+        
+        # Check expiry
+        expires_at = datetime.fromisoformat(coupon["expires_at"].replace('Z', '+00:00'))
+        if datetime.now(timezone.utc) > expires_at:
+            await db.parking_coupons.update_one(
+                {"coupon_code": session_code},
+                {"$set": {"status": "expired"}}
+            )
+            return {
+                "valid": False,
+                "error": "Expired",
+                "message": "This parking coupon has expired."
+            }
+        
+        # Mark coupon as used
+        now = datetime.now(timezone.utc)
+        await db.parking_coupons.update_one(
+            {"coupon_code": session_code},
+            {
+                "$set": {
+                    "used": True,
+                    "used_at": now.isoformat(),
+                    "status": "used",
+                    "scanned_by": scanned_by
+                }
+            }
+        )
+        
+        created_at = datetime.fromisoformat(coupon["created_at"].replace('Z', '+00:00'))
+        date_display = now.strftime("%d %b %Y")
+        time_display = now.strftime("%I:%M %p")
+        
+        return {
+            "valid": True,
+            "message": "EXIT APPROVED - Free Parking Coupon",
+            "session": {
+                "code": session_code,
+                "type": "parking_coupon",
+                "user_phone": coupon.get("user_phone", ""),
+                "user_name": coupon.get("user_name", "Customer"),
+                "entry_time": coupon.get("created_at"),
+                "exit_time": now.isoformat(),
+                "status": "completed",
+                "date": date_display,
+                "exit_display": time_display,
+            }
+        }
+    
+    # ===== CHECK PARKING SESSIONS (PKG-XXXX) =====
     session = await db.parking_sessions.find_one({"session_code": session_code}, {"_id": 0})
     
     if not session:
