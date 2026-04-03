@@ -5635,54 +5635,6 @@ async def get_parking_session(session_id: str, payload: dict = Depends(verify_jw
     return session
 
 
-@api_router.get("/parking/exit-gates")
-async def get_exit_gates(payload: dict = Depends(verify_jwt_token)):
-    """Get exit gate info and QR code URLs"""
-    backend_url = os.environ.get('REACT_APP_BACKEND_URL', os.environ.get('BACKEND_PUBLIC_URL', ''))
-    gates = [
-        {
-            "gate_id": "gate1",
-            "name": "Gate 1",
-            "login": {"username": "parking1", "password": "Parking1@2025"},
-            "qr_url": f"{backend_url}/api/parking/exit-qr/gate1"
-        },
-        {
-            "gate_id": "gate2",
-            "name": "Gate 2",
-            "login": {"username": "parking2", "password": "Parking2@2025"},
-            "qr_url": f"{backend_url}/api/parking/exit-qr/gate2"
-        }
-    ]
-    return {"gates": gates}
-
-@api_router.get("/parking/exit-qr/{gate_id}")
-async def get_exit_gate_qr(gate_id: str):
-    """Generate a printable QR code image for an exit gate scanner login page"""
-    import qrcode
-    from io import BytesIO
-    
-    if gate_id not in ("gate1", "gate2"):
-        raise HTTPException(status_code=404, detail="Invalid gate ID")
-    
-    # QR encodes the login URL with gate pre-selected
-    frontend_url = os.environ.get('REACT_APP_BACKEND_URL', '').replace('/api', '')
-    scanner_url = f"{frontend_url}/login?gate={gate_id}"
-    
-    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=12, border=2)
-    qr.add_data(scanner_url)
-    qr.make(fit=True)
-    
-    img = qr.make_image(fill_color="black", back_color="white")
-    
-    buffer = BytesIO()
-    img.save(buffer, format="PNG")
-    buffer.seek(0)
-    
-    from fastapi.responses import StreamingResponse
-    return StreamingResponse(buffer, media_type="image/png", headers={
-        "Content-Disposition": f"inline; filename=exit-{gate_id}-qr.png"
-    })
-
 # ======================== HEALTH CHECK ========================
 
 @api_router.get("/")
