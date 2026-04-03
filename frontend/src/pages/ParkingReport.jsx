@@ -67,6 +67,7 @@ const ParkingReport = () => {
     if (!isoString) return '-';
     const date = new Date(isoString);
     return date.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       day: '2-digit',
       month: 'short',
       hour: '2-digit',

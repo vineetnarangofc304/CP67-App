@@ -130,11 +130,12 @@ const ParkingScanner = () => {
   };
 
   const extractParkingCode = (text) => {
-    const match = text.match(/PKG-[\w]+-[\w]+/i);
+    // Match both PKG- and PARK- prefixes
+    const match = text.match(/(PKG|PARK)-[\w]+-[\w]+/i);
     if (match) return match[0].toUpperCase();
-    const urlMatch = text.match(/code=(PKG-[\w]+-[\w]+)/i);
+    const urlMatch = text.match(/code=((PKG|PARK)-[\w]+-[\w]+)/i);
     if (urlMatch) return urlMatch[1].toUpperCase();
-    if (text.startsWith('PKG')) return text.toUpperCase();
+    if (text.startsWith('PKG') || text.startsWith('PARK')) return text.toUpperCase();
     return text;
   };
 
@@ -330,13 +331,13 @@ const ParkingScanner = () => {
                   Manual Code Entry
                 </CardTitle>
                 <CardDescription>
-                  Enter the parking session code manually (e.g., PKG-143022-A1B2C3)
+                  Enter the parking session code manually (e.g., PKG-143022-A1B2C3 or PARK-XXXXXX)
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleManualSubmit} className="flex gap-3">
                   <Input
-                    placeholder="PKG-XXXXXX-XXXXXX"
+                    placeholder="PKG- or PARK- code"
                     value={manualCode}
                     onChange={(e) => setManualCode(e.target.value.toUpperCase())}
                     className="font-mono text-lg"

@@ -51,6 +51,12 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 ## Pending Issues
 - Karix WhatsApp QR Image delivery to actual devices (Karix platform issue — API returns 200 but image may not render on some devices)
 
+## Recently Fixed (April 3, 2026 - Session 2)
+- **Parking times now in IST**: All entry/exit times in Parking Report and Scanner validation converted from UTC to IST (UTC+5:30)
+- **PARK- coupon validation fixed**: Exit scanner now supports both `PKG-` and `PARK-` codes; response format normalized with `entry_time_display`/`exit_time_display`
+- **Scanner QR regex updated**: ParkingScanner now extracts both `PKG-` and `PARK-` prefixes from QR scans
+- **completed_today stats fixed**: Uses IST midnight for daily exit count
+
 ## Upcoming Tasks (P1)
 - Campaign-aware bill processing: Auto-apply multipliers during active campaigns
 - PWA Installation Guide: Modal for mall visitors on "Add to Home Screen"

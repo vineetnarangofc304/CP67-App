@@ -12,6 +12,9 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
+
+# IST timezone for display formatting
+IST = timezone(timedelta(hours=5, minutes=30))
 import hashlib
 import jwt
 import httpx
@@ -5297,23 +5300,28 @@ async def validate_parking(session_code: str, scanned_by: Optional[str] = None, 
         )
         
         created_at = datetime.fromisoformat(coupon["created_at"].replace('Z', '+00:00'))
-        date_display = now.strftime("%d %b %Y")
-        time_display = now.strftime("%I:%M %p")
+        now_ist = now.astimezone(IST)
+        entry_ist = created_at.astimezone(IST)
+        duration = now - created_at
+        duration_minutes = int(duration.total_seconds() / 60)
+        hours = duration_minutes // 60
+        mins = duration_minutes % 60
+        duration_display = f"{hours}h {mins}m" if hours > 0 else f"{mins} minutes"
         
         return {
             "valid": True,
             "message": "EXIT APPROVED - Free Parking Coupon",
-            "session": {
-                "code": session_code,
-                "type": "parking_coupon",
-                "user_phone": coupon.get("user_phone", ""),
-                "user_name": coupon.get("user_name", "Customer"),
-                "entry_time": coupon.get("created_at"),
-                "exit_time": now.isoformat(),
-                "status": "completed",
-                "date": date_display,
-                "exit_display": time_display,
-            }
+            "session_code": session_code,
+            "mobile_number": coupon.get("user_phone", ""),
+            "user_name": coupon.get("user_name", "Customer"),
+            "entry_time": coupon.get("created_at"),
+            "entry_time_display": entry_ist.strftime("%I:%M %p"),
+            "exit_time": now.isoformat(),
+            "exit_time_display": now_ist.strftime("%I:%M %p"),
+            "duration_minutes": duration_minutes,
+            "duration_display": duration_display,
+            "coupon_type": "free_parking",
+            "thank_you_sent": False
         }
     
     # ===== CHECK PARKING SESSIONS (PKG-XXXX) =====
@@ -5360,10 +5368,12 @@ async def validate_parking(session_code: str, scanned_by: Optional[str] = None, 
         }
     )
     
-    # Format times for display
-    entry_display = entry_time.strftime("%I:%M %p")
-    exit_display = exit_time.strftime("%I:%M %p")
-    date_display = exit_time.strftime("%d %b %Y")
+    # Format times for display in IST
+    entry_ist = entry_time.astimezone(IST)
+    exit_ist = exit_time.astimezone(IST)
+    entry_display = entry_ist.strftime("%I:%M %p")
+    exit_display = exit_ist.strftime("%I:%M %p")
+    date_display = exit_ist.strftime("%d %b %Y")
     
     hours = duration_minutes // 60
     mins = duration_minutes % 60
@@ -5439,11 +5449,30 @@ async def get_parking_sessions(
     total = await db.parking_sessions.count_documents(query)
     sessions = await db.parking_sessions.find(query, {"_id": 0}).skip(skip).limit(limit).sort("entry_time", -1).to_list(limit)
     
+    # Convert entry/exit times to IST for display
+    for s in sessions:
+        if s.get("entry_time"):
+            try:
+                et = datetime.fromisoformat(s["entry_time"].replace('Z', '+00:00'))
+                s["entry_time"] = et.astimezone(IST).isoformat()
+            except Exception:
+                pass
+        if s.get("exit_time"):
+            try:
+                xt = datetime.fromisoformat(s["exit_time"].replace('Z', '+00:00'))
+                s["exit_time"] = xt.astimezone(IST).isoformat()
+            except Exception:
+                pass
+    
     # Calculate stats
     active_count = await db.parking_sessions.count_documents({"status": "active"})
+    # IST midnight = UTC 18:30 previous day
+    now_ist = datetime.now(IST)
+    ist_midnight = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
+    ist_midnight_utc = ist_midnight.astimezone(timezone.utc)
     completed_today = await db.parking_sessions.count_documents({
         "status": "completed",
-        "exit_time": {"$gte": datetime.now(timezone.utc).replace(hour=0, minute=0, second=0).isoformat()}
+        "exit_time": {"$gte": ist_midnight_utc.isoformat()}
     })
     
     # Average duration
