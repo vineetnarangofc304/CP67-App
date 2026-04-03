@@ -22,6 +22,11 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
+const PARKING_NAV = [
+  { path: '/parking-scanner', label: 'Parking Scanner', icon: ScanLine },
+  { path: '/parking-report', label: 'Parking Report', icon: Car },
+];
+
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/qr-codes', label: 'QR Codes', icon: QrCode },
@@ -44,6 +49,9 @@ const DashboardLayout = ({ children, title }) => {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+
+  const isParkingStaff = user?.role === 'parking_staff';
+  const visibleNav = isParkingStaff ? PARKING_NAV : navItems;
 
   const handleLogout = () => {
     logout();
@@ -91,7 +99,7 @@ const DashboardLayout = ({ children, title }) => {
 
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-1">
-            {navItems.map((item) => {
+            {visibleNav.map((item) => {
               const isActive = location.pathname === item.path;
               const Icon = item.icon;
               return (
@@ -125,7 +133,7 @@ const DashboardLayout = ({ children, title }) => {
               </div>
               <div>
                 <p className="text-sm font-medium text-slate-900">{user?.username || 'Admin'}</p>
-                <p className="text-xs text-slate-500">Administrator</p>
+                <p className="text-xs text-slate-500">{isParkingStaff ? 'Parking Staff' : 'Administrator'}</p>
               </div>
             </div>
             <Button 

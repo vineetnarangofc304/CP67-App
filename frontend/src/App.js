@@ -66,7 +66,16 @@ const AuthProvider = ({ children }) => {
     const data = await response.json();
     localStorage.setItem('cp67_token', data.token);
     setToken(data.token);
-    setUser({ username: data.username });
+    // Fetch full user profile to get role
+    const meRes = await fetch(`${API_URL}/admin/me`, {
+      headers: { 'Authorization': `Bearer ${data.token}` }
+    });
+    if (meRes.ok) {
+      const meData = await meRes.json();
+      setUser(meData);
+    } else {
+      setUser({ username: data.username });
+    }
     return data;
   };
 
@@ -83,8 +92,10 @@ const AuthProvider = ({ children }) => {
   );
 };
 
-const ProtectedRoute = ({ children }) => {
-  const { token, loading } = useAuth();
+const PARKING_ROUTES = ['/parking-scanner', '/parking-report'];
+
+const ProtectedRoute = ({ children, allowParking = false }) => {
+  const { token, user, loading } = useAuth();
 
   if (loading) {
     return (
@@ -96,6 +107,11 @@ const ProtectedRoute = ({ children }) => {
 
   if (!token) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Parking staff can only access parking routes
+  if (user?.role === 'parking_staff' && !allowParking) {
+    return <Navigate to="/parking-scanner" replace />;
   }
 
   return children;
@@ -112,8 +128,8 @@ function App() {
           <Route path="/qr-codes" element={<ProtectedRoute><QRCodes /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
           <Route path="/bills" element={<ProtectedRoute><Bills /></ProtectedRoute>} />
-          <Route path="/parking-scanner" element={<ProtectedRoute><ParkingScanner /></ProtectedRoute>} />
-          <Route path="/parking-report" element={<ProtectedRoute><ParkingReport /></ProtectedRoute>} />
+          <Route path="/parking-scanner" element={<ProtectedRoute allowParking><ParkingScanner /></ProtectedRoute>} />
+          <Route path="/parking-report" element={<ProtectedRoute allowParking><ParkingReport /></ProtectedRoute>} />
           <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppSimulator /></ProtectedRoute>} />
           <Route path="/whatsapp-logs" element={<ProtectedRoute><WhatsAppLogs /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />

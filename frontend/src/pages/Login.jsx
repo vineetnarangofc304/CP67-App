@@ -13,23 +13,27 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { login, token } = useAuth();
+  const { login, token, user } = useAuth();
   const navigate = useNavigate();
 
   // Redirect if already logged in
   React.useEffect(() => {
-    if (token) {
-      navigate('/', { replace: true });
+    if (token && user) {
+      if (user.role === 'parking_staff') {
+        navigate('/parking-scanner', { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
     }
-  }, [token, navigate]);
+  }, [token, user, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
       await login(username, password);
-      toast.success('Welcome to CP67 Loyalty Dashboard!');
-      navigate('/', { replace: true });
+      toast.success('Welcome to CP67 Mall!');
+      // Navigation handled by useEffect after user state updates
     } catch (error) {
       toast.error(error.message || 'Login failed');
     } finally {

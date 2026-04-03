@@ -699,6 +699,18 @@ async def ensure_default_admin():
         )
         await db.admins.insert_one(default_admin.model_dump())
         logger.info(f"Created default admin user: {ADMIN_USERNAME}")
+    
+    # Ensure parking staff user exists
+    parking_user = await db.admins.find_one({"username": "parking"})
+    if not parking_user:
+        parking_admin = AdminUser(
+            username="parking",
+            password_hash=hash_password("Parking@2025"),
+            name="Parking Staff",
+            role="parking_staff"
+        )
+        await db.admins.insert_one(parking_admin.model_dump())
+        logger.info("Created parking staff user")
 
 @api_router.post("/admin/login", response_model=AdminLoginResponse)
 async def admin_login(request: AdminLoginRequest):
