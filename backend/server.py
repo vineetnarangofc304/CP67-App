@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks, Response
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks, Response, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -114,7 +114,8 @@ class AdminUser(BaseModel):
     username: str
     password_hash: str
     name: str
-    role: str = "admin"  # admin, super_admin
+    role: str = "admin"  # admin, super_admin, parking_staff
+    gate: Optional[str] = None  # gate1, gate2 - for parking_staff only
     is_active: bool = True
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     last_login: Optional[str] = None
@@ -700,17 +701,27 @@ async def ensure_default_admin():
         await db.admins.insert_one(default_admin.model_dump())
         logger.info(f"Created default admin user: {ADMIN_USERNAME}")
     
-    # Ensure parking staff user exists
-    parking_user = await db.admins.find_one({"username": "parking"})
-    if not parking_user:
-        parking_admin = AdminUser(
-            username="parking",
-            password_hash=hash_password("Parking@2025"),
-            name="Parking Staff",
-            role="parking_staff"
-        )
-        await db.admins.insert_one(parking_admin.model_dump())
-        logger.info("Created parking staff user")
+    # Ensure parking staff users exist for both gates
+    for gate_num, gate_label in [("1", "gate1"), ("2", "gate2")]:
+        username = f"parking{gate_num}"
+        parking_user = await db.admins.find_one({"username": username})
+        if not parking_user:
+            parking_admin = AdminUser(
+                username=username,
+                password_hash=hash_password(f"Parking{gate_num}@2025"),
+                name=f"Parking Gate {gate_num}",
+                role="parking_staff",
+                gate=gate_label
+            )
+            await db.admins.insert_one(parking_admin.model_dump())
+            logger.info(f"Created parking staff user: {username} ({gate_label})")
+        elif not parking_user.get("gate"):
+            await db.admins.update_one({"username": username}, {"$set": {"gate": gate_label}})
+    
+    # Remove old single 'parking' user if it exists (replaced by parking1/parking2)
+    old_parking = await db.admins.find_one({"username": "parking", "gate": None})
+    if old_parking:
+        await db.admins.delete_one({"username": "parking", "gate": None})
 
 @api_router.post("/admin/login", response_model=AdminLoginResponse)
 async def admin_login(request: AdminLoginRequest):
@@ -734,7 +745,8 @@ async def admin_login(request: AdminLoginRequest):
             "username": admin["username"],
             "name": admin.get("name", admin["username"]),
             "role": admin.get("role", "admin"),
-            "admin_id": admin["id"]
+            "admin_id": admin["id"],
+            "gate": admin.get("gate")
         })
         return AdminLoginResponse(token=token, username=admin["username"])
     
@@ -747,11 +759,14 @@ async def admin_login(request: AdminLoginRequest):
 
 @api_router.get("/admin/me")
 async def get_admin_profile(payload: dict = Depends(verify_jwt_token)):
-    return {
+    result = {
         "username": payload.get("username"),
         "name": payload.get("name", payload.get("username")),
         "role": payload.get("role")
     }
+    if payload.get("gate"):
+        result["gate"] = payload["gate"]
+    return result
 
 @api_router.get("/admin/users")
 async def get_admin_users(payload: dict = Depends(verify_jwt_token)):
@@ -5295,8 +5310,17 @@ Thank you for visiting CP67 Mall! """
     }
 
 @api_router.post("/parking/validate/{session_code}")
-async def validate_parking(session_code: str, scanned_by: Optional[str] = None, background_tasks: BackgroundTasks = None):
+async def validate_parking(session_code: str, request: Request = None, background_tasks: BackgroundTasks = None):
     """Validate parking QR code at exit - PUBLIC endpoint for scanner app"""
+    # Parse body for scanned_by and gate
+    scanned_by = None
+    gate = None
+    try:
+        body = await request.json() if request else {}
+        scanned_by = body.get("scanned_by")
+        gate = body.get("gate")
+    except Exception:
+        pass
     
     # ===== CHECK PARKING COUPONS (PARK-XXXX) =====
     if session_code.startswith("PARK-"):
@@ -5332,16 +5356,17 @@ async def validate_parking(session_code: str, scanned_by: Optional[str] = None, 
         
         # Mark coupon as used
         now = datetime.now(timezone.utc)
+        update_fields = {
+            "used": True,
+            "used_at": now.isoformat(),
+            "status": "used",
+            "scanned_by": scanned_by
+        }
+        if gate:
+            update_fields["exit_gate"] = gate
         await db.parking_coupons.update_one(
             {"coupon_code": session_code},
-            {
-                "$set": {
-                    "used": True,
-                    "used_at": now.isoformat(),
-                    "status": "used",
-                    "scanned_by": scanned_by
-                }
-            }
+            {"$set": update_fields}
         )
         
         created_at = datetime.fromisoformat(coupon["created_at"].replace('Z', '+00:00'))
@@ -5401,16 +5426,17 @@ async def validate_parking(session_code: str, scanned_by: Optional[str] = None, 
     duration_minutes = int(duration.total_seconds() / 60)
     
     # Mark session as completed
+    update_fields = {
+        "status": "completed",
+        "exit_time": exit_time.isoformat(),
+        "duration_minutes": duration_minutes,
+        "scanned_by": scanned_by
+    }
+    if gate:
+        update_fields["exit_gate"] = gate
     await db.parking_sessions.update_one(
         {"session_code": session_code},
-        {
-            "$set": {
-                "status": "completed",
-                "exit_time": exit_time.isoformat(),
-                "duration_minutes": duration_minutes,
-                "scanned_by": scanned_by
-            }
-        }
+        {"$set": update_fields}
     )
     
     # Format times for display in IST
@@ -5487,9 +5513,13 @@ async def get_parking_sessions(
     payload: dict = Depends(verify_jwt_token)
 ):
     """Get parking sessions report - includes both PKG sessions and PARK coupons"""
+    user_gate = payload.get("gate")  # None for admin, "gate1"/"gate2" for staff
+    
     query = {}
     if status:
         query["status"] = status
+    if user_gate:
+        query["exit_gate"] = user_gate
     
     # Get PKG parking sessions
     pkg_sessions = await db.parking_sessions.find(query, {"_id": 0}).sort("entry_time", -1).to_list(500)
@@ -5502,6 +5532,8 @@ async def get_parking_sessions(
         coupon_query = {"used": True}
     elif status == "expired":
         coupon_query = {"status": "expired"}
+    if user_gate:
+        coupon_query["exit_gate"] = user_gate
     
     park_coupons = await db.parking_coupons.find(coupon_query, {"_id": 0}).sort("created_at", -1).to_list(500)
     
@@ -5544,28 +5576,38 @@ async def get_parking_sessions(
             except Exception:
                 pass
     
-    # Calculate stats
-    active_pkg = await db.parking_sessions.count_documents({"status": "active"})
-    active_coupons = await db.parking_coupons.count_documents({"used": False, "status": {"$ne": "expired"}})
+    # Calculate stats (gate-filtered for parking staff)
+    pkg_stat_q = {"status": "active"}
+    coupon_stat_q = {"used": False, "status": {"$ne": "expired"}}
+    if user_gate:
+        pkg_stat_q["exit_gate"] = user_gate
+        coupon_stat_q["exit_gate"] = user_gate
+    
+    active_pkg = await db.parking_sessions.count_documents(pkg_stat_q)
+    active_coupons = await db.parking_coupons.count_documents(coupon_stat_q)
     active_count = active_pkg + active_coupons
     
     # IST midnight
     now_ist = datetime.now(IST)
     ist_midnight = now_ist.replace(hour=0, minute=0, second=0, microsecond=0)
     ist_midnight_utc = ist_midnight.astimezone(timezone.utc)
-    completed_pkg_today = await db.parking_sessions.count_documents({
-        "status": "completed",
-        "exit_time": {"$gte": ist_midnight_utc.isoformat()}
-    })
-    completed_coupons_today = await db.parking_coupons.count_documents({
-        "used": True,
-        "used_at": {"$gte": ist_midnight_utc.isoformat()}
-    })
+    
+    pkg_today_q = {"status": "completed", "exit_time": {"$gte": ist_midnight_utc.isoformat()}}
+    coupon_today_q = {"used": True, "used_at": {"$gte": ist_midnight_utc.isoformat()}}
+    if user_gate:
+        pkg_today_q["exit_gate"] = user_gate
+        coupon_today_q["exit_gate"] = user_gate
+    
+    completed_pkg_today = await db.parking_sessions.count_documents(pkg_today_q)
+    completed_coupons_today = await db.parking_coupons.count_documents(coupon_today_q)
     completed_today = completed_pkg_today + completed_coupons_today
     
     # Average duration
+    avg_match = {"status": "completed", "duration_minutes": {"$exists": True}}
+    if user_gate:
+        avg_match["exit_gate"] = user_gate
     avg_pipeline = [
-        {"$match": {"status": "completed", "duration_minutes": {"$exists": True}}},
+        {"$match": avg_match},
         {"$group": {"_id": None, "avg_duration": {"$avg": "$duration_minutes"}}}
     ]
     avg_result = await db.parking_sessions.aggregate(avg_pipeline).to_list(1)
@@ -5576,6 +5618,7 @@ async def get_parking_sessions(
         "total": total,
         "skip": skip,
         "limit": limit,
+        "gate": user_gate,
         "stats": {
             "active": active_count,
             "completed_today": completed_today,
@@ -5590,6 +5633,55 @@ async def get_parking_session(session_id: str, payload: dict = Depends(verify_jw
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+@api_router.get("/parking/exit-gates")
+async def get_exit_gates(payload: dict = Depends(verify_jwt_token)):
+    """Get exit gate info and QR code URLs"""
+    backend_url = os.environ.get('REACT_APP_BACKEND_URL', os.environ.get('BACKEND_PUBLIC_URL', ''))
+    gates = [
+        {
+            "gate_id": "gate1",
+            "name": "Gate 1",
+            "login": {"username": "parking1", "password": "Parking1@2025"},
+            "qr_url": f"{backend_url}/api/parking/exit-qr/gate1"
+        },
+        {
+            "gate_id": "gate2",
+            "name": "Gate 2",
+            "login": {"username": "parking2", "password": "Parking2@2025"},
+            "qr_url": f"{backend_url}/api/parking/exit-qr/gate2"
+        }
+    ]
+    return {"gates": gates}
+
+@api_router.get("/parking/exit-qr/{gate_id}")
+async def get_exit_gate_qr(gate_id: str):
+    """Generate a printable QR code image for an exit gate scanner login page"""
+    import qrcode
+    from io import BytesIO
+    
+    if gate_id not in ("gate1", "gate2"):
+        raise HTTPException(status_code=404, detail="Invalid gate ID")
+    
+    # QR encodes the login URL with gate pre-selected
+    frontend_url = os.environ.get('REACT_APP_BACKEND_URL', '').replace('/api', '')
+    scanner_url = f"{frontend_url}/login?gate={gate_id}"
+    
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=12, border=2)
+    qr.add_data(scanner_url)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    buffer = BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(buffer, media_type="image/png", headers={
+        "Content-Disposition": f"inline; filename=exit-{gate_id}-qr.png"
+    })
 
 # ======================== HEALTH CHECK ========================
 

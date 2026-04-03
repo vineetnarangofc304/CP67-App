@@ -11,7 +11,7 @@ import { Camera, CheckCircle2, XCircle, Clock, Car, QrCode, RefreshCw, StopCircl
 const SCANNER_CONTAINER_ID = 'parking-qr-reader';
 
 const ParkingScanner = () => {
-  const { API_URL, token } = useAuth();
+  const { API_URL, token, user } = useAuth();
   const [scannerState, setScannerState] = useState('idle'); // idle | starting | active | error
   const [manualCode, setManualCode] = useState('');
   const [validationResult, setValidationResult] = useState(null);
@@ -147,10 +147,12 @@ const ParkingScanner = () => {
     setLoading(true);
     setValidationResult(null);
     try {
+      const body = { scanned_by: user?.username || 'counter_staff' };
+      if (user?.gate) body.gate = user.gate;
       const response = await fetch(`${API_URL}/parking/validate/${code.trim()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scanned_by: 'counter_staff' })
+        body: JSON.stringify(body)
       });
       const data = await response.json();
       setValidationResult(data);
@@ -192,7 +194,9 @@ const ParkingScanner = () => {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold">Exit Validation Scanner</h2>
-                  <p className="text-sm text-slate-300">Scan customer QR at parking exit</p>
+                  <p className="text-sm text-slate-300">
+                    {user?.gate ? `${user.gate === 'gate1' ? 'Gate 1' : 'Gate 2'} — ` : ''}Scan customer QR at parking exit
+                  </p>
                 </div>
               </div>
               <Badge variant="outline" className="border-white/30 text-white" data-testid="scanner-status">

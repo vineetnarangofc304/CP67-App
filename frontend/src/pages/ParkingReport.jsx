@@ -23,12 +23,14 @@ import { toast } from 'sonner';
 import { Car, Clock, CheckCircle2, AlertCircle, Timer, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const ParkingReport = () => {
-  const { API_URL, token } = useAuth();
+  const { API_URL, token, user } = useAuth();
   const [sessions, setSessions] = useState([]);
   const [stats, setStats] = useState({ active: 0, completed_today: 0, avg_duration_minutes: 0 });
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [pagination, setPagination] = useState({ skip: 0, limit: 20, total: 0 });
+  
+  const gateLabel = user?.gate === 'gate1' ? 'Gate 1' : user?.gate === 'gate2' ? 'Gate 2' : null;
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -100,7 +102,7 @@ const ParkingReport = () => {
   const currentPage = Math.floor(pagination.skip / pagination.limit) + 1;
 
   return (
-    <DashboardLayout title="Parking Report">
+    <DashboardLayout title={gateLabel ? `Parking Report — ${gateLabel}` : 'Parking Report'}>
       <div className="space-y-6">
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

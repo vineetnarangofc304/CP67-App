@@ -133,7 +133,11 @@ const DashboardLayout = ({ children, title }) => {
               </div>
               <div>
                 <p className="text-sm font-medium text-slate-900">{user?.username || 'Admin'}</p>
-                <p className="text-xs text-slate-500">{isParkingStaff ? 'Parking Staff' : 'Administrator'}</p>
+                <p className="text-xs text-slate-500">
+                  {isParkingStaff 
+                    ? `Parking Staff${user?.gate ? ` — ${user.gate === 'gate1' ? 'Gate 1' : 'Gate 2'}` : ''}` 
+                    : 'Administrator'}
+                </p>
               </div>
             </div>
             <Button 
