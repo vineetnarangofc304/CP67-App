@@ -2720,7 +2720,7 @@ async def send_whatsapp_image(phone: str, image_base64: str, caption: str = ""):
     
     try:
         import re
-        code_match = re.search(r'(PKG-[A-Z0-9-]+)', caption)
+        code_match = re.search(r'(PKG-[A-Z0-9-]+|PARK-[A-Z0-9]+)', caption)
         
         if not code_match:
             logger.warning("No parking code found in caption, cannot send image")
@@ -2728,7 +2728,10 @@ async def send_whatsapp_image(phone: str, image_base64: str, caption: str = ""):
         
         parking_code = code_match.group(1)
         backend_url = os.environ.get('BACKEND_PUBLIC_URL', 'https://cp67bot.fundlexperiences.com')
-        qr_url = f"{backend_url}/api/parking/qr-image/{parking_code}"
+        if parking_code.startswith("PARK-"):
+            qr_url = f"{backend_url}/api/parking/coupon-qr/{parking_code}"
+        else:
+            qr_url = f"{backend_url}/api/parking/qr-image/{parking_code}"
         
         logger.info(f"Sending QR image to {phone} via ATTACHMENT type")
         logger.info(f"QR URL: {qr_url}")
@@ -2896,6 +2899,146 @@ Shop - Earn - Redeem - Repeat"""
     
     await send_whatsapp_list(phone, welcome_msg, menu_options, header_text="Homeland Advantage", button_text="Menu")
     return new_user
+
+
+async def process_parking_registration(phone: str, profile_name: str, source_code: str, qr_data: dict, background_tasks: BackgroundTasks):
+    """Handle new user registration from Parking QR - NO bonus points, get free parking coupon instead"""
+    mobile_10 = phone[2:] if phone.startswith("91") and len(phone) == 12 else phone
+    
+    try:
+        # Register with Fundle (without bonus points message)
+        fundle_registered = False
+        balance_points = 0
+        
+        # Check if user exists in Fundle API
+        points_result = await tagnpay_client.get_customer_points(mobile_10)
+        is_existing_fundle_user = points_result.get("success") and points_result.get("data") is not None
+        
+        # Also check imported list
+        imported_fundle_customer = await db.fundle_customers.find_one({"phone_10": mobile_10})
+        if imported_fundle_customer:
+            is_existing_fundle_user = True
+        
+        customer_type = "new"
+        if is_existing_fundle_user:
+            customer_type = "existing"
+            balance_points = points_result["data"].get("balance_points", 0) if points_result.get("data") else 0
+            fundle_registered = True
+        else:
+            reg_result = await tagnpay_client.register_customer(
+                mobile_number=mobile_10,
+                name=profile_name or "Customer",
+                pan_number="",
+                source="WhatsApp_Parking"
+            )
+            if reg_result.get("success"):
+                fundle_registered = True
+        
+        # Create user in DB
+        new_user = UserData(
+            phone=phone,
+            name=profile_name or "Customer",
+            kyc_status=fundle_registered,
+            customer_type=customer_type,
+            registration_time=datetime.now(timezone.utc).isoformat(),
+            first_touch_source=source_code,
+            first_touch_qr=qr_data["qr_code_id"] if qr_data else None,
+            first_touch_message="Parking QR Registration",
+            balance_points=balance_points
+        )
+        await db.users.insert_one(new_user.model_dump())
+        
+        # Update QR analytics
+        if qr_data:
+            await db.qr_analytics.update_one(
+                {"qr_code_id": qr_data["qr_code_id"]},
+                {"$inc": {"scans": 1, "registrations": 1}},
+                upsert=True
+            )
+        
+        # Generate Parking Coupon Code
+        coupon_code = f"PARK-{uuid.uuid4().hex[:8].upper()}"
+        expiry_time = datetime.now(timezone.utc) + timedelta(hours=24)
+        
+        # Store coupon in DB
+        parking_coupon = {
+            "coupon_code": coupon_code,
+            "user_phone": phone,
+            "user_name": profile_name or "Customer",
+            "source": "SRC_PARKING",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": expiry_time.isoformat(),
+            "status": "active",
+            "used": False
+        }
+        await db.parking_coupons.insert_one(parking_coupon)
+        logger.info(f"Parking coupon created: {coupon_code} for {phone}, expires: {expiry_time.isoformat()}")
+        
+        # Generate QR code image from coupon code
+        qr_image = await generate_parking_qr_image(coupon_code)
+        
+        expiry_str = expiry_time.strftime("%d %b %Y, %I:%M %p")
+        
+        # Send welcome + parking coupon message
+        welcome_msg = f"""Hi {profile_name or 'there'}! Welcome to Homeland Advantage, CP67 Mall's exclusive loyalty program.
+
+As a welcome gift, here is your FREE Parking Coupon!
+
+*Coupon Code:* {coupon_code}
+*Valid Until:* {expiry_str}
+
+Show this QR code at the parking exit counter.
+
+Shop, Earn and Redeem rewards every time you visit CP67 Mall!"""
+        
+        outbound_log = WhatsAppLog(
+            user_id=new_user.id,
+            user_phone=phone,
+            direction="outbound",
+            message_type="interactive",
+            content=welcome_msg
+        )
+        await db.whatsapp_logs.insert_one(outbound_log.model_dump())
+        
+        # Try sending QR image
+        if qr_image:
+            qr_caption = f"""Welcome to Homeland Advantage!
+
+Your FREE Parking Coupon:
+*{coupon_code}*
+
+Valid until: {expiry_str}
+
+Show this QR at the parking exit counter."""
+            
+            image_sent = await send_whatsapp_image(phone, qr_image, qr_caption)
+            if image_sent:
+                logger.info(f"Parking coupon QR sent to {phone}")
+                # Also send menu
+                menu_options = [
+                    {"id": "upload_bill", "title": "Upload Bill", "description": "Upload your shopping bill to earn points"},
+                    {"id": "my_points", "title": "My Points", "description": "Check your loyalty points balance"},
+                    {"id": "know_more", "title": "Know More", "description": "Participating brands & T&C"}
+                ]
+                menu_msg = "Start earning points now! Upload your shopping bills to earn and redeem rewards."
+                await send_whatsapp_list(phone, menu_msg, menu_options, header_text="Homeland Advantage", button_text="Menu")
+                return
+        
+        # Fallback: send text message with coupon code
+        buttons = [
+            {"id": "upload_bill", "title": "Upload Bill"},
+            {"id": "my_points", "title": "Check Points"}
+        ]
+        await send_whatsapp_buttons(phone, welcome_msg, buttons)
+        
+    except Exception as e:
+        logger.error(f"Error in parking registration for {phone}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        # Send fallback message
+        fallback_msg = "Welcome to Homeland Advantage! Please visit our help desk for your free parking coupon."
+        await send_whatsapp_text(phone, fallback_msg)
+
 
 
 async def process_bill_image(phone: str, user: dict, image_url: str, background_tasks: BackgroundTasks):
@@ -3592,10 +3735,13 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
         image_url = None
         
         if message_type == "text":
-            message = message_data.get("text", {}).get("body", "")
-            # Karix sometimes sends text as a flat string
-            if not message and isinstance(message_data.get("text"), str):
-                message = message_data["text"]
+            text_content = message_data.get("text", "")
+            if isinstance(text_content, dict):
+                message = text_content.get("body", "")
+            elif isinstance(text_content, str):
+                message = text_content
+            else:
+                message = str(text_content) if text_content else ""
         elif message_type == "interactive":
             interactive = message_data.get("interactive", {})
             # Handle both button replies AND list replies
@@ -3684,6 +3830,38 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
             # PARKING ENTRY FLOW - Generate parking session and send QR
             await process_parking_entry(phone, profile_name or (user.get("name") if user else None), background_tasks)
             return {"status": "ok", "message": "Parking entry processed"}
+        
+        # ===== CHECK FOR PARKING REGISTRATION QR (SRC_PARKING) =====
+        if source_code == "SRC_PARKING":
+            # Check if blocked
+            is_blocked = await db.blocked_phones.find_one({"phone": mobile_10})
+            if is_blocked:
+                logger.info(f"Blocked phone {mobile_10} tried parking QR")
+                block_msg = "Sorry, this number is not eligible for this service."
+                await send_whatsapp_text(phone, block_msg)
+                return {"status": "ok", "message": "Blocked user"}
+            
+            if user:
+                # EXISTING USER - No free parking
+                existing_msg = f"""Hi {(user.get('name') or profile_name or 'there')}!
+
+You are already registered with Homeland Advantage.
+
+Free parking is available only for new members who register via the parking QR code.
+
+Use the menu below to explore your rewards!"""
+                menu_options = [
+                    {"id": "upload_bill", "title": "Upload Bill", "description": "Upload your shopping bill to earn points"},
+                    {"id": "my_points", "title": "My Points", "description": "Check your loyalty points balance"},
+                    {"id": "redeem_points", "title": "Redeem Points", "description": "Redeem points at participating brands"},
+                ]
+                outbound_log = WhatsAppLog(user_id=user["id"], user_phone=phone, direction="outbound", message_type="interactive", content=existing_msg)
+                await db.whatsapp_logs.insert_one(outbound_log.model_dump())
+                await send_whatsapp_list(phone, existing_msg, menu_options, header_text="Homeland Advantage", button_text="Menu")
+            else:
+                # NEW USER via Parking QR - Register WITHOUT 1000 points
+                background_tasks.add_task(process_parking_registration, phone, profile_name, source_code, qr_data, background_tasks)
+            return {"status": "ok", "message": "Parking registration processed"}
         
         # ===== FLOW LOGIC =====
         
@@ -4567,6 +4745,42 @@ async def get_parking_qr_image(code: str):
     except Exception as e:
         logger.error(f"Error generating QR image: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate QR code")
+
+@api_router.get("/parking/coupon-qr/{coupon_code}")
+async def get_parking_coupon_qr(coupon_code: str):
+    """Public endpoint to serve parking coupon QR code images as JPEG."""
+    import qrcode
+    from PIL import Image, ImageDraw, ImageFont
+    
+    try:
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(coupon_code)
+        qr.make(fit=True)
+        
+        qr_img = qr.make_image(fill_color="#2E2219", back_color="white").convert("RGB")
+        
+        img_buffer = io.BytesIO()
+        qr_img.save(img_buffer, format='JPEG', quality=95)
+        img_buffer.seek(0)
+        
+        return Response(
+            content=img_buffer.getvalue(),
+            media_type="image/jpeg",
+            headers={
+                "Content-Disposition": f"inline; filename=coupon_{coupon_code}.jpeg",
+                "Cache-Control": "public, max-age=86400"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error generating coupon QR image: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate coupon QR")
+
+
 
 # ======================== ANALYTICS ROUTES ========================
 
