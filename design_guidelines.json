@@ -1,120 +1,115 @@
 {
-  "theme_archetype": {
-    "name": "Archetype 5: Jewel & Luxury (Dark Theme)",
-    "rationale": "The app is a premium mall loyalty PWA. The splash screen established a 'Kinetic Luxury' aesthetic with dark chocolate and gold. To fix the 'jarring transition' to plain inner pages, we must carry this luxurious, deep, dark theme across all screens, utilizing glassmorphism, metallic accents, and fluid motion."
-  },
-  "colors": {
-    "background": {
-      "base": "#140B00",
-      "surface": "#1A0F00",
-      "surface_elevated": "#261700"
+  "theme": {
+    "base": "light",
+    "archetype": "1 (Organic & Earthy / Luxury Extension)",
+    "colors": {
+      "background": "#FAF8F5",
+      "card_bg": "#FFFFFF",
+      "text_primary": "#2E2219",
+      "accent_gold": "#C68939",
+      "accent_gold_light": "rgba(198, 137, 57, 0.1)",
+      "border_luxury": "rgba(198, 137, 57, 0.2)",
+      "gradient_gold_start": "#E8C28D",
+      "gradient_gold_end": "#C68939"
     },
-    "brand": {
-      "primary": "#C9A55A",
-      "primary_light": "#E3C584",
-      "primary_dark": "#8F7233"
+    "typography": {
+      "primary_heading": "Playfair Display",
+      "secondary_heading": "Outfit",
+      "body": "Manrope",
+      "numbers": "Playfair Display",
+      "rules": "Use Playfair Display for all numerical data (points, balances) to evoke an old-money luxury feel. Use Outfit for modern, clean secondary headings. Manrope for highly legible body text."
     },
-    "text": {
-      "primary": "#F5F0E8",
-      "secondary": "#A3988B",
-      "disabled": "#5C5346"
-    },
-    "borders": {
-      "subtle": "rgba(245, 240, 232, 0.1)",
-      "gold": "rgba(201, 165, 90, 0.4)"
-    },
-    "tiers": {
-      "bronze": "#CD7F32",
-      "silver": "#C0C0C0",
-      "gold": "#FFD700",
-      "platinum": "#E5E4E2",
-      "titanium": "#878681",
-      "diamond": "#B9F2FF",
-      "privilege": "#8A2BE2"
+    "shadows": {
+      "luxury_soft": "0 8px 32px rgba(198, 137, 57, 0.06)",
+      "luxury_hover": "0 12px 48px rgba(198, 137, 57, 0.12)",
+      "gold_glow": "0 0 20px rgba(198, 137, 57, 0.4)"
     }
   },
-  "typography": {
-    "headings": {
-      "font_family": "Playfair Display, serif",
-      "weights": ["400", "600"],
-      "tracking": "tracking-tight"
+  "visual_gimmicks": {
+    "gold_shimmer_sweep": {
+      "description": "A subtle animated gradient that sweeps across premium cards to simulate light catching metallic gold.",
+      "css_classes": "relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2.5s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/50 before:to-transparent"
     },
-    "body": {
-      "font_family": "Outfit, sans-serif",
-      "weights": ["300", "400", "500"]
+    "premium_card_effect": {
+      "description": "White cards with an extremely subtle gold-tinted border and a tinted shadow to feel like a premium physical invitation.",
+      "css_classes": "bg-white border border-[#C68939]/20 shadow-[0_8px_32px_rgba(198,137,57,0.06)] rounded-2xl transition-all duration-500 hover:shadow-[0_12px_48px_rgba(198,137,57,0.12)] hover:-translate-y-1"
     },
-    "hierarchy": {
-      "h1": "text-4xl sm:text-5xl font-semibold text-[#C9A55A]",
-      "h2": "text-2xl sm:text-3xl font-medium text-[#C9A55A]",
-      "h3": "text-xl font-medium text-[#F5F0E8]",
-      "body": "text-base font-light text-[#A3988B]",
-      "caption": "text-xs tracking-wider uppercase text-[#A3988B]"
+    "elegant_dividers": {
+      "description": "Use gradient lines instead of solid borders for section dividers to feel like editorial flourishes.",
+      "css_classes": "h-[1px] w-full bg-gradient-to-r from-transparent via-[#C68939]/30 to-transparent"
+    },
+    "gradient_typography": {
+      "description": "For high-impact numbers like Points or Tier Status.",
+      "css_classes": "bg-clip-text text-transparent bg-gradient-to-r from-[#2E2219] to-[#C68939]"
+    },
+    "micro_interactions": {
+      "description": "Use framer-motion for smooth tap/hover scaling on interactive elements like quick action icons. Add a subtle gold halo on hover.",
+      "framer_props": "{ whileHover: { scale: 1.03 }, whileTap: { scale: 0.97 } }",
+      "css_classes": "transition-shadow duration-300 hover:shadow-[0_0_15px_rgba(198,137,57,0.2)]"
+    },
+    "glassmorphism_nav": {
+      "description": "For sticky headers or bottom navigation to maintain the cream background context while floating.",
+      "css_classes": "backdrop-blur-xl bg-white/70 border-t border-[#C68939]/10"
     }
-  },
-  "surfaces_and_textures": {
-    "glass_panel": "bg-black/40 backdrop-blur-xl border border-white/10 shadow-lg",
-    "gold_panel": "bg-gradient-to-br from-[#8F7233]/20 to-black/60 border border-[#C9A55A]/30",
-    "shimmer_effect": "relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/10 before:to-transparent",
-    "card_hover": "hover:bg-white/5 hover:border-[#C9A55A]/50 transition-all duration-300"
-  },
-  "motion_and_interactions": {
-    "page_transition": {
-      "initial": { "opacity": 0, "y": 15 },
-      "animate": { "opacity": 1, "y": 0 },
-      "exit": { "opacity": 0, "y": -15 },
-      "transition": { "duration": 0.4, "ease": [0.22, 1, 0.36, 1] }
-    },
-    "stagger_children": {
-      "container": {
-        "hidden": { "opacity": 0 },
-        "show": {
-          "opacity": 1,
-          "transition": { "staggerChildren": 0.1 }
-        }
-      },
-      "item": {
-        "hidden": { "opacity": 0, "y": 20 },
-        "show": { "opacity": 1, "y": 0, "transition": { "type": "spring", "stiffness": 300, "damping": 24 } }
-      }
-    },
-    "tap_scale": "whileTap={{ scale: 0.95 }}",
-    "kinetic_tilt": "Apply framer-motion useMotionValue and useTransform to create a subtle 3D tilt effect on the Home Points Card and Wallet Balance Card based on touch coordinates."
   },
   "page_specific_instructions": {
-    "home_page": {
-      "points_card": "Redesign as a premium 'physical' digital card. Use kinetic_tilt. Include a gold foil gradient background and a subtle shimmer. Data-testid: 'home-points-card'.",
-      "quick_actions": "Replace plain circles with glass_panel rounded-2xl squares. Icons should be gold and have a subtle hover lift. Data-testid: 'quick-action-btn'.",
-      "banner": "Use 'mall_luxury_banner' image with a bottom gradient fade into the dark background to avoid hard edges."
-    },
-    "wallet_page": {
-      "balance_card": "Centerpiece of the page. Should have a glowing aura behind it (e.g., div with blur-3xl bg-gold/20).",
-      "stats_row": "Use glassmorphism pills for Earned/Redeemed/Expired.",
-      "tier_progress": "A sleek, thin progress bar with a luminous gold fill and a glowing dot at the current position."
-    },
-    "explore_stores": {
-      "search_bar": "Glassmorphism input with gold focus ring. Data-testid: 'store-search-input'.",
-      "category_pills": "Horizontal scrollable list. Active pill is border-[#C9A55A] text-[#C9A55A], inactive is border-white/10 text-[#A3988B].",
-      "store_cards": "Bento-style grid. Cards must use glass_panel with the store image acting as a background layer heavily dimmed (bg-black/60) so text is readable. Data-testid: 'explore-store-card'."
-    },
-    "tier_journey": {
-      "layout": "Vertical timeline ladder. Each tier is a card that reveals on scroll.",
-      "visuals": "Use 'diamond_tier_reward' image for the top tier. Apply respective tier colors (bronze, silver, gold, platinum, titanium, diamond, privilege) as subtle glows or text gradients. Active tier has a gold_panel. Data-testid: 'tier-journey-card'."
-    },
-    "profile": {
-      "header": "Avatar surrounded by a gold ring. Member since and points clearly visible.",
-      "info_card": "A stacked list inside a glass_panel. Each row separated by a subtle border-b border-white/10."
-    }
+    "home_page": [
+      "Wrap the primary 'Points Card' in the `premium_card_effect` but apply the white marble texture from media_assets lightly mixed with the background.",
+      "Apply `gold_shimmer_sweep` across the points value container.",
+      "Quick action icons (Scan, Redeem) should be encased in soft rounded squares (bg-white/50) with 1px gold borders, utilizing `micro_interactions` scaling.",
+      "Animate the points counter on mount using a React counter hook/framer-motion (e.g., ticking up from 0 to 1,250).",
+      "Featured stores should use an editorial layout: image fills the card, with a gradient overlay (black/0 to black/40 at bottom), white serif text for the brand."
+    ],
+    "wallet_page": [
+      "Tier progress bar should be uniquely styled: a track of `bg-[#FAF8F5] border border-[#C68939]/20` with a fill of `bg-gradient-to-r from-[#E8C28D] to-[#C68939]` and a slow, continuous pulse animation.",
+      "The 'Balance Card' should utilize the elegant wavy cream texture from media_assets, ensuring text contrast remains high.",
+      "Recent activity list items should be separated by `elegant_dividers`."
+    ],
+    "explore_stores_page": [
+      "Category pills must look like high-end retail tags: pill shape, 1px gold-tinted border, pure white background, elegant sans-serif text (`Outfit`), subtle gold glow when active.",
+      "Store cards should be minimalist: borderless, pure white background, soft shadow. On hover, the image scales up slightly inside a hidden overflow container."
+    ],
+    "tier_journey_page": [
+      "The 7-tier ladder must feel physical. Each tier card should represent its metal (Bronze, Silver, Gold, Platinum, etc.) using custom gradient borders and subtle metallic noise textures.",
+      "Current tier gets an expanded 'Active' state card with the `gold_shimmer_sweep`."
+    ],
+    "bottom_navigation": [
+      "The main 5-tab bar must use `glassmorphism_nav`.",
+      "The center gold camera button must be elevated with `shadow-[0_0_20px_rgba(198,137,57,0.4)]`. It should have a slow, breathing scale animation (`animate-pulse` mixed with scale)."
+    ]
   },
   "media_assets": {
-    "mall_luxury_banner": "https://images.pexels.com/photos/8337785/pexels-photo-8337785.jpeg",
-    "diamond_tier_reward": "https://images.pexels.com/photos/6532369/pexels-photo-6532369.jpeg",
-    "abstract_gold_bg": "https://images.pexels.com/photos/21031387/pexels-photo-21031387.jpeg",
-    "store_fashion_1": "https://images.pexels.com/photos/11911863/pexels-photo-11911863.jpeg",
-    "store_fashion_2": "https://images.pexels.com/photos/35045845/pexels-photo-35045845.jpeg"
+    "images": [
+      {
+        "url": "https://images.pexels.com/photos/6634147/pexels-photo-6634147.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "texture",
+        "description": "White marble texture for the Home Points card background"
+      },
+      {
+        "url": "https://images.pexels.com/photos/6534919/pexels-photo-6534919.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "texture",
+        "description": "Elegant abstract wavy cream texture for the Wallet Balance card"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1769981271695-bb3d766ee419?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzN8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBzaG9wcGluZyUyMGZhc2hpb258ZW58MHx8fHwxNzc1MTk1Mzk3fDA&ixlib=rb-4.1.0&q=85",
+        "category": "store_card",
+        "description": "Luxury boutique image for 'Featured Stores' banner or hero carousel"
+      },
+      {
+        "url": "https://images.pexels.com/photos/135620/pexels-photo-135620.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "store_card",
+        "description": "Chic boutique image for Explore list fallback"
+      }
+    ]
   },
-  "component_usage": {
-    "icons": "Use lucide-react (already installed) with minimal strokeWidth (e.g., 1.5) for elegance.",
-    "buttons": "Primary buttons: solid gold (#C9A55A) background, dark chocolate text (#1A0F00), rounded-full, with tap_scale animation.",
-    "testing": "All interactive elements MUST have data-testid. e.g., 'scan-bill-btn', 'redeem-btn'."
+  "icons_library": "lucide-react",
+  "implementation_rules": [
+    "DO NOT change the overall light cream (#FAF8F5) body background.",
+    "DO NOT redesign structural page layouts. Only apply these specific styles, borders, shadows, and animations ON TOP of the existing elements.",
+    "Add 'shimmer' keyframes to tailwind config: { keyframes: { shimmer: { '100%': { transform: 'translateX(100%)' } } } }."
+  ],
+  "accessibility_and_testing": {
+    "contrast": "Ensure #2E2219 text maintains strong contrast against #FAF8F5 and #FFFFFF. Use #C68939 exclusively for large decorative elements, borders, or text sizes >18px.",
+    "testing": "All interactive elements, buttons, nav links, and tier cards MUST have a `data-testid` attribute formatted as kebab-case and role-based (e.g., `data-testid='scan-bill-center-button'`)."
   }
 }

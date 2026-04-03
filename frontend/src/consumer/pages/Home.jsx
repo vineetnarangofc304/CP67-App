@@ -134,10 +134,10 @@ export default function Home({ onMenuOpen }) {
       {/* Quick Actions — Staggered */}
       <motion.div className="home-quick-actions" data-testid="quick-actions" variants={stagger} initial="hidden" animate="visible">
         {[
-          { icon: Camera, label: 'Scan Bill', path: '/app/upload', color: '#C9A55A' },
-          { icon: Gift, label: 'Redeem', path: '/app/redeem', color: '#E3C584' },
-          { icon: Ticket, label: 'Events', path: '/app/events', color: '#C9A55A' },
-          { icon: MapPin, label: 'Explore', path: '/app/stores', color: '#E3C584' },
+          { icon: Camera, label: 'Scan Bill', path: '/app/upload', color: '#C68939' },
+          { icon: Gift, label: 'Redeem', path: '/app/redeem', color: '#e74c3c' },
+          { icon: Ticket, label: 'Events', path: '/app/events', color: '#8b5cf6' },
+          { icon: MapPin, label: 'Explore', path: '/app/stores', color: '#3b82f6' },
         ].map(a => (
           <motion.button
             key={a.label}
