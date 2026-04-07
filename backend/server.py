@@ -4091,7 +4091,7 @@ Support Desk: Ground Floor"""
                 # UPLOAD BILL PROMPT (per revised flow document)
                 upload_msg = """*Great Choice!*
 
-• Tap the Camera icon. (Camera Icon)
+• Tap the Camera icon.📸
 
 • Upload your CP67 Shopping Bill using Camera or Gallery.
 
