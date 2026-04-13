@@ -2,6 +2,15 @@
    CP67 Consumer App — Kinetic Luxury CSS
    ============================================ */
 
+/* === Antique Olive Font === */
+@font-face {
+  font-family: 'Antique Olive';
+  src: url('https://db.onlinewebfonts.com/t/cb7b75403be21916da62371db2387b14.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* === CSS Variables === */
 :root {
   --cp-gold: #C68939;
@@ -26,8 +35,8 @@
   --cp-cream: #F8F6F2;
   --cp-gold-bg: rgba(198, 137, 57, 0.08);
   --cp-gold-border: rgba(198, 137, 57, 0.2);
-  --font-heading: 'Playfair Display', serif;
-  --font-body: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading: 'Antique Olive', 'Playfair Display', serif;
+  --font-body: 'Antique Olive', 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
   --luxury-shadow: 0 8px 32px rgba(198, 137, 57, 0.06);
   --luxury-shadow-hover: 0 12px 48px rgba(198, 137, 57, 0.12);
   --gold-glow: 0 0 20px rgba(198, 137, 57, 0.35);

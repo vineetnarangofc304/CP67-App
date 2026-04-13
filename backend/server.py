@@ -1431,6 +1431,102 @@ async def get_fundle_count(payload: dict = Depends(verify_jwt_token)):
     count = await db.fundle_customers.count_documents({})
     return {"count": count}
 
+
+# ============ HOT DEALS (OFFERS) MANAGEMENT ============
+
+@api_router.get("/admin/offers")
+async def get_admin_offers(payload: dict = Depends(verify_jwt_token)):
+    offers = await db.offers.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"offers": offers}
+
+@api_router.post("/admin/offers")
+async def create_offer(request: Request, payload: dict = Depends(verify_jwt_token)):
+    data = await request.json()
+    offer = {
+        "id": str(uuid.uuid4()),
+        "title": data.get("title", ""),
+        "description": data.get("description", ""),
+        "store_name": data.get("store_name", ""),
+        "image_url": data.get("image_url", ""),
+        "discount_text": data.get("discount_text", ""),
+        "is_active": data.get("is_active", True),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.offers.insert_one(offer)
+    return {"success": True, "offer": {k: v for k, v in offer.items() if k != "_id"}}
+
+@api_router.post("/admin/offers/{offer_id}/upload-image")
+async def upload_offer_image(offer_id: str, file: UploadFile = File(...), payload: dict = Depends(verify_jwt_token)):
+    content = await file.read()
+    import base64
+    b64 = base64.b64encode(content).decode("utf-8")
+    mime = file.content_type or "image/jpeg"
+    data_url = f"data:{mime};base64,{b64}"
+    await db.offers.update_one({"id": offer_id}, {"$set": {"image_url": data_url}})
+    return {"success": True, "image_url": data_url}
+
+@api_router.put("/admin/offers/{offer_id}")
+async def update_offer(offer_id: str, request: Request, payload: dict = Depends(verify_jwt_token)):
+    data = await request.json()
+    update = {k: v for k, v in data.items() if k in ("title", "description", "store_name", "discount_text", "image_url", "is_active")}
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.offers.update_one({"id": offer_id}, {"$set": update})
+    return {"success": True}
+
+@api_router.delete("/admin/offers/{offer_id}")
+async def delete_offer(offer_id: str, payload: dict = Depends(verify_jwt_token)):
+    await db.offers.delete_one({"id": offer_id})
+    return {"success": True}
+
+
+# ============ EVENTS MANAGEMENT ============
+
+@api_router.get("/admin/events")
+async def get_admin_events(payload: dict = Depends(verify_jwt_token)):
+    events = await db.events.find({}, {"_id": 0}).sort("date", -1).to_list(100)
+    return {"events": events}
+
+@api_router.post("/admin/events")
+async def create_event(request: Request, payload: dict = Depends(verify_jwt_token)):
+    data = await request.json()
+    event = {
+        "id": str(uuid.uuid4()),
+        "title": data.get("title", ""),
+        "description": data.get("description", ""),
+        "date": data.get("date", ""),
+        "time": data.get("time", ""),
+        "venue": data.get("venue", ""),
+        "image_url": data.get("image_url", ""),
+        "is_active": data.get("is_active", True),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.events.insert_one(event)
+    return {"success": True, "event": {k: v for k, v in event.items() if k != "_id"}}
+
+@api_router.post("/admin/events/{event_id}/upload-image")
+async def upload_event_image(event_id: str, file: UploadFile = File(...), payload: dict = Depends(verify_jwt_token)):
+    content = await file.read()
+    import base64
+    b64 = base64.b64encode(content).decode("utf-8")
+    mime = file.content_type or "image/jpeg"
+    data_url = f"data:{mime};base64,{b64}"
+    await db.events.update_one({"id": event_id}, {"$set": {"image_url": data_url}})
+    return {"success": True, "image_url": data_url}
+
+@api_router.put("/admin/events/{event_id}")
+async def update_event(event_id: str, request: Request, payload: dict = Depends(verify_jwt_token)):
+    data = await request.json()
+    update = {k: v for k, v in data.items() if k in ("title", "description", "date", "time", "venue", "image_url", "is_active")}
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.events.update_one({"id": event_id}, {"$set": update})
+    return {"success": True}
+
+@api_router.delete("/admin/events/{event_id}")
+async def delete_event(event_id: str, payload: dict = Depends(verify_jwt_token)):
+    await db.events.delete_one({"id": event_id})
+    return {"success": True}
+
+
 # ============ BRAND MANAGEMENT ============
 
 @api_router.get("/admin/brands")

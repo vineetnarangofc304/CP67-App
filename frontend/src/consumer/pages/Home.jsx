@@ -80,7 +80,7 @@ export default function Home({ onMenuOpen }) {
           </motion.button>
           <img src="/ha-logo-white.png" alt="Homeland Advantage" className="home-ha-logo" />
           <div className="home-greeting">
-            <h1 data-testid="home-user-name" style={{ fontFamily: 'Playfair Display, serif', letterSpacing: '-0.02em' }}>Homeland Advantage</h1>
+            <h1 data-testid="home-user-name" style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>Homeland Advantage</h1>
           </div>
         </div>
         <motion.button className="home-bell" onClick={() => navigate('/app/notifications')} data-testid="notifications-btn" whileTap={{ scale: 0.9 }}>
@@ -210,7 +210,7 @@ export default function Home({ onMenuOpen }) {
         <motion.div className="home-section" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
           <div className="gold-divider" style={{ margin: '4px 20px 16px' }} />
           <div className="home-section-header">
-            <h2 style={{ fontFamily: 'Playfair Display, serif' }}>
+            <h2 style={{ fontFamily: 'var(--font-heading)' }}>
               <Sparkles size={16} style={{ display: 'inline', marginRight: 6, color: 'var(--cp-gold)' }} />
               Hot Deals
             </h2>
@@ -247,7 +247,7 @@ export default function Home({ onMenuOpen }) {
         <motion.div className="home-section" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
           <div className="gold-divider" style={{ margin: '4px 20px 16px' }} />
           <div className="home-section-header">
-            <h2 style={{ fontFamily: 'Playfair Display, serif' }}>Featured Stores</h2>
+            <h2 style={{ fontFamily: 'var(--font-heading)' }}>Featured Stores</h2>
             <button onClick={() => navigate('/app/stores')} data-testid="see-all-stores">See All <ChevronRight size={16} /></button>
           </div>
           <div className="home-stores-grid" data-testid="featured-stores">
@@ -280,7 +280,7 @@ export default function Home({ onMenuOpen }) {
       {data?.upcoming_events?.length > 0 && (
         <motion.div className="home-section" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
           <div className="home-section-header">
-            <h2 style={{ fontFamily: 'Playfair Display, serif' }}>Upcoming Events</h2>
+            <h2 style={{ fontFamily: 'var(--font-heading)' }}>Upcoming Events</h2>
             <button onClick={() => navigate('/app/events')} data-testid="see-all-events">See All <ChevronRight size={16} /></button>
           </div>
           <div className="home-events-scroll" data-testid="upcoming-events">

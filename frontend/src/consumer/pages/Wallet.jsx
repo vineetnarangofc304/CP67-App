@@ -14,6 +14,16 @@ const EARNING_SLABS = [
   { range: '5,00,001 & Above', retail: '35%', jewellery: '17.5%' },
 ];
 
+const TIER_CARD_STYLES = {
+  Bronze: { bg: 'linear-gradient(135deg, #B87333 0%, #8B5E3C 60%, #CD8E54 100%)', text: '#FFF' },
+  Silver: { bg: 'linear-gradient(135deg, #C0C0C0 0%, #A8A9AD 60%, #D4D4D8 100%)', text: '#1A1A1A' },
+  Gold: { bg: 'linear-gradient(135deg, #DAA520 0%, #B8860B 60%, #E8C252 100%)', text: '#FFF' },
+  Platinum: { bg: 'linear-gradient(135deg, #D8D8D4 0%, #B8B8B4 60%, #E8E8E6 100%)', text: '#2A2A2A' },
+  Titanium: { bg: 'linear-gradient(135deg, #54545A 0%, #3A3A3E 60%, #6B6B6F 100%)', text: '#FFF' },
+  Diamond: { bg: 'linear-gradient(135deg, #A7D8DE 0%, #6CB4C0 60%, #C5E8ED 100%)', text: '#1A3A3F' },
+  Privilege: { bg: 'linear-gradient(135deg, #6B3FA0 0%, #4A1D80 50%, #DAA520 100%)', text: '#FFF' },
+};
+
 function AnimatedCounter({ value, duration = 1.2 }) {
   const [display, setDisplay] = React.useState(0);
   const ref = React.useRef(null);
@@ -52,10 +62,12 @@ export default function Wallet() {
   if (loading) return <div className="consumer-loading"><div className="consumer-spinner" /></div>;
 
   const tier = wallet?.tier || {};
+  const tierName = tier.name || 'Bronze';
+  const cardStyle = TIER_CARD_STYLES[tierName] || TIER_CARD_STYLES.Bronze;
 
   return (
     <motion.div className="consumer-wallet" initial={{ opacity: 0 }} animate={{ opacity: 1 }} data-testid="wallet-screen">
-      <div className="wallet-header"><h1 style={{ fontFamily: 'Playfair Display, serif', letterSpacing: '-0.02em' }}>My Wallet</h1></div>
+      <div className="wallet-header"><h1 style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>My Wallet</h1></div>
 
       {/* Points Card */}
       <motion.div
@@ -64,20 +76,25 @@ export default function Wallet() {
         initial={{ y: -40, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: 'spring', damping: 14 }}
+        style={{ background: cardStyle.bg }}
       >
-        <div className="wallet-card-bg" />
+        <div className="wallet-card-bg" style={{ opacity: 0 }} />
+        {/* Coin decorations */}
+        <div style={{ position: 'absolute', top: 12, right: 16, opacity: 0.12, fontSize: 48, zIndex: 0, pointerEvents: 'none' }}>&#x1FA99;</div>
+        <div style={{ position: 'absolute', bottom: 16, left: 20, opacity: 0.08, fontSize: 36, zIndex: 0, pointerEvents: 'none' }}>&#x1FA99;</div>
+        <div style={{ position: 'absolute', top: '50%', right: '30%', opacity: 0.06, fontSize: 28, zIndex: 0, pointerEvents: 'none', transform: 'translateY(-50%)' }}>&#x1FA99;</div>
         {/* Shimmer sweep */}
         <motion.div style={{ position: 'absolute', inset: 0, borderRadius: 'var(--cp-radius)', overflow: 'hidden', zIndex: 1, pointerEvents: 'none' }}>
           <motion.div
-            style={{ width: '40%', height: '100%', background: 'linear-gradient(90deg, transparent, rgba(255,223,115,0.1), transparent)' }}
+            style={{ width: '40%', height: '100%', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)' }}
             animate={{ x: ['-100%', '350%'] }}
             transition={{ duration: 3, repeat: Infinity, repeatDelay: 5, ease: 'easeInOut' }}
           />
         </motion.div>
-        <div className="wallet-card-content">
-          <p className="wallet-label">Available Balance</p>
-          <h2 className="wallet-balance" data-testid="wallet-balance"><AnimatedCounter value={wallet?.balance || 0} /></h2>
-          <p className="wallet-conversion">Points</p>
+        <div className="wallet-card-content" style={{ color: cardStyle.text }}>
+          <p className="wallet-label" style={{ color: cardStyle.text, opacity: 0.8 }}>Available Balance</p>
+          <h2 className="wallet-balance" data-testid="wallet-balance" style={{ color: cardStyle.text }}><AnimatedCounter value={wallet?.balance || 0} /></h2>
+          <p className="wallet-conversion" style={{ color: cardStyle.text, opacity: 0.7 }}>Points</p>
           <div className="wallet-tier-section" onClick={() => navigate('/app/tier-journey')} style={{ cursor: 'pointer' }}>
             <motion.span
               className={`tier-badge tier-${(tier.name || 'bronze').toLowerCase()}`}

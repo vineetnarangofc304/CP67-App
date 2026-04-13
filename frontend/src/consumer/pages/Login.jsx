@@ -95,7 +95,7 @@ export default function Login() {
       <div className="login-body">
         <img src="/ha-logo-white.png" alt="Homeland Advantage" className="login-ha-logo" />
 
-        <h1 style={{ fontFamily: 'Playfair Display, serif', letterSpacing: '-0.02em' }}>{step === 'phone' ? 'Welcome' : 'Verify OTP'}</h1>
+        <h1 style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>{step === 'phone' ? 'Welcome to Homeland Advantage' : 'Verify OTP'}</h1>
         <p className="login-subtitle">
           {step === 'phone'
             ? 'Enter your phone number to continue'

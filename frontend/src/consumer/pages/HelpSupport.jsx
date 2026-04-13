@@ -8,7 +8,6 @@ const faqs = [
   { q: 'How do I redeem points?', a: 'Go to the Rewards section and choose from available vouchers. 1 point = Rs 1. Redeem directly at participating stores.' },
   { q: 'How long are bills valid for upload?', a: 'Bills must be uploaded within 15 days of purchase. Bills older than 15 days cannot be processed.' },
   { q: 'Why was my bill rejected?', a: 'Bills may be rejected if they are from outside CP67 Mall, are older than 15 days, are duplicates, or if the image is unclear.' },
-  { q: 'What happens with bills above Rs 30,000?', a: 'Bills above Rs 30,000 require manual verification by our team. Points will be credited within 24-48 hours after approval.' },
   { q: 'Do points expire?', a: 'Please check the terms and conditions for point expiry rules. We recommend redeeming points regularly.' },
 ];
 

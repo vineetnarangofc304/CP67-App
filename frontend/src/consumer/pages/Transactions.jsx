@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowUpRight, ArrowDownRight, Filter } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, ArrowDownRight, Filter, Clock } from 'lucide-react';
 import { useConsumerAuth, API } from '../ConsumerApp';
 
 const FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'earn', label: 'Earned' },
   { id: 'redeem', label: 'Redeemed' },
+  { id: 'expired', label: 'Expired' },
 ];
 
 export default function Transactions() {
@@ -59,14 +60,15 @@ export default function Transactions() {
             <motion.div key={t.id || i} className="txn-list-item"
               initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }} data-testid={`txn-item-${i}`}>
-              <div className={`txn-list-icon ${t.type}`}>
-                {t.type === 'earn' ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
+              <div className={`txn-list-icon ${t.type}`} style={t.type === 'expired' ? { background: '#FEE2E2', color: '#EF4444' } : {}}>
+                {t.type === 'earn' ? <ArrowUpRight size={18} /> : t.type === 'expired' ? <Clock size={18} /> : <ArrowDownRight size={18} />}
               </div>
               <div className="txn-list-info">
                 <h4>{t.description || t.store_name}</h4>
                 <p>
                   {t.bill_no && <span>#{t.bill_no} &middot; </span>}
                   {new Date(t.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {t.type === 'expired' && <span style={{ color: '#EF4444', fontWeight: 600 }}> &middot; Expired</span>}
                 </p>
               </div>
               <div className="txn-list-points">

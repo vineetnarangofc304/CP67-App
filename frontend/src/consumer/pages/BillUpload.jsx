@@ -222,7 +222,7 @@ export default function BillUpload() {
               <div className="capture-icon">
                 <Camera size={40} />
               </div>
-              <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Great Choice!</h2>
+              <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: 24, fontWeight: 700, marginBottom: 12 }}>Great Choice!</h2>
 
               <div style={{ textAlign: 'left', padding: '0 8px', marginBottom: 16, color: 'var(--cp-text)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 15 }}>

@@ -97,12 +97,12 @@ const ProtectedConsumer = ({ children }) => {
   return children;
 };
 
-const showNav = ['/app', '/app/home', '/app/stores', '/app/wallet', '/app/events', '/app/offers', '/app/profile', '/app/notifications'];
+const hideNav = ['/app/welcome', '/app/login', '/app/onboarding', '/app/legal'];
 
 export default function ConsumerApp() {
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const showBottomNav = showNav.includes(location.pathname) || location.pathname === '/app/';
+  const showBottomNav = !hideNav.includes(location.pathname);
 
   return (
     <ConsumerAuthProvider>

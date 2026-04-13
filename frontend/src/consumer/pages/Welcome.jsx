@@ -76,7 +76,7 @@ export default function Welcome() {
           transition={{ delay: 0.8 }}
         >
           <h1 style={{
-            fontFamily: 'Playfair Display, serif',
+            fontFamily: 'var(--font-heading)',
             fontSize: 28,
             fontWeight: 700,
             color: '#fff',

@@ -64,7 +64,7 @@ export default function Stores() {
   return (
     <motion.div className="consumer-stores" initial={{ opacity: 0 }} animate={{ opacity: 1 }} data-testid="stores-screen">
       <div className="stores-header">
-        <h1 style={{ fontFamily: 'Playfair Display, serif', letterSpacing: '-0.02em' }}>Explore Stores</h1>
+        <h1 style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>Explore Stores</h1>
         <p className="stores-count">{stores.length} brands at CP67 Mall</p>
         <div className="stores-search">
           <Search size={18} />

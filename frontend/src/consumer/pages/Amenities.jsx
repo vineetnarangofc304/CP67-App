@@ -5,7 +5,6 @@ import { API } from '../ConsumerApp';
 
 const CATEGORY_ICONS = {
   'Restrooms': Droplets,
-  'ATMs & Banking': CreditCard,
   'Services': HelpCircle,
   'Connectivity': Wifi,
   'Parking & EV Services': Car,
@@ -14,7 +13,6 @@ const CATEGORY_ICONS = {
 
 const CATEGORY_COLORS = {
   'Restrooms': '#3b82f6',
-  'ATMs & Banking': '#22c55e',
   'Services': '#C68939',
   'Connectivity': '#8b5cf6',
   'Parking & EV Services': '#f59e0b',

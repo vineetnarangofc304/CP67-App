@@ -45,7 +45,7 @@ export default function SideDrawer({ isOpen, onClose }) {
               <div className="drawer-user-info">
                 <img src="/ha-logo-white.png" alt="Homeland Advantage" className="drawer-ha-logo" />
                 <div>
-                  <h3 style={{ fontFamily: 'Playfair Display, serif' }}>{user?.name || 'User'}</h3>
+                  <h3 style={{ fontFamily: 'var(--font-heading)' }}>{user?.name || 'User'}</h3>
                   <p>{user?.phone || ''}</p>
                 </div>
               </div>

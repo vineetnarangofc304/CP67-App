@@ -5,13 +5,13 @@ import { ArrowLeft, Award, Star, Crown, Shield, Gem, Zap, Diamond, Trophy, Lock,
 import { useConsumerAuth, API } from '../ConsumerApp';
 
 const TIER_META = {
-  Bronze: { icon: Shield, gradient: 'linear-gradient(135deg, #CD7F32 0%, #A0522D 100%)', light: '#F5E6D3' },
-  Silver: { icon: Star, gradient: 'linear-gradient(135deg, #D4D4D4 0%, #A8A8A8 100%)', light: '#F0F0F0' },
-  Gold: { icon: Crown, gradient: 'linear-gradient(135deg, #FFD700 0%, #B8960C 100%)', light: '#FFF8E1' },
-  Platinum: { icon: Gem, gradient: 'linear-gradient(135deg, #E8E8E0 0%, #B0AFA8 100%)', light: '#F5F5F4' },
-  Titanium: { icon: Zap, gradient: 'linear-gradient(135deg, #878681 0%, #5A5A56 100%)', light: '#EDEDEC' },
-  Diamond: { icon: Diamond, gradient: 'linear-gradient(135deg, #4FC3F7 0%, #0288D1 100%)', light: '#E1F5FE' },
-  Privilege: { icon: Trophy, gradient: 'linear-gradient(135deg, #2E2219 0%, #5D3A1A 100%)', light: '#F5E6D3' },
+  Bronze: { icon: Shield, gradient: 'linear-gradient(135deg, #B87333 0%, #8B5E3C 100%)', light: '#F5E6D3' },
+  Silver: { icon: Star, gradient: 'linear-gradient(135deg, #C0C0C0 0%, #A8A9AD 100%)', light: '#F0F0F0' },
+  Gold: { icon: Crown, gradient: 'linear-gradient(135deg, #DAA520 0%, #B8860B 100%)', light: '#FFF8E1' },
+  Platinum: { icon: Gem, gradient: 'linear-gradient(135deg, #D8D8D4 0%, #C4C4C0 100%)', light: '#F5F5F4' },
+  Titanium: { icon: Zap, gradient: 'linear-gradient(135deg, #6B6B6F 0%, #54545A 100%)', light: '#EDEDEC' },
+  Diamond: { icon: Diamond, gradient: 'linear-gradient(135deg, #A7D8DE 0%, #6CB4C0 100%)', light: '#E1F5FE' },
+  Privilege: { icon: Trophy, gradient: 'linear-gradient(135deg, #6B3FA0 0%, #DAA520 100%)', light: '#F3E8FF' },
 };
 
 function AnimatedProgress({ value, delay = 0 }) {
@@ -75,7 +75,7 @@ export default function TierJourney() {
           >
             <ArrowLeft size={20} />
           </motion.button>
-          <h1 style={{ fontFamily: 'Playfair Display, serif', color: '#fff', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
+          <h1 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
             Tier Journey
           </h1>
         </div>
@@ -106,7 +106,7 @@ export default function TierJourney() {
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: 600 }}>
                 Current Tier
               </div>
-              <div style={{ color: '#fff', fontSize: 22, fontWeight: 700, fontFamily: 'Playfair Display, serif' }}>
+              <div style={{ color: '#fff', fontSize: 22, fontWeight: 700, fontFamily: 'var(--font-heading)' }}>
                 {current.name}
               </div>
             </div>
@@ -130,7 +130,7 @@ export default function TierJourney() {
       {/* Vertical Ladder */}
       <div style={{ padding: '24px 20px', position: 'relative' }}>
         <h2 style={{
-          fontFamily: 'Playfair Display, serif', fontSize: 20, fontWeight: 700,
+          fontFamily: 'var(--font-heading)', fontSize: 20, fontWeight: 700,
           color: 'var(--cp-text)', marginBottom: 24,
         }}>
           Your Reward Ladder
@@ -212,7 +212,7 @@ export default function TierJourney() {
                       <div>
                         <div style={{
                           fontSize: 16, fontWeight: 700,
-                          fontFamily: 'Playfair Display, serif',
+                          fontFamily: 'var(--font-heading)',
                           color: isCurrentOrPast ? 'var(--cp-text)' : 'var(--cp-text-3)',
                         }}>
                           {tier.name}
@@ -236,7 +236,7 @@ export default function TierJourney() {
                       {isExpanded ? <ChevronUp size={16} color="var(--cp-text-3)" /> : <ChevronDown size={16} color="var(--cp-text-3)" />}
                     </div>
 
-                    {/* Expanded benefits */}
+                    {/* Expanded slab info */}
                     <motion.div
                       initial={false}
                       animate={{ height: isExpanded ? 'auto' : 0, opacity: isExpanded ? 1 : 0 }}
@@ -249,21 +249,23 @@ export default function TierJourney() {
                         border: isCurrent ? '1px solid var(--cp-gold-border)' : '1px solid var(--cp-border)',
                       }}>
                         <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--cp-text-2)', marginBottom: 8 }}>
-                          Benefits
+                          Earning Rates
                         </div>
-                        {tier.benefits?.map((b, bi) => (
-                          <div key={bi} style={{
-                            display: 'flex', alignItems: 'center', gap: 8,
-                            fontSize: 13, color: 'var(--cp-text)',
-                            padding: '4px 0',
-                          }}>
-                            <div style={{
-                              width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
-                              background: isCurrentOrPast ? 'var(--cp-gold)' : 'var(--cp-text-3)',
-                            }} />
-                            {b}
+                        {tier.purchase_range && (
+                          <div style={{ fontSize: 12, color: 'var(--cp-text-2)', marginBottom: 10 }}>
+                            Purchase Range: <strong style={{ color: 'var(--cp-text)' }}>INR {tier.purchase_range}</strong>
                           </div>
-                        ))}
+                        )}
+                        <div style={{ display: 'flex', gap: 12 }}>
+                          <div style={{ flex: 1, textAlign: 'center', padding: '10px 8px', borderRadius: 8, background: 'rgba(198,137,57,0.08)' }}>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--cp-gold)' }}>{tier.retail || '-'}</div>
+                            <div style={{ fontSize: 10, color: 'var(--cp-text-2)', marginTop: 2 }}>Retail</div>
+                          </div>
+                          <div style={{ flex: 1, textAlign: 'center', padding: '10px 8px', borderRadius: 8, background: 'rgba(198,137,57,0.08)' }}>
+                            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--cp-gold)' }}>{tier.jewellery || '-'}</div>
+                            <div style={{ fontSize: 10, color: 'var(--cp-text-2)', marginTop: 2 }}>Jewellery & Electronics</div>
+                          </div>
+                        </div>
                       </div>
                     </motion.div>
                   </div>
@@ -282,14 +284,14 @@ export default function TierJourney() {
         viewport={{ once: true }}
         data-testid="points-earning-slab"
       >
-        <h3 style={{ fontFamily: 'Playfair Display, serif', fontSize: 17, fontWeight: 700, marginBottom: 14, color: 'var(--cp-text)' }}>
+        <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 17, fontWeight: 700, marginBottom: 14, color: 'var(--cp-text)' }}>
           Points Earning Slab
         </h3>
         <div style={{
           background: 'linear-gradient(135deg, #2E2219, #5D3A1A)',
           borderRadius: 12, padding: '14px 16px', color: '#FFDF73',
           fontSize: 15, fontWeight: 700, textAlign: 'center', marginBottom: 14,
-          fontFamily: 'Playfair Display, serif',
+          fontFamily: 'var(--font-heading)',
         }}>
           10 Points = INR 1
         </div>

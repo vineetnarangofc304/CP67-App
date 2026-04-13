@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, ChevronRight, Phone, Mail, Heart, User, Calendar, MapPin, Users, Bell } from 'lucide-react';
+import { LogOut, ChevronRight, Phone, Mail, Heart, User, Calendar, MapPin, Users, Bell, Home, Navigation } from 'lucide-react';
 import { useConsumerAuth, API } from '../ConsumerApp';
 import { toast } from 'sonner';
 
@@ -10,6 +10,7 @@ export default function Profile() {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({});
   const [loading, setLoading] = useState(true);
+  const [pincodeLoading, setPincodeLoading] = useState(false);
   const { token, logout } = useConsumerAuth();
   const navigate = useNavigate();
 
@@ -19,13 +20,32 @@ export default function Profile() {
       if (res.ok) {
         const data = await res.json();
         setProfile(data);
-        setForm({ name: data.name || '', email: data.email || '', gender: data.gender || '', dob: data.dob || '', address: data.address || '' });
+        setForm({
+          name: data.name || '', email: data.email || '', gender: data.gender || '',
+          dob: data.dob || '', house_no: data.house_no || '', landmark: data.landmark || '',
+          pincode: data.pincode || '', city: data.city || '', state: data.state || ''
+        });
       }
     } catch { /* */ }
     setLoading(false);
   }, [token]);
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
+
+  const lookupPincode = async (pincode) => {
+    if (pincode.length !== 6) return;
+    setPincodeLoading(true);
+    try {
+      const res = await fetch(`${API}/pincode/${pincode}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setForm(f => ({ ...f, city: data.city, state: data.state }));
+        }
+      }
+    } catch { /* */ }
+    setPincodeLoading(false);
+  };
 
   const saveProfile = async () => {
     try {
@@ -49,12 +69,14 @@ export default function Profile() {
 
   if (loading) return <div className="consumer-loading"><div className="consumer-spinner" /></div>;
 
-  const tierColors = { Bronze: '#CD7F32', Silver: '#C0C0C0', Gold: '#FFD700', Platinum: '#E5E4E2' };
+  const tierColors = { Bronze: '#B87333', Silver: '#A8A9AD', Gold: '#DAA520', Platinum: '#C4C4C0', Titanium: '#54545A', Diamond: '#A7D8DE', Privilege: '#6B3FA0' };
+
+  const addressParts = [form.house_no, form.landmark, form.city, form.state, form.pincode].filter(Boolean).join(', ');
 
   return (
     <motion.div className="consumer-profile" initial={{ opacity: 0 }} animate={{ opacity: 1 }} data-testid="profile-screen">
       <div className="profile-header-section">
-        <div className="profile-avatar" style={{ borderColor: tierColors[profile?.tier] || '#CD7F32' }}>
+        <div className="profile-avatar" style={{ borderColor: tierColors[profile?.tier] || '#B87333' }}>
           <span>{(profile?.name || '?')[0].toUpperCase()}</span>
         </div>
         <h1 data-testid="profile-name">{profile?.name || 'CP67 Member'}</h1>
@@ -88,10 +110,40 @@ export default function Profile() {
               <label><Calendar size={14} /> Date of Birth</label>
               <input type="date" value={form.dob} onChange={e => setForm(f => ({...f, dob: e.target.value}))} data-testid="edit-dob" />
             </div>
+
+            <h3 style={{ fontSize: 13, fontWeight: 600, color: 'var(--cp-text-2)', margin: '16px 0 8px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Address</h3>
             <div className="profile-field">
-              <label><MapPin size={14} /> Address</label>
-              <input value={form.address} onChange={e => setForm(f => ({...f, address: e.target.value}))} data-testid="edit-address" placeholder="Your address" />
+              <label><Home size={14} /> House / Flat No.</label>
+              <input value={form.house_no} onChange={e => setForm(f => ({...f, house_no: e.target.value}))} data-testid="edit-house-no" placeholder="e.g. B-42, Tower 3" />
             </div>
+            <div className="profile-field">
+              <label><Navigation size={14} /> Landmark</label>
+              <input value={form.landmark} onChange={e => setForm(f => ({...f, landmark: e.target.value}))} data-testid="edit-landmark" placeholder="Near..." />
+            </div>
+            <div className="profile-field">
+              <label><MapPin size={14} /> Pincode</label>
+              <input
+                value={form.pincode} maxLength={6} inputMode="numeric"
+                onChange={e => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  setForm(f => ({...f, pincode: val}));
+                  if (val.length === 6) lookupPincode(val);
+                }}
+                data-testid="edit-pincode" placeholder="6-digit pincode"
+              />
+              {pincodeLoading && <span style={{ fontSize: 11, color: 'var(--cp-gold)' }}>Looking up...</span>}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div className="profile-field" style={{ flex: 1 }}>
+                <label>City</label>
+                <input value={form.city} onChange={e => setForm(f => ({...f, city: e.target.value}))} data-testid="edit-city" placeholder="City" />
+              </div>
+              <div className="profile-field" style={{ flex: 1 }}>
+                <label>State</label>
+                <input value={form.state} onChange={e => setForm(f => ({...f, state: e.target.value}))} data-testid="edit-state" placeholder="State" />
+              </div>
+            </div>
+
             <div className="profile-edit-actions">
               <button className="profile-save-btn" onClick={saveProfile} data-testid="save-profile-btn">Save Changes</button>
               <button className="profile-cancel-btn" onClick={() => setEditing(false)}>Cancel</button>
@@ -104,7 +156,7 @@ export default function Profile() {
             <div className="profile-info-item"><Mail size={16} /><div><label>Email</label><p>{profile?.email || 'Not set'}</p></div></div>
             <div className="profile-info-item"><Users size={16} /><div><label>Gender</label><p>{profile?.gender ? profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1) : 'Not set'}</p></div></div>
             <div className="profile-info-item"><Calendar size={16} /><div><label>Date of Birth</label><p>{profile?.dob || 'Not set'}</p></div></div>
-            <div className="profile-info-item"><MapPin size={16} /><div><label>Address</label><p>{profile?.address || 'Not set'}</p></div></div>
+            <div className="profile-info-item"><MapPin size={16} /><div><label>Address</label><p>{addressParts || 'Not set'}</p></div></div>
             <button className="profile-edit-btn" onClick={() => setEditing(true)} data-testid="edit-profile-btn">
               Edit Profile <ChevronRight size={16} />
             </button>

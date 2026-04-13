@@ -111,13 +111,20 @@ BRAND_LOGO_MAP = {
 }
 
 async def _migrate_brand_logos():
-    """Ensure all brands have CDN-hosted logo URLs (not local file paths)"""
+    """Ensure brands without logos get a CDN fallback. Never overwrite manually uploaded logos."""
     if _db is None:
         return
     updated = 0
     async for brand in _db.brands.find({"brand_name": {"$exists": True, "$ne": ""}}, {"_id": 0, "id": 1, "brand_name": 1, "logo_url": 1}):
         name = brand.get("brand_name", "")
         current_logo = brand.get("logo_url", "")
+        
+        # Skip if brand already has a custom logo (data URL from admin upload or external URL)
+        if current_logo and current_logo.startswith("data:"):
+            continue
+        if current_logo and not current_logo.startswith("https://www.google.com/s2/favicons") and current_logo.startswith("http"):
+            continue
+        
         domain = BRAND_LOGO_MAP.get(name, "")
         if domain:
             expected = f"https://www.google.com/s2/favicons?domain={domain}&sz=128"
@@ -128,13 +135,12 @@ async def _migrate_brand_logos():
                 )
                 updated += 1
         elif not current_logo or "/api/uploads/" in current_logo:
-            # Brand not in map and has no external logo - clear broken local URL
             await _db.brands.update_one(
                 {"id": brand["id"]},
                 {"$set": {"logo_url": ""}}
             )
     if updated > 0:
-        logger.info(f"Migrated {updated} brand logos to CDN URLs")
+        logger.info(f"Set CDN fallback logos for {updated} brands")
 
 
 BRAND_DIRECTORY = [
@@ -327,6 +333,11 @@ class UpdateProfileRequest(BaseModel):
     gender: Optional[str] = None
     dob: Optional[str] = None
     address: Optional[str] = None
+    house_no: Optional[str] = None
+    landmark: Optional[str] = None
+    pincode: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
     interests: Optional[List[str]] = None
 
 class RedeemRequest(BaseModel):
@@ -519,6 +530,16 @@ async def update_profile(request: UpdateProfileRequest, current_user=Depends(get
         update_data["interests"] = request.interests
     if request.address is not None:
         update_data["address"] = request.address
+    if request.house_no is not None:
+        update_data["house_no"] = request.house_no
+    if request.landmark is not None:
+        update_data["landmark"] = request.landmark
+    if request.pincode is not None:
+        update_data["pincode"] = request.pincode
+    if request.city is not None:
+        update_data["city"] = request.city
+    if request.state is not None:
+        update_data["state"] = request.state
 
     if update_data:
         update_data["onboarding_complete"] = True
@@ -527,6 +548,23 @@ async def update_profile(request: UpdateProfileRequest, current_user=Depends(get
 
     user = await _db.users.find_one({"id": current_user["sub"]}, {"_id": 0})
     return {"success": True, "user": {k: v for k, v in user.items() if k != "_id"}}
+
+
+@consumer_router.get("/pincode/{pincode}")
+async def lookup_pincode(pincode: str):
+    """Lookup city and state from pincode using India Post API"""
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(f"https://api.postalpincode.in/pincode/{pincode}")
+            data = resp.json()
+            if data and data[0].get("Status") == "Success" and data[0].get("PostOffice"):
+                po = data[0]["PostOffice"][0]
+                return {"success": True, "city": po.get("District", ""), "state": po.get("State", "")}
+    except Exception:
+        pass
+    return {"success": False, "city": "", "state": ""}
+
 
 
 # ==================== HOME ROUTE ====================
@@ -558,12 +596,13 @@ async def get_home(current_user=Depends(get_current_consumer)):
         async for s in _db.stores.find({"is_active": True}, {"_id": 0}).limit(8):
             featured_stores.append(s)
     if not featured_stores:
-        async for b in _db.brands.find({"is_active": {"$ne": False}, "description": {"$exists": True, "$ne": ""}}, {"_id": 0}).limit(8):
+        async for b in _db.brands.find({"is_active": {"$ne": False}, "is_eligible": {"$ne": False}}, {"_id": 0}).limit(8):
             featured_stores.append({
                 "id": b.get("id"),
                 "name": b.get("brand_name"),
                 "category": b.get("category") or "General",
-                "cover_image": b.get("cover_image_url") or "",
+                "cover_image": b.get("cover_image_url") or b.get("logo_url") or "",
+                "logo_url": b.get("logo_url") or "",
                 "is_featured": True
             })
 
@@ -765,13 +804,13 @@ async def get_wallet(current_user=Depends(get_current_consumer)):
 
 def calculate_tier(total_points):
     tiers = [
-        {"name": "Bronze", "min": 0, "max": 2499, "color": "#CD7F32", "next": "Silver", "next_at": 2500},
-        {"name": "Silver", "min": 2500, "max": 9999, "color": "#C0C0C0", "next": "Gold", "next_at": 10000},
-        {"name": "Gold", "min": 10000, "max": 24999, "color": "#FFD700", "next": "Platinum", "next_at": 25000},
-        {"name": "Platinum", "min": 25000, "max": 49999, "color": "#E5E4E2", "next": "Titanium", "next_at": 50000},
-        {"name": "Titanium", "min": 50000, "max": 99999, "color": "#878681", "next": "Diamond", "next_at": 100000},
-        {"name": "Diamond", "min": 100000, "max": 249999, "color": "#B9F2FF", "next": "Privilege", "next_at": 250000},
-        {"name": "Privilege", "min": 250000, "max": 999999, "color": "#2c1810", "next": None, "next_at": None},
+        {"name": "Bronze", "min": 0, "max": 2499, "color": "#B87333", "next": "Silver", "next_at": 2500},
+        {"name": "Silver", "min": 2500, "max": 9999, "color": "#A8A9AD", "next": "Gold", "next_at": 10000},
+        {"name": "Gold", "min": 10000, "max": 24999, "color": "#DAA520", "next": "Platinum", "next_at": 25000},
+        {"name": "Platinum", "min": 25000, "max": 49999, "color": "#C4C4C0", "next": "Titanium", "next_at": 50000},
+        {"name": "Titanium", "min": 50000, "max": 99999, "color": "#54545A", "next": "Diamond", "next_at": 100000},
+        {"name": "Diamond", "min": 100000, "max": 249999, "color": "#A7D8DE", "next": "Privilege", "next_at": 250000},
+        {"name": "Privilege", "min": 250000, "max": 999999, "color": "#6B3FA0", "next": None, "next_at": None},
     ]
     for t in tiers:
         if t["min"] <= total_points <= t["max"]:
@@ -1091,6 +1130,22 @@ async def list_transactions(
                 "points": -(r.get("points_used", 0)),
                 "status": r.get("status", "completed"),
                 "date": r.get("created_at")
+            })
+
+    if filter_type in ("all", "expired"):
+        async for e in _db.expired_points.find(
+            {"user_phone": {"$in": [current_user["phone"], phone_10, f"91{phone_10}"]}},
+            {"_id": 0}
+        ).sort("expired_at", -1).limit(100):
+            transactions.append({
+                "id": e.get("id", ""),
+                "type": "expired",
+                "description": e.get("reason", "Points expired"),
+                "store_name": "",
+                "amount": 0,
+                "points": -(e.get("points", 0)),
+                "status": "expired",
+                "date": e.get("expired_at", e.get("created_at"))
             })
 
     # Sort all by date descending
@@ -1459,9 +1514,6 @@ async def get_amenities():
             {"name": "Washroom - Third Floor", "location": "Zone 1 & Zone 4", "floor": "Third Floor"},
             {"name": "Washroom - 4th Floor", "location": "Zone 4", "floor": "4th Floor"},
         ]},
-        {"category": "ATMs & Banking", "items": [
-            {"name": "ATM / Banking Services", "location": "Not Available", "floor": "-"},
-        ]},
         {"category": "Services", "items": [
             {"name": "Customer Help Desk", "location": "Ground Floor", "floor": "Ground Floor"},
             {"name": "Lost & Found", "location": "Ground Floor, Security Office", "floor": "Ground Floor"},
@@ -1552,53 +1604,13 @@ async def get_tier_info(current_user=Depends(get_current_consumer)):
     current_tier = calculate_tier(total_earned)
 
     tiers = [
-        {"name": "Bronze", "min_points": 0, "color": "#CD7F32", "benefits": [
-            "Earn points on every purchase",
-            "Access to basic rewards catalog",
-            "Birthday bonus points",
-        ]},
-        {"name": "Silver", "min_points": 2500, "color": "#C0C0C0", "benefits": [
-            "All Bronze benefits",
-            "1.5x points multiplier",
-            "Priority customer support",
-            "Exclusive Silver member offers",
-        ]},
-        {"name": "Gold", "min_points": 10000, "color": "#FFD700", "benefits": [
-            "All Silver benefits",
-            "2x points multiplier",
-            "Free valet parking (weekends)",
-            "Exclusive Gold member events",
-            "Early access to sales",
-        ]},
-        {"name": "Platinum", "min_points": 25000, "color": "#E5E4E2", "benefits": [
-            "All Gold benefits",
-            "3x points multiplier",
-            "Free valet parking (anytime)",
-            "Personal shopping concierge",
-            "Platinum-only lounge access",
-        ]},
-        {"name": "Titanium", "min_points": 50000, "color": "#878681", "benefits": [
-            "All Platinum benefits",
-            "4x points multiplier",
-            "Dedicated relationship manager",
-            "Exclusive Titanium member events",
-            "Priority mall services",
-        ]},
-        {"name": "Diamond", "min_points": 100000, "color": "#B9F2FF", "benefits": [
-            "All Titanium benefits",
-            "5x points multiplier",
-            "VIP lounge & concierge",
-            "Complimentary gift wrapping",
-            "Exclusive Diamond previews",
-        ]},
-        {"name": "Privilege", "min_points": 250000, "color": "#2c1810", "benefits": [
-            "All Diamond benefits",
-            "Maximum points multiplier",
-            "Personal stylist service",
-            "All-access VIP privileges",
-            "Exclusive invitation-only events",
-            "Anniversary luxury rewards",
-        ]},
+        {"name": "Bronze", "min_points": 0, "color": "#B87333", "purchase_range": "0 - 10,000", "retail": "10%", "jewellery": "5%"},
+        {"name": "Silver", "min_points": 2500, "color": "#A8A9AD", "purchase_range": "10,001 - 25,000", "retail": "15%", "jewellery": "7.5%"},
+        {"name": "Gold", "min_points": 10000, "color": "#DAA520", "purchase_range": "25,001 - 75,000", "retail": "20%", "jewellery": "10%"},
+        {"name": "Platinum", "min_points": 25000, "color": "#C4C4C0", "purchase_range": "75,001 - 1,50,000", "retail": "25%", "jewellery": "12.5%"},
+        {"name": "Titanium", "min_points": 50000, "color": "#54545A", "purchase_range": "1,50,001 - 3,00,000", "retail": "30%", "jewellery": "15%"},
+        {"name": "Diamond", "min_points": 100000, "color": "#A7D8DE", "purchase_range": "3,00,001 - 5,00,000", "retail": "32.5%", "jewellery": "16.25%"},
+        {"name": "Privilege", "min_points": 250000, "color": "#6B3FA0", "purchase_range": "5,00,001 & Above", "retail": "35%", "jewellery": "17.5%"},
     ]
 
     return {
