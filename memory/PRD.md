@@ -62,6 +62,20 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (April 13, 2026 - Session 3)
+- **Font**: Changed to Antique Olive everywhere (heading + body)
+- **Login**: Shows "Welcome to Homeland Advantage"
+- **Wallet Card**: Tier-specific slab colours (Bronze=Copper, Silver=Metallic Grey, Gold=Rich Gold, Platinum=Cool Light Grey, Titanium=Dark Grey, Diamond=Ice Blue, Privilege=Royal Purple & Gold) with coin decorations
+- **Hot Deals & Events Admin**: Full CRUD with image upload in admin panel; consumer app pulls from DB
+- **Profile**: Added pincode auto-fill (city/state via India Post API), house_no, landmark fields
+- **Tier Journey**: Replaced old benefits with earning rates table (Retail % / Jewellery & Electronics % per purchase range)
+- **Transactions**: Added "Expired" filter tab
+- **Bottom Nav**: Now visible on ALL inner pages (wallet, upload, tier, transactions, amenities, help, profile, etc.)
+- **Amenities**: Removed ATM & Banking category
+- **Help & Support**: Removed "bill above 30,000" FAQ
+- **Logo Syncing**: Admin-uploaded logos (data: URLs) no longer overwritten by startup migration
+- **Brands Filtering**: Featured stores only show eligible, active brands
+
 ## Upcoming Tasks (P1)
 - Campaign-aware bill processing: Auto-apply multipliers during active campaigns
 - PWA Installation Guide: Modal for mall visitors on "Add to Home Screen"
