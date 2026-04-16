@@ -5755,9 +5755,34 @@ BACKEND_PUBLIC_URL = os.environ.get('BACKEND_PUBLIC_URL', '')
 init_consumer_routes(db, tagnpay_client, JWT_SECRET, JWT_ALGORITHM, EMERGENT_LLM_KEY, BACKEND_PUBLIC_URL)
 app.include_router(consumer_router)
 
+async def expire_old_parking_coupons():
+    """Mark all parking coupons past their 24hr expiry as expired"""
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.parking_coupons.update_many(
+        {"used": False, "status": {"$ne": "expired"}, "expires_at": {"$lt": now}},
+        {"$set": {"status": "expired"}}
+    )
+    if result.modified_count > 0:
+        logger.info(f"Auto-expired {result.modified_count} parking coupons")
+
+async def _parking_expiry_loop():
+    """Background loop to auto-expire parking coupons every 5 minutes"""
+    import asyncio
+    while True:
+        try:
+            await expire_old_parking_coupons()
+        except Exception as e:
+            logger.error(f"Parking expiry loop error: {e}")
+        await asyncio.sleep(300)  # 5 minutes
+
 @app.on_event("startup")
 async def startup_seed():
     await auto_seed_if_empty()
+    # Expire any stale coupons immediately on startup
+    await expire_old_parking_coupons()
+    # Start background expiry loop
+    import asyncio
+    asyncio.create_task(_parking_expiry_loop())
 
 # Static file serving for uploads
 from fastapi.staticfiles import StaticFiles
