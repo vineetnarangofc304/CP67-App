@@ -18,6 +18,7 @@ import Campaigns from './pages/Campaigns';
 import Banners from './pages/Banners';
 import Offers from './pages/Offers';
 import Events from './pages/Events';
+import BlockedUsers from './pages/BlockedUsers';
 import ConsumerApp from './consumer/ConsumerApp';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -136,6 +137,7 @@ function App() {
           <Route path="/whatsapp-logs" element={<ProtectedRoute><WhatsAppLogs /></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
           <Route path="/admin-users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
+          <Route path="/blocked-users" element={<ProtectedRoute><BlockedUsers /></ProtectedRoute>} />
           <Route path="/brands" element={<ProtectedRoute><Brands /></ProtectedRoute>} />
           <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
           <Route path="/banners" element={<ProtectedRoute><Banners /></ProtectedRoute>} />

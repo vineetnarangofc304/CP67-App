@@ -20,7 +20,8 @@ import {
   Megaphone,
   ImageIcon,
   Tag,
-  CalendarDays
+  CalendarDays,
+  ShieldOff
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -46,6 +47,7 @@ const navItems = [
   { path: '/whatsapp', label: 'WhatsApp Simulator', icon: MessageSquare },
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
   { path: '/admin-users', label: 'Admin Users', icon: ShieldCheck },
+  { path: '/blocked-users', label: 'Blocked Users', icon: ShieldOff },
 ];
 
 const DashboardLayout = ({ children, title }) => {

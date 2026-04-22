@@ -1432,6 +1432,67 @@ async def get_fundle_count(payload: dict = Depends(verify_jwt_token)):
     return {"count": count}
 
 
+
+# ============ BLOCKED USERS MANAGEMENT ============
+
+@api_router.get("/admin/blocked-users")
+async def get_blocked_users(
+    skip: int = 0, limit: int = 50, search: str = "",
+    payload: dict = Depends(verify_jwt_token)
+):
+    query = {}
+    if search:
+        query["phone"] = {"$regex": search}
+    total = await db.blocked_phones.count_documents(query)
+    blocked = await db.blocked_phones.find(query, {"_id": 0}).skip(skip).limit(limit).sort("blocked_at", -1).to_list(limit)
+    return {"blocked_users": blocked, "total": total}
+
+@api_router.post("/admin/block-user")
+async def block_user(request: Request, payload: dict = Depends(verify_jwt_token)):
+    data = await request.json()
+    phone = data.get("phone", "").strip()
+    reason = data.get("reason", "Blocked by admin")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Phone number required")
+    # Normalize to 10 digits
+    if phone.startswith("91") and len(phone) == 12:
+        phone = phone[2:]
+    if phone.startswith("+91"):
+        phone = phone[3:]
+    
+    existing = await db.blocked_phones.find_one({"phone": phone})
+    if existing:
+        raise HTTPException(status_code=400, detail="Number already blocked")
+    
+    doc = {
+        "phone": phone,
+        "reason": reason,
+        "blocked_by": payload.get("username", "admin"),
+        "blocked_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.blocked_phones.insert_one(doc)
+    logger.info(f"Admin {payload.get('username')} blocked phone {phone}: {reason}")
+    return {"success": True, "message": f"{phone} has been blocked"}
+
+@api_router.post("/admin/unblock-user")
+async def unblock_user(request: Request, payload: dict = Depends(verify_jwt_token)):
+    data = await request.json()
+    phone = data.get("phone", "").strip()
+    if not phone:
+        raise HTTPException(status_code=400, detail="Phone number required")
+    if phone.startswith("91") and len(phone) == 12:
+        phone = phone[2:]
+    if phone.startswith("+91"):
+        phone = phone[3:]
+    
+    result = await db.blocked_phones.delete_one({"phone": phone})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Number not found in blocked list")
+    
+    logger.info(f"Admin {payload.get('username')} unblocked phone {phone}")
+    return {"success": True, "message": f"{phone} has been activated"}
+
+
 # ============ HOT DEALS (OFFERS) MANAGEMENT ============
 
 @api_router.get("/admin/offers")
@@ -3984,6 +4045,16 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
         user = await db.users.find_one({"phone": phone})
         mobile_10 = phone[2:] if phone.startswith("91") and len(phone) == 12 else phone
         
+        # ===== GLOBAL BLOCKED CHECK — blocks ALL interactions =====
+        is_blocked = await db.blocked_phones.find_one({"phone": mobile_10})
+        if is_blocked:
+            logger.info(f"Blocked phone {mobile_10} attempted interaction — rejected")
+            block_msg = "Sorry, this number has been restricted from using Homeland Advantage services. Please contact mall management for assistance."
+            outbound_log = WhatsAppLog(user_phone=phone, direction="outbound", message_type="text", content=block_msg)
+            await db.whatsapp_logs.insert_one(outbound_log.model_dump())
+            await send_whatsapp_text(phone, block_msg)
+            return {"status": "ok", "message": "Blocked user"}
+        
         # ===== CHECK FOR PARKING QR SCAN =====
         if source_code == "SRC_PARKING_PAY" or "parking validation" in clean_message.lower():
             # PARKING ENTRY FLOW - Generate parking session and send QR
@@ -3992,14 +4063,6 @@ async def whatsapp_webhook(request: Dict[Any, Any], background_tasks: Background
         
         # ===== CHECK FOR PARKING REGISTRATION QR (SRC_PARKING) =====
         if source_code == "SRC_PARKING":
-            # Check if blocked
-            is_blocked = await db.blocked_phones.find_one({"phone": mobile_10})
-            if is_blocked:
-                logger.info(f"Blocked phone {mobile_10} tried parking QR")
-                block_msg = "Sorry, this number is not eligible for this service."
-                await send_whatsapp_text(phone, block_msg)
-                return {"status": "ok", "message": "Blocked user"}
-            
             if user:
                 # EXISTING USER - No free parking
                 existing_msg = f"""Hi {(user.get('name') or profile_name or 'there')}!
