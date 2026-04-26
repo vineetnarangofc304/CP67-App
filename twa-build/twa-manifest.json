@@ -1,0 +1,51 @@
+{
+  "packageId": "com.homelandadvantage.cp67",
+  "host": "mall-engage-preview.preview.emergentagent.com",
+  "name": "CP67 Mall",
+  "launcherName": "CP67 Mall",
+  "display": "standalone",
+  "themeColor": "#2C1810",
+  "themeColorDark": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#FDF6EE",
+  "enableNotifications": true,
+  "startUrl": "/app/welcome",
+  "iconUrl": "https://mall-engage-preview.preview.emergentagent.com/icon-512.png",
+  "maskableIconUrl": "https://mall-engage-preview.preview.emergentagent.com/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "/app/twa-build/android.keystore",
+    "alias": "android"
+  },
+  "appVersionName": "1",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "unknown",
+  "webManifestUrl": "https://mall-engage-preview.preview.emergentagent.com/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://mall-engage-preview.preview.emergentagent.com/app/",
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "fingerprints": [
+    {
+      "value": "32:BF:48:D0:63:E1:4C:64:26:7B:59:1B:45:50:97:AE:46:F1:8F:E9:EE:35:4C:B6:BE:BB:03:23:5C:31:40:5E"
+    }
+  ],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [],
+  "appVersion": "1"
+}

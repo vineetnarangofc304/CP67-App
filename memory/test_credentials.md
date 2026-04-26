@@ -17,3 +17,16 @@
 ## Parking QR Test
 - WhatsApp: Send "Hi! Sign me up for CP67 Rewards | SRC_PARKING" to 917347576767
 - Use any non-blocked, non-registered phone number
+
+
+## Android TWA Signing Keystore (PROD)
+- Keystore: `/app/twa-build/android.keystore`
+- Alias: `android`
+- Keystore password: `CP67Mall@2025`
+- Key password: `CP67Mall@2025`
+- SHA-256: `32:BF:48:D0:63:E1:4C:64:26:7B:59:1B:45:50:97:AE:46:F1:8F:E9:EE:35:4C:B6:BE:BB:03:23:5C:31:40:5E`
+- ⚠ Back up the keystore before Play Store submission — losing it means losing the ability to publish updates.
+
+## Play Console / App Store Account
+- Email: `Bharat.sharma@fundle.ai`
+- Password: `Bharat@123`

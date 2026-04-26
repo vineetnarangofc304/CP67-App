@@ -62,6 +62,12 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (April 26, 2026 - Session 4)
+- **Android TWA / APK generated**: `/app/twa-build/app-release-signed.apk` & `app-release-bundle.aab` (1.2 MB / 1.3 MB). Package `com.homelandadvantage.cp67`, version 1, signed with `android.keystore` (alias `android`, password `CP67Mall@2025`).
+- **Bubblewrap bootstrap**: `/app/twa-build/bootstrap.js` generates `twa-manifest.json`, project files, checksum, and signing key non-interactively. Build via `bubblewrap build --skipPwaValidation` with `BUBBLEWRAP_KEYSTORE_PASSWORD` / `BUBBLEWRAP_KEY_PASSWORD` env vars.
+- **ARM64 build host workaround**: Wrapped `aapt`, `aapt2`, `aidl`, `zipalign`, `dexdump`, `split-select`, `bcc_compat`, `llvm-rs-cc` (build-tools/34.0.0) and the gradle-cached `aapt2-8.9.1-12782657-linux/aapt2` with shell scripts that delegate to `qemu-x86_64-static` (`/usr/x86_64-linux-gnu` ld prefix).
+- **Digital Asset Links**: SHA-256 fingerprint `32:BF:48:D0:63:E1:4C:64:26:7B:59:1B:45:50:97:AE:46:F1:8F:E9:EE:35:4C:B6:BE:BB:03:23:5C:31:40:5E` published at `/.well-known/assetlinks.json` (frontend public/) — verified live at the preview URL.
+
 ## Recently Fixed (April 13, 2026 - Session 3)
 - **Font**: Changed to Antique Olive everywhere (heading + body)
 - **Login**: Shows "Welcome to Homeland Advantage"
