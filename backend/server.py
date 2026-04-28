@@ -2256,6 +2256,7 @@ async def get_pending_bills(payload: dict = Depends(verify_jwt_token)):
             "ocr_raw_data": 1,
             "system_rejection_reason": "$rejection_reason",
             "rejection_reason": 1,
+            "invoice_mobile": 1,
             "processed_by": 1,
             "processed_by_username": 1,
             "processed_by_role": 1,
@@ -3388,22 +3389,23 @@ Thank you for being a valued Homeland Advantage member."""
         extraction_notes = ocr_data.get("extraction_notes", "")
         raw_text = ocr_data.get("raw_text", "")
         customer_mobile = ocr_data.get("customer_mobile", None)
-        
-        # Determine which mobile number to use for points
-        # If bill has customer mobile, use that; otherwise use WhatsApp sender
-        points_mobile = mobile_10  # Default to WhatsApp sender
+
+        # Points always go to the uploader's WhatsApp number. If the invoice has a
+        # different customer mobile printed on it, we flag a mismatch and route the
+        # bill to admin review (handled below after CP67/age/duplicate checks).
+        points_mobile = mobile_10
         points_mobile_source = "whatsapp"
-        
+
+        invoice_mobile_clean = None
         if customer_mobile:
-            # Clean and validate customer mobile from bill
-            clean_customer_mobile = str(customer_mobile).replace(" ", "").replace("-", "").replace("+", "")
-            # Extract last 10 digits if longer
-            if len(clean_customer_mobile) >= 10:
-                clean_customer_mobile = clean_customer_mobile[-10:]
-                if clean_customer_mobile.isdigit() and len(clean_customer_mobile) == 10:
-                    points_mobile = clean_customer_mobile
-                    points_mobile_source = "bill"
-                    logger.info(f"Using customer mobile from bill: {points_mobile} (WhatsApp sender: {mobile_10})")
+            digits_only = "".join(ch for ch in str(customer_mobile) if ch.isdigit())
+            if len(digits_only) >= 10:
+                invoice_mobile_clean = digits_only[-10:]
+        invoice_mobile_mismatch = bool(invoice_mobile_clean and invoice_mobile_clean != mobile_10)
+        if invoice_mobile_mismatch:
+            logger.info(
+                f"Invoice mobile mismatch: invoice={invoice_mobile_clean}, uploader={mobile_10}"
+            )
         
         # CHECK: Bill date older than 15 days - Reject immediately
         try:
@@ -3620,7 +3622,60 @@ Thank you for being a valued Homeland Advantage member."""
             ]
             await send_whatsapp_buttons(phone, unclear_msg, buttons)
             return
-        
+
+        # CHECK: Mobile number on invoice does not match WhatsApp uploader → admin review
+        if invoice_mobile_mismatch:
+            mismatch_msg = f"""Bill Received - Under Review
+
+Thank you for shopping at {store_name}!
+
+Bill No: {bill_no}
+Date: {bill_date}
+Amount: Rs {amount:,.0f}
+
+The mobile number printed on this invoice does not match your WhatsApp number, so our team will review it before crediting points. You will be notified within 24-48 hours.
+
+Thank you for your patience!"""
+
+            bill_data = BillData(
+                user_id=user["id"],
+                user_phone=phone,
+                store_name=store_name,
+                bill_no=bill_no,
+                bill_date=bill_date,
+                amount=amount,
+                status="pending_review",
+                rejection_reason="Mob No not matched with Invoice",
+                image_url=f"data:image/jpeg;base64,{image_base64}",
+                image_hash=image_hash,
+                ocr_confidence=confidence,
+                ocr_raw_data=ocr_data
+            )
+            doc = bill_data.model_dump()
+            doc["invoice_mobile"] = invoice_mobile_clean
+            await db.bills.insert_one(doc)
+
+            admin_alert_msg = f""" *Mobile Mismatch Alert*
+
+Invoice mobile does not match WhatsApp sender.
+
+ Store: {store_name}
+ Bill No: {bill_no}
+ Amount: Rs {amount:,.0f}
+ Invoice Mobile: {invoice_mobile_clean}
+ WhatsApp Sender: {mobile_10}
+
+Please review in the admin dashboard."""
+            background_tasks.add_task(send_whatsapp_text, ADMIN_PHONE, admin_alert_msg)
+
+            buttons = [
+                {"id": "upload_bill", "title": "Upload Another Bill"},
+                {"id": "my_points", "title": "My Points"}
+            ]
+            await send_whatsapp_buttons(phone, mismatch_msg, buttons)
+            return
+
+
         # CHECK: Bill amount > 30000 - Send to pending for manual review
         if amount > 30000:
             high_amount_msg = f"""Bill Received - Under Review

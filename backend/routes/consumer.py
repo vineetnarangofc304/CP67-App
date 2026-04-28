@@ -887,9 +887,10 @@ async def process_bill_ocr(bill_id: str, image_base64: str, user_id: str, phone:
 3. Bill date (in YYYY-MM-DD format)
 4. Total amount (final amount paid)
 5. Is this bill from CP67 Mall, Mohali?
+6. Customer mobile number printed on the bill (10 digits, null if not found)
 
 Return ONLY valid JSON:
-{"store_name": "...", "bill_no": "...", "bill_date": "YYYY-MM-DD", "amount": 0.0, "is_cp67": true/false, "confidence": 0.0}"""
+{"store_name": "...", "bill_no": "...", "bill_date": "YYYY-MM-DD", "amount": 0.0, "is_cp67": true/false, "confidence": 0.0, "customer_mobile": "..."}"""
 
         result = await gemini_analyze_image(
             config=config,
@@ -940,6 +941,32 @@ Return ONLY valid JSON:
             }})
             await send_app_notification(user_id, "Bill Rejected",
                 "We could not read your bill amount. Please upload a clearer image.", "bill")
+            return
+
+        # Mobile number mismatch check: if invoice has a customer mobile and it
+        # doesn't match the uploader's number (last 10 digits), send to pending review.
+        invoice_mobile = ocr_data.get("customer_mobile")
+        invoice_mobile_clean = None
+        if invoice_mobile:
+            digits_only = "".join(ch for ch in str(invoice_mobile) if ch.isdigit())
+            if len(digits_only) >= 10:
+                invoice_mobile_clean = digits_only[-10:]
+
+        if invoice_mobile_clean and invoice_mobile_clean != phone_10:
+            await _db.bills.update_one({"id": bill_id}, {"$set": {
+                "status": "pending_review",
+                "store_name": store_name,
+                "bill_no": bill_no,
+                "bill_date": bill_date,
+                "amount": amount,
+                "ocr_confidence": confidence,
+                "ocr_raw_data": ocr_data,
+                "invoice_mobile": invoice_mobile_clean,
+                "rejection_reason": "Mob No not matched with Invoice"
+            }})
+            await send_app_notification(user_id, "Bill Under Review",
+                f"Your bill from {store_name} is under review (mobile on invoice does not match your number). Our team will verify it shortly.",
+                "bill")
             return
 
         # Check high value

@@ -233,6 +233,12 @@ const Bills = () => {
         reasons.push('Not a CP67 Mall Bill');
       } else if (reason.includes('Duplicate')) {
         reasons.push('Duplicate Bill');
+      } else if (reason.includes('Mob No not matched')) {
+        reasons.push(
+          bill.invoice_mobile
+            ? `Mob No not matched with Invoice (${bill.invoice_mobile} vs ${bill.user_phone?.slice(-10)})`
+            : 'Mob No not matched with Invoice'
+        );
       } else {
         reasons.push(reason.substring(0, 50));
       }
