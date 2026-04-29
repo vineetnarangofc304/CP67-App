@@ -62,6 +62,10 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (April 29, 2026 - Session 6)
+- **Brand staff blocklist enrichment + verification**: Re-imported the latest `Brand Staff Details (1).xlsx` (1050 unique 10-digit phones). All numbers were already in `blocked_phones` (carry-over from earlier 1050 import), so no duplicates created. Existing minimal records (`reason: 'brand_staff'`) were enriched with `brand`, `staff_name`, `designation`, `source_file` so the admin BlockedUsers page now shows who each phone belongs to. Confirmed enforcement live on `/api/consumer/auth/send-otp` (HTTP 403 for blocked phone, 200 for unblocked).
+- **Admin BlockedUsers UI**: Added "Brand / Staff" column showing brand · staff name · designation. Admin search now matches phone OR brand OR staff name (case-insensitive).
+
 ## Recently Fixed (April 28, 2026 - Session 5)
 - **Invoice mobile-number mismatch check**: OCR now extracts `customer_mobile` from the bill. If the invoice prints a mobile number that does not match the uploader's WhatsApp/app number (last-10-digit comparison, country codes & spaces stripped), the bill is routed to admin review with `rejection_reason="Mob No not matched with Invoice"` and `invoice_mobile` stored. Applies to both Consumer App (`POST /api/consumer/bills/upload` → `process_bill_ocr`) and WhatsApp (`process_bill_image`). If no customer mobile is on the invoice, processing continues normally with the uploader's number. Admin Bills page shows the mismatch reason with both numbers side-by-side.
 

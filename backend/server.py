@@ -1442,7 +1442,11 @@ async def get_blocked_users(
 ):
     query = {}
     if search:
-        query["phone"] = {"$regex": search}
+        query["$or"] = [
+            {"phone": {"$regex": search, "$options": "i"}},
+            {"brand": {"$regex": search, "$options": "i"}},
+            {"staff_name": {"$regex": search, "$options": "i"}},
+        ]
     total = await db.blocked_phones.count_documents(query)
     blocked = await db.blocked_phones.find(query, {"_id": 0}).skip(skip).limit(limit).sort("blocked_at", -1).to_list(limit)
     return {"blocked_users": blocked, "total": total}

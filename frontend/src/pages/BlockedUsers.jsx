@@ -144,6 +144,7 @@ export default function BlockedUsers() {
                 <thead className="bg-slate-50 border-b">
                   <tr>
                     <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">Phone</th>
+                    <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">Brand / Staff</th>
                     <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">Reason</th>
                     <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">Blocked By</th>
                     <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">Blocked On</th>
@@ -154,6 +155,18 @@ export default function BlockedUsers() {
                   {blocked.map((b, i) => (
                     <tr key={b.phone || i} className="border-b last:border-0 hover:bg-slate-50" data-testid={`blocked-row-${b.phone}`}>
                       <td className="px-4 py-3 font-mono text-sm font-medium">{b.phone}</td>
+                      <td className="px-4 py-3 text-sm text-slate-700">
+                        {b.brand || b.staff_name ? (
+                          <div>
+                            {b.brand && <div className="font-medium">{b.brand}</div>}
+                            {(b.staff_name || b.designation) && (
+                              <div className="text-xs text-slate-500">
+                                {[b.staff_name, b.designation].filter(Boolean).join(' · ')}
+                              </div>
+                            )}
+                          </div>
+                        ) : '-'}
+                      </td>
                       <td className="px-4 py-3 text-sm text-slate-600">{b.reason || '-'}</td>
                       <td className="px-4 py-3 text-sm text-slate-500">{b.blocked_by || '-'}</td>
                       <td className="px-4 py-3 text-sm text-slate-500">
