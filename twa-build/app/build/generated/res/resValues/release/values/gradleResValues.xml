@@ -28,13 +28,13 @@
     <!-- Value from default config. -->
     <string name="fallbackType" translatable="false">customtabs</string>
     <!-- Value from default config. -->
-    <string name="fullScopeUrl" translatable="false">https://mall-engage-preview.preview.emergentagent.com/app/</string>
+    <string name="fullScopeUrl" translatable="false">https://cp67bot.fundlexperiences.com/app/</string>
     <!-- Value from default config. -->
     <string name="generatorApp" translatable="false">unknown</string>
     <!-- Value from default config. -->
-    <string name="hostName" translatable="false">mall-engage-preview.preview.emergentagent.com</string>
+    <string name="hostName" translatable="false">cp67bot.fundlexperiences.com</string>
     <!-- Value from default config. -->
-    <string name="launchUrl" translatable="false">https://mall-engage-preview.preview.emergentagent.com/app/welcome</string>
+    <string name="launchUrl" translatable="false">https://cp67bot.fundlexperiences.com/app/welcome</string>
     <!-- Value from default config. -->
     <string name="launcherName" translatable="false">CP67 Mall</string>
     <!-- Value from default config. -->
@@ -42,6 +42,6 @@
     <!-- Value from default config. -->
     <string name="providerAuthority" translatable="false">com.homelandadvantage.cp67.fileprovider</string>
     <!-- Value from default config. -->
-    <string name="webManifestUrl" translatable="false">https://mall-engage-preview.preview.emergentagent.com/manifest.json</string>
+    <string name="webManifestUrl" translatable="false">https://cp67bot.fundlexperiences.com/manifest.json</string>
 
 </resources>

@@ -22,7 +22,7 @@ plugins {
 
 def twaManifest = [
     applicationId: 'com.homelandadvantage.cp67',
-    hostName: 'mall-engage-preview.preview.emergentagent.com', // The domain being opened in the TWA.
+    hostName: 'cp67bot.fundlexperiences.com', // The domain being opened in the TWA.
     launchUrl: '/app/welcome', // The start path for the TWA. Must be relative to the domain.
     name: 'CP67 Mall', // The application name.
     launcherName: 'CP67 Mall', // The name shown on the Android Launcher.
@@ -76,12 +76,12 @@ android {
             // The URL the Web Manifest for the Progressive Web App that the TWA points to. This
             // is used by Chrome OS and Meta Quest to open the Web version of the PWA instead of
             // the TWA, as it will probably give a better user experience for non-mobile devices.
-            resValue "string", "webManifestUrl", 'https://mall-engage-preview.preview.emergentagent.com/manifest.json'
+            resValue "string", "webManifestUrl", 'https://cp67bot.fundlexperiences.com/manifest.json'
         
 
         
             // This is used by Meta Quest.
-            resValue "string", "fullScopeUrl", 'https://mall-engage-preview.preview.emergentagent.com/app/'
+            resValue "string", "fullScopeUrl", 'https://cp67bot.fundlexperiences.com/app/'
         
 
         

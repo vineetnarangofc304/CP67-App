@@ -1,6 +1,6 @@
 {
   "packageId": "com.homelandadvantage.cp67",
-  "host": "mall-engage-preview.preview.emergentagent.com",
+  "host": "cp67bot.fundlexperiences.com",
   "name": "CP67 Mall",
   "launcherName": "CP67 Mall",
   "display": "standalone",
@@ -13,8 +13,8 @@
   "backgroundColor": "#FDF6EE",
   "enableNotifications": true,
   "startUrl": "/app/welcome",
-  "iconUrl": "https://mall-engage-preview.preview.emergentagent.com/icon-512.png",
-  "maskableIconUrl": "https://mall-engage-preview.preview.emergentagent.com/icon-512.png",
+  "iconUrl": "https://cp67bot.fundlexperiences.com/icon-512.png",
+  "maskableIconUrl": "https://cp67bot.fundlexperiences.com/icon-512.png",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "/app/twa-build/android.keystore",
@@ -24,7 +24,7 @@
   "appVersionCode": 1,
   "shortcuts": [],
   "generatorApp": "unknown",
-  "webManifestUrl": "https://mall-engage-preview.preview.emergentagent.com/manifest.json",
+  "webManifestUrl": "https://cp67bot.fundlexperiences.com/manifest.json",
   "fallbackType": "customtabs",
   "features": {},
   "alphaDependencies": {
@@ -33,14 +33,10 @@
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "https://mall-engage-preview.preview.emergentagent.com/app/",
+  "fullScopeUrl": "https://cp67bot.fundlexperiences.com/app/",
   "minSdkVersion": 21,
   "orientation": "portrait",
-  "fingerprints": [
-    {
-      "value": "32:BF:48:D0:63:E1:4C:64:26:7B:59:1B:45:50:97:AE:46:F1:8F:E9:EE:35:4C:B6:BE:BB:03:23:5C:31:40:5E"
-    }
-  ],
+  "fingerprints": [],
   "additionalTrustedOrigins": [],
   "retainedBundles": [],
   "protocolHandlers": [],

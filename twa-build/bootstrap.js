@@ -26,7 +26,7 @@ const {
 
 const { computeChecksum } = require(path.join(CLI_PATH, 'dist/lib/cmds/shared.js'));
 
-const MANIFEST_URL = process.env.MANIFEST_URL || 'https://mall-engage-preview.preview.emergentagent.com/manifest.json';
+const MANIFEST_URL = process.env.MANIFEST_URL || 'https://cp67bot.fundlexperiences.com/manifest.json';
 const TARGET_DIR = process.env.TARGET_DIR || '/app/twa-build';
 
 const PACKAGE_ID = 'com.homelandadvantage.cp67';
