@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../App';
 import { toast } from 'sonner';
 import DashboardLayout from '../components/DashboardLayout';
-import { ShieldOff, ShieldCheck, Search, Plus, Phone, AlertTriangle } from 'lucide-react';
+import { ShieldOff, ShieldCheck, Search, Phone, AlertTriangle, Upload } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -16,6 +16,9 @@ export default function BlockedUsers() {
   const [newPhone, setNewPhone] = useState('');
   const [newReason, setNewReason] = useState('');
   const [adding, setAdding] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+  const fileInputRef = useRef(null);
 
   const fetchBlocked = useCallback(async () => {
     try {
@@ -71,6 +74,34 @@ export default function BlockedUsers() {
     } catch { toast.error('Failed'); }
   };
 
+  const handleBulkUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_URL}/admin/blocked-users/bulk-upload`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setUploadResult(data);
+        toast.success(`Uploaded ${data.file}: ${data.newly_blocked} newly blocked, ${data.already_blocked} already blocked`);
+        fetchBlocked();
+      } else {
+        toast.error(data.detail || 'Upload failed');
+      }
+    } catch (err) {
+      toast.error('Upload failed: ' + (err.message || 'unknown error'));
+    }
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   return (
     <DashboardLayout title="Blocked Users">
       <div className="p-6" data-testid="blocked-users-page">
@@ -86,6 +117,42 @@ export default function BlockedUsers() {
             data-testid="block-user-btn">
             <ShieldOff size={16} /> Block Number
           </button>
+        </div>
+
+        {/* Upload Excel / CSV */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" data-testid="bulk-upload-card">
+          <div>
+            <p className="text-sm font-semibold text-blue-900 flex items-center gap-2">
+              <Upload size={16} /> Bulk block from Excel / CSV
+            </p>
+            <p className="text-xs text-blue-700 mt-1">
+              Upload a sheet with columns like <span className="font-mono">Brand Name, Staff Name, Designation, Contact No.</span> Existing entries are skipped automatically.
+            </p>
+            {uploadResult && (
+              <p className="text-xs text-blue-900 mt-2" data-testid="bulk-upload-result">
+                {uploadResult.file}: parsed <b>{uploadResult.parsed_rows}</b>, unique <b>{uploadResult.unique_phones}</b>,
+                newly blocked <b>{uploadResult.newly_blocked}</b>, already blocked <b>{uploadResult.already_blocked}</b>
+                {uploadResult.enriched_existing ? `, enriched ${uploadResult.enriched_existing}` : ''}.
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xlsm,.xltx,.xltm,.csv"
+              onChange={handleBulkUpload}
+              className="hidden"
+              data-testid="bulk-upload-file"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+              data-testid="bulk-upload-btn">
+              <Upload size={16} /> {uploading ? 'Uploading…' : 'Upload Excel / CSV'}
+            </button>
+          </div>
         </div>
 
         {/* Search */}

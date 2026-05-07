@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Car, Clock, CheckCircle2, AlertCircle, Timer, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Car, Clock, CheckCircle2, AlertCircle, Timer, RefreshCw, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 
 const ParkingReport = () => {
   const { API_URL, token, user } = useAuth();
@@ -101,6 +101,33 @@ const ParkingReport = () => {
   const totalPages = Math.ceil(pagination.total / pagination.limit);
   const currentPage = Math.floor(pagination.skip / pagination.limit) + 1;
 
+  const handleExport = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter && statusFilter !== 'all') params.append('status', statusFilter);
+      const res = await fetch(`${API_URL}/export/parking?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        toast.error('Failed to export parking report');
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      a.href = url;
+      a.download = `parking_report_${stamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Parking report exported');
+    } catch {
+      toast.error('Failed to export parking report');
+    }
+  };
+
   return (
     <DashboardLayout title={gateLabel ? `Parking Report — ${gateLabel}` : 'Parking Report'}>
       <div className="space-y-6">
@@ -168,6 +195,10 @@ const ParkingReport = () => {
               <Button variant="outline" size="sm" onClick={fetchSessions} data-testid="refresh-btn">
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExport} data-testid="parking-export-btn">
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
               </Button>
             </div>
           </CardHeader>

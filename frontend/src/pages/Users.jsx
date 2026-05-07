@@ -24,6 +24,7 @@ import {
   ArrowLeft,
   X,
   UserPlus,
+  Download,
   Users as UsersIcon
 } from 'lucide-react';
 
@@ -90,6 +91,38 @@ const Users = () => {
     setDateTo('');
     setSearch('');
     setPagination(prev => ({ ...prev, skip: 0 }));
+  };
+
+  const handleExport = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (sourceFilter && sourceFilter !== 'all') params.append('source', sourceFilter);
+      if (customerTypeFilter && customerTypeFilter !== 'all') params.append('customer_type', customerTypeFilter);
+      if (dateFrom) params.append('start_date', dateFrom);
+      if (dateTo) params.append('end_date', dateTo);
+
+      const res = await fetch(`${API_URL}/export/users?${params}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        toast.error('Failed to export users');
+        return;
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      a.href = url;
+      a.download = `users_export_${stamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Users exported');
+    } catch {
+      toast.error('Failed to export users');
+    }
   };
 
   const fetchUserDetails = async (userId) => {
@@ -227,6 +260,9 @@ const Users = () => {
               </Button>
               <Button size="sm" variant="outline" onClick={clearFilters}>
                 Clear All
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleExport} data-testid="users-export-btn" className="ml-auto">
+                <Download className="h-4 w-4 mr-1" /> Export CSV
               </Button>
             </div>
           </div>

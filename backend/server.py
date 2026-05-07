@@ -1497,6 +1497,197 @@ async def unblock_user(request: Request, payload: dict = Depends(verify_jwt_toke
     return {"success": True, "message": f"{phone} has been activated"}
 
 
+@api_router.post("/admin/blocked-users/bulk-upload")
+async def bulk_block_users(
+    file: UploadFile = File(...),
+    payload: dict = Depends(verify_jwt_token)
+):
+    """Bulk-block phone numbers from an uploaded Excel/CSV file.
+
+    Expected columns (case-insensitive, any of these per column):
+      - Phone:       'contact no', 'contact', 'phone', 'mobile', 'mobile number'
+      - Brand:       'brand', 'brand name', 'store', 'store name'
+      - Staff Name:  'staff name', 'name'
+      - Designation: 'designation', 'role', 'position'
+
+    Only the phone column is required. Phones are normalised to last 10 digits.
+    Existing entries are skipped (idempotent).
+    """
+    filename = (file.filename or "").lower()
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    # Parse rows
+    parsed_rows = []  # list of {phone, brand, name, designation}
+    try:
+        if filename.endswith((".xlsx", ".xlsm", ".xltx", ".xltm")):
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(contents), data_only=True)
+            for sh in wb.sheetnames:
+                ws = wb[sh]
+                # Find header row
+                rows_iter = ws.iter_rows(values_only=True)
+                try:
+                    headers = next(rows_iter)
+                except StopIteration:
+                    continue
+                norm = [str(h).strip().lower() if h is not None else "" for h in headers]
+
+                def find(*candidates):
+                    for c in candidates:
+                        for i, h in enumerate(norm):
+                            if h == c:
+                                return i
+                    for c in candidates:
+                        for i, h in enumerate(norm):
+                            if c in h:
+                                return i
+                    return None
+
+                phone_idx = find("contact no.", "contact no", "contact", "phone", "mobile number", "mobile")
+                brand_idx = find("brand name", "brand", "store name", "store")
+                name_idx = find("staff name", "name")
+                desig_idx = find("designation", "role", "position")
+                if phone_idx is None:
+                    continue
+                for row in rows_iter:
+                    if not row:
+                        continue
+                    raw_phone = row[phone_idx] if phone_idx < len(row) else None
+                    if raw_phone is None or str(raw_phone).strip() == "":
+                        continue
+                    if isinstance(raw_phone, float):
+                        raw_phone = int(raw_phone)
+                    digits = "".join(ch for ch in str(raw_phone) if ch.isdigit())
+                    if len(digits) > 10:
+                        digits = digits[-10:]
+                    if len(digits) != 10:
+                        continue
+                    parsed_rows.append({
+                        "phone": digits,
+                        "brand": str(row[brand_idx]).strip() if brand_idx is not None and brand_idx < len(row) and row[brand_idx] else "",
+                        "name": str(row[name_idx]).strip() if name_idx is not None and name_idx < len(row) and row[name_idx] else "",
+                        "designation": str(row[desig_idx]).strip() if desig_idx is not None and desig_idx < len(row) and row[desig_idx] else "",
+                    })
+        elif filename.endswith(".csv"):
+            text = contents.decode("utf-8-sig", errors="ignore")
+            reader = csv.DictReader(io.StringIO(text))
+            norm_keys = {(k or "").strip().lower(): k for k in (reader.fieldnames or [])}
+
+            def col(*candidates):
+                for c in candidates:
+                    if c in norm_keys:
+                        return norm_keys[c]
+                for c in candidates:
+                    for k in norm_keys:
+                        if c in k:
+                            return norm_keys[k]
+                return None
+
+            phone_col = col("contact no.", "contact no", "contact", "phone", "mobile number", "mobile")
+            brand_col = col("brand name", "brand", "store name", "store")
+            name_col = col("staff name", "name")
+            desig_col = col("designation", "role", "position")
+            if not phone_col:
+                raise HTTPException(status_code=400, detail="Could not find a phone column in CSV. Expected 'Contact No.' / 'Phone' / 'Mobile'.")
+            for row in reader:
+                raw_phone = row.get(phone_col)
+                if not raw_phone:
+                    continue
+                digits = "".join(ch for ch in str(raw_phone) if ch.isdigit())
+                if len(digits) > 10:
+                    digits = digits[-10:]
+                if len(digits) != 10:
+                    continue
+                parsed_rows.append({
+                    "phone": digits,
+                    "brand": (row.get(brand_col) or "").strip() if brand_col else "",
+                    "name": (row.get(name_col) or "").strip() if name_col else "",
+                    "designation": (row.get(desig_col) or "").strip() if desig_col else "",
+                })
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type. Upload .xlsx or .csv.")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Bulk block parse failed")
+        raise HTTPException(status_code=400, detail=f"Could not parse file: {e}")
+
+    if not parsed_rows:
+        raise HTTPException(status_code=400, detail="No valid 10-digit phone numbers found in the file.")
+
+    # Dedupe within file
+    by_phone = {}
+    for r in parsed_rows:
+        if r["phone"] not in by_phone:
+            by_phone[r["phone"]] = r
+    phones = list(by_phone.keys())
+
+    # Find which already exist
+    existing = set()
+    async for d in db.blocked_phones.find({"phone": {"$in": phones}}, {"_id": 0, "phone": 1}):
+        existing.add(d["phone"])
+
+    new_rows = [by_phone[p] for p in phones if p not in existing]
+    now = datetime.now(timezone.utc).isoformat()
+    inserted = 0
+    if new_rows:
+        docs = []
+        for s in new_rows:
+            parts = ["Brand Staff"]
+            if s.get("brand"):
+                parts.append(s["brand"])
+            if s.get("name"):
+                parts.append(s["name"])
+            if s.get("designation"):
+                parts.append(s["designation"])
+            docs.append({
+                "phone": s["phone"],
+                "reason": " - ".join(parts) if len(parts) > 1 else "Brand Staff",
+                "blocked_by": payload.get("username", "admin"),
+                "blocked_at": now,
+                "source_file": file.filename,
+                "brand": s.get("brand", ""),
+                "staff_name": s.get("name", ""),
+                "designation": s.get("designation", ""),
+            })
+        result = await db.blocked_phones.insert_many(docs, ordered=False)
+        inserted = len(result.inserted_ids)
+
+    # Optional metadata enrichment for already-existing rows that lack brand info
+    enriched = 0
+    for p in phones:
+        if p in existing:
+            r = by_phone[p]
+            if r.get("brand") or r.get("name") or r.get("designation"):
+                res = await db.blocked_phones.update_one(
+                    {"phone": p, "$or": [{"brand": {"$exists": False}}, {"brand": ""}]},
+                    {"$set": {
+                        "brand": r.get("brand", ""),
+                        "staff_name": r.get("name", ""),
+                        "designation": r.get("designation", ""),
+                        "source_file": file.filename,
+                    }}
+                )
+                enriched += res.modified_count
+
+    logger.info(
+        f"Bulk-block by {payload.get('username')}: file={file.filename}, "
+        f"parsed={len(parsed_rows)}, unique={len(phones)}, inserted={inserted}, "
+        f"already_blocked={len(existing)}, enriched={enriched}"
+    )
+    return {
+        "success": True,
+        "file": file.filename,
+        "parsed_rows": len(parsed_rows),
+        "unique_phones": len(phones),
+        "newly_blocked": inserted,
+        "already_blocked": len(existing),
+        "enriched_existing": enriched,
+    }
+
+
 # ============ HOT DEALS (OFFERS) MANAGEMENT ============
 
 @api_router.get("/admin/offers")
@@ -4878,14 +5069,23 @@ async def export_bills(
 @api_router.get("/export/users")
 async def export_users(
     customer_type: Optional[str] = None,
+    source: Optional[str] = None,
+    search: Optional[str] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     payload: dict = Depends(verify_jwt_token)
 ):
-    """Export users as CSV"""
+    """Export users as CSV (matches /api/users filters)."""
     query = {}
     if customer_type and customer_type != "all":
         query["customer_type"] = customer_type
+    if source and source != "all":
+        query["first_touch_source"] = source
+    if search:
+        query["$or"] = [
+            {"phone": {"$regex": search, "$options": "i"}},
+            {"name": {"$regex": search, "$options": "i"}},
+        ]
     if start_date:
         query["created_at"] = {"$gte": start_date}
     if end_date:
@@ -4893,26 +5093,51 @@ async def export_users(
             query["created_at"]["$lte"] = end_date
         else:
             query["created_at"] = {"$lte": end_date}
-    
+
     users = await db.users.find(query, {"_id": 0}).sort("created_at", -1).to_list(50000)
-    
+
     if not users:
         return Response(content="No users found", media_type="text/plain")
-    
-    # Create CSV
+
+    def _split_ist(iso_str):
+        if not iso_str:
+            return ("", "")
+        try:
+            dt = datetime.fromisoformat(str(iso_str).replace("Z", "+00:00"))
+            ist_dt = dt.astimezone(IST)
+            return (ist_dt.strftime("%d %b %Y"), ist_dt.strftime("%I:%M %p"))
+        except Exception:
+            return ("", "")
+
     output = io.StringIO()
-    fieldnames = ["id", "phone", "name", "loyalty_id", "customer_type", "balance_points", "total_earned_points", "first_touch_source", "first_touch_qr", "kyc_status", "created_at"]
-    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+    fieldnames = [
+        "phone", "name", "loyalty_id", "customer_type",
+        "first_touch_source", "first_touch_qr",
+        "balance_points", "total_earned_points",
+        "kyc_status", "joined_date", "joined_time",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
-    
-    for user in users:
-        writer.writerow(user)
-    
+    for u in users:
+        d, t = _split_ist(u.get("created_at"))
+        writer.writerow({
+            "phone": u.get("phone", ""),
+            "name": u.get("name", ""),
+            "loyalty_id": u.get("loyalty_id", ""),
+            "customer_type": u.get("customer_type", ""),
+            "first_touch_source": u.get("first_touch_source", ""),
+            "first_touch_qr": u.get("first_touch_qr", ""),
+            "balance_points": u.get("balance_points", 0),
+            "total_earned_points": u.get("total_earned_points", 0),
+            "kyc_status": u.get("kyc_status", ""),
+            "joined_date": d,
+            "joined_time": t,
+        })
+
     csv_content = output.getvalue()
     output.close()
-    
+
     filename = f"users_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
-    
     return Response(
         content=csv_content,
         media_type="text/csv",
@@ -4953,36 +5178,113 @@ async def export_parking(
     end_date: Optional[str] = None,
     payload: dict = Depends(verify_jwt_token)
 ):
-    """Export parking sessions as CSV"""
-    query = {}
+    """Export parking sessions + free coupons as CSV with separate Date / Time columns (IST)."""
+    user_gate = payload.get("gate")  # gate1/gate2 for parking staff, None for admin
+
+    # ---- parking_sessions ----
+    sess_q = {}
     if status and status != "all":
-        query["status"] = status
+        sess_q["status"] = status
     if start_date:
-        query["entry_time"] = {"$gte": start_date}
+        sess_q["entry_time"] = {"$gte": start_date}
     if end_date:
-        if "entry_time" in query:
-            query["entry_time"]["$lte"] = end_date
+        sess_q.setdefault("entry_time", {})["$lte"] = end_date
+    if user_gate:
+        sess_q["exit_gate"] = user_gate
+    pkg_sessions = await db.parking_sessions.find(sess_q, {"_id": 0}).sort("entry_time", -1).to_list(50000)
+
+    # ---- parking_coupons ----
+    coupon_q = {}
+    if status == "active":
+        coupon_q = {"used": False, "status": {"$ne": "expired"}}
+    elif status == "completed":
+        coupon_q = {"used": True}
+    elif status == "expired":
+        coupon_q = {"status": "expired"}
+    if start_date:
+        coupon_q["created_at"] = {"$gte": start_date}
+    if end_date:
+        coupon_q.setdefault("created_at", {})["$lte"] = end_date
+    if user_gate:
+        coupon_q["exit_gate"] = user_gate
+    park_coupons = await db.parking_coupons.find(coupon_q, {"_id": 0}).sort("created_at", -1).to_list(50000)
+
+    def _split_ist(iso_str):
+        if not iso_str:
+            return ("", "")
+        try:
+            dt = datetime.fromisoformat(str(iso_str).replace("Z", "+00:00"))
+            ist_dt = dt.astimezone(IST)
+            return (ist_dt.strftime("%d %b %Y"), ist_dt.strftime("%I:%M %p"))
+        except Exception:
+            return ("", "")
+
+    rows = []
+    for s in pkg_sessions:
+        ed, et = _split_ist(s.get("entry_time"))
+        xd, xt = _split_ist(s.get("exit_time"))
+        rows.append({
+            "session_code": s.get("session_code", ""),
+            "phone": s.get("user_phone", ""),
+            "user_name": s.get("user_name", ""),
+            "type": "Session",
+            "entry_date": ed, "entry_time": et,
+            "exit_date": xd, "exit_time": xt,
+            "duration_minutes": s.get("duration_minutes") or "",
+            "status": s.get("status", ""),
+            "exit_gate": s.get("exit_gate", ""),
+            "scanned_by": s.get("scanned_by", ""),
+        })
+    for c in park_coupons:
+        ed, et = _split_ist(c.get("created_at"))
+        xd, xt = _split_ist(c.get("used_at"))
+        if c.get("used"):
+            cstatus = "completed"
+        elif c.get("status") == "expired":
+            cstatus = "expired"
         else:
-            query["entry_time"] = {"$lte": end_date}
-    
-    sessions = await db.parking_sessions.find(query, {"_id": 0}).sort("entry_time", -1).to_list(10000)
-    
-    if not sessions:
-        return Response(content="No parking sessions found", media_type="text/plain")
-    
+            cstatus = "active"
+        duration = ""
+        if c.get("used") and c.get("created_at") and c.get("used_at"):
+            try:
+                a = datetime.fromisoformat(str(c["created_at"]).replace("Z", "+00:00"))
+                b = datetime.fromisoformat(str(c["used_at"]).replace("Z", "+00:00"))
+                duration = int((b - a).total_seconds() / 60)
+            except Exception:
+                pass
+        rows.append({
+            "session_code": c.get("coupon_code", ""),
+            "phone": c.get("user_phone", ""),
+            "user_name": c.get("user_name", ""),
+            "type": "Free Coupon",
+            "entry_date": ed, "entry_time": et,
+            "exit_date": xd, "exit_time": xt,
+            "duration_minutes": duration,
+            "status": cstatus,
+            "exit_gate": c.get("exit_gate", ""),
+            "scanned_by": c.get("scanned_by", ""),
+        })
+
+    # Sort by entry_date+entry_time descending (raw ISO sorting via IST string is OK because we kept original key)
+    rows.sort(key=lambda r: (r["entry_date"], r["entry_time"]), reverse=True)
+
+    if not rows:
+        return Response(content="No parking records found", media_type="text/plain")
+
     output = io.StringIO()
-    fieldnames = ["id", "session_code", "user_phone", "user_name", "entry_time", "exit_time", "duration_minutes", "status", "scanned_by"]
-    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction='ignore')
+    fieldnames = [
+        "session_code", "phone", "user_name", "type",
+        "entry_date", "entry_time", "exit_date", "exit_time",
+        "duration_minutes", "status", "exit_gate", "scanned_by",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
-    
-    for session in sessions:
-        writer.writerow(session)
-    
+    for r in rows:
+        writer.writerow(r)
     csv_content = output.getvalue()
     output.close()
-    
+
     filename = f"parking_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
-    
     return Response(
         content=csv_content,
         media_type="text/csv",
