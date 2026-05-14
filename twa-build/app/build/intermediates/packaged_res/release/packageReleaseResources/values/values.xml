@@ -29,6 +29,6 @@
     <string name="launchUrl" translatable="false">https://cp67bot.fundlexperiences.com/app/welcome</string>
     <string name="launcherName" translatable="false">CP67 Mall</string>
     <string name="orientation" translatable="false">portrait</string>
-    <string name="providerAuthority" translatable="false">com.homelandadvantage.cp67.fileprovider</string>
+    <string name="providerAuthority" translatable="false">com.fundle.cp67.fileprovider</string>
     <string name="webManifestUrl" translatable="false">https://cp67bot.fundlexperiences.com/manifest.json</string>
 </resources>

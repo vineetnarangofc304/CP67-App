@@ -22,7 +22,7 @@
 22     the abbreviated format.
 23-->
 24<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-25    package="com.homelandadvantage.cp67"
+25    package="com.fundle.cp67"
 26    android:versionCode="1"
 27    android:versionName="1" >
 28
@@ -54,18 +54,18 @@
 44
 45    <permission
 45-->[androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:22:5-24:47
-46        android:name="com.homelandadvantage.cp67.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+46        android:name="com.fundle.cp67.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
 46-->[androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:23:9-81
 47        android:protectionLevel="signature" />
 47-->[androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:24:9-44
 48
-49    <uses-permission android:name="com.homelandadvantage.cp67.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+49    <uses-permission android:name="com.fundle.cp67.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
 49-->[androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:26:5-97
 49-->[androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:26:22-94
 50
 51    <application
 51-->/app/twa-build/app/src/main/AndroidManifest.xml:35:5-201:19
-52        android:name="com.homelandadvantage.cp67.Application"
+52        android:name="com.fundle.cp67.Application"
 52-->/app/twa-build/app/src/main/AndroidManifest.xml:36:9-35
 53        android:allowBackup="true"
 53-->/app/twa-build/app/src/main/AndroidManifest.xml:37:9-35
@@ -131,7 +131,7 @@
 85        </activity>
 86        <activity
 86-->/app/twa-build/app/src/main/AndroidManifest.xml:79:9-162:20
-87            android:name="com.homelandadvantage.cp67.LauncherActivity"
+87            android:name="com.fundle.cp67.LauncherActivity"
 87-->/app/twa-build/app/src/main/AndroidManifest.xml:79:19-50
 88            android:alwaysRetainTaskState="true"
 88-->/app/twa-build/app/src/main/AndroidManifest.xml:80:13-49
@@ -288,7 +288,7 @@
 165
 166        <service
 166-->/app/twa-build/app/src/main/AndroidManifest.xml:179:9-194:19
-167            android:name="com.homelandadvantage.cp67.DelegationService"
+167            android:name="com.fundle.cp67.DelegationService"
 167-->/app/twa-build/app/src/main/AndroidManifest.xml:180:13-46
 168            android:enabled="@bool/enableNotification"
 168-->/app/twa-build/app/src/main/AndroidManifest.xml:181:13-55
@@ -321,7 +321,7 @@
 183-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/8.11.1/transforms/5cb7738f5242d8c4e38c8ffa2b265b31/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
 184            android:name="androidx.startup.InitializationProvider"
 184-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/8.11.1/transforms/5cb7738f5242d8c4e38c8ffa2b265b31/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
-185            android:authorities="com.homelandadvantage.cp67.androidx-startup"
+185            android:authorities="com.fundle.cp67.androidx-startup"
 185-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/8.11.1/transforms/5cb7738f5242d8c4e38c8ffa2b265b31/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
 186            android:exported="false" >
 186-->[androidx.emoji2:emoji2:1.3.0] /root/.gradle/caches/8.11.1/transforms/5cb7738f5242d8c4e38c8ffa2b265b31/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37

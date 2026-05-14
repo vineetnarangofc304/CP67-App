@@ -36,7 +36,7 @@ MERGED from [androidx.tracing:tracing:1.0.0] /root/.gradle/caches/8.11.1/transfo
 MERGED from [androidx.arch.core:core-runtime:2.2.0] /root/.gradle/caches/8.11.1/transforms/09558f1b9b56a339611f1f3ff5685123/transformed/core-runtime-2.2.0/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.annotation:annotation-experimental:1.4.1] /root/.gradle/caches/8.11.1/transforms/7880efad619dc72d569f5e6e2c17444b/transformed/annotation-experimental-1.4.1/AndroidManifest.xml:2:1-7:12
 	package
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:23:5-41
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:23:5-30
 		INJECTED from /app/twa-build/app/src/main/AndroidManifest.xml
 	android:versionName
 		INJECTED from /app/twa-build/app/src/main/AndroidManifest.xml
@@ -125,7 +125,7 @@ category#android.intent.category.DEFAULT
 ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:74:21-80
 	android:name
 		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:74:31-77
-activity#com.homelandadvantage.cp67.LauncherActivity
+activity#com.fundle.cp67.LauncherActivity
 ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:79:9-162:20
 	android:label
 		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:81:13-49
@@ -275,7 +275,7 @@ ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:174:13-176:53
 		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:176:17-50
 	android:name
 		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:175:17-67
-service#com.homelandadvantage.cp67.DelegationService
+service#com.fundle.cp67.DelegationService
 ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:179:9-194:19
 	android:enabled
 		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:181:13-55
@@ -401,7 +401,7 @@ ADDED from [androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5
 		ADDED from [androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:24:9-44
 	android:name
 		ADDED from [androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:23:9-81
-permission#com.homelandadvantage.cp67.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+permission#com.fundle.cp67.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 ADDED from [androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:22:5-24:47
 	android:protectionLevel
 		ADDED from [androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:24:9-44
@@ -411,7 +411,7 @@ uses-permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 ADDED from [androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:26:5-97
 	android:name
 		ADDED from [androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:26:22-94
-uses-permission#com.homelandadvantage.cp67.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+uses-permission#com.fundle.cp67.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 ADDED from [androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:26:5-97
 	android:name
 		ADDED from [androidx.core:core:1.13.0] /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/AndroidManifest.xml:26:22-94

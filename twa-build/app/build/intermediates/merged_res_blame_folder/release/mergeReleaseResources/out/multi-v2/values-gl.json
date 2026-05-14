@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.homelandadvantage.cp67.app-mergeReleaseResources-2:/values-gl/values-gl.xml",
+            "outputFile": "com.fundle.cp67.app-mergeReleaseResources-2:/values-gl/values-gl.xml",
             "map": [
                 {
                     "source": "/root/.gradle/caches/8.11.1/transforms/183ebbc8ed821348f80a6d36d20b75e3/transformed/appcompat-1.7.0/res/values-gl/values-gl.xml",

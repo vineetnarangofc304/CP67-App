@@ -29,7 +29,7 @@ const { computeChecksum } = require(path.join(CLI_PATH, 'dist/lib/cmds/shared.js
 const MANIFEST_URL = process.env.MANIFEST_URL || 'https://cp67bot.fundlexperiences.com/manifest.json';
 const TARGET_DIR = process.env.TARGET_DIR || '/app/twa-build';
 
-const PACKAGE_ID = 'com.homelandadvantage.cp67';
+const PACKAGE_ID = 'com.fundle.cp67';
 const APP_NAME = 'CP67 Mall';
 const LAUNCHER_NAME = 'CP67 Mall';
 const VERSION_CODE = 1;

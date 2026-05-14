@@ -62,6 +62,9 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (May 14, 2026 - Session 8)
+- **Play Store package name fix**: Rebuilt the production AAB with `packageId=com.fundle.cp67` (Google Play Console rejected the previous `com.homelandadvantage.cp67` since the listing was created under `Fundle`). Same signing key reused so future updates work. Updated `assetlinks.json` to match the new package name and republished it under `/app/frontend/public/.well-known/` on preview. **Production needs a redeploy** for the new assetlinks.json + new download files (`/downloads/cp67-mall.aab` and `/downloads/cp67-mall.apk`) to go live at `cp67bot.fundlexperiences.com`.
+
 ## Recently Fixed (May 7, 2026 - Session 7)
 - **Users CSV Export**: New "Export CSV" button in admin Users page. `GET /api/export/users` now also accepts `source` and `search`, and returns separate `joined_date` / `joined_time` (IST) columns instead of a raw ISO timestamp.
 - **Parking CSV Export**: New "Export CSV" button in admin Parking Report. `GET /api/export/parking` now merges `parking_sessions` + `parking_coupons` (matches the live UI report) and outputs separate `entry_date` / `entry_time` / `exit_date` / `exit_time` (IST) columns plus `type` (Session / Free Coupon), `exit_gate`, `scanned_by`. Parking-staff users see only their gate; admin sees both.
