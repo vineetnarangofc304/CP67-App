@@ -41,6 +41,8 @@ const Bills = () => {
   const [pendingBills, setPendingBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [pagination, setPagination] = useState({ skip: 0, limit: 20, total: 0 });
   const [selectedBill, setSelectedBill] = useState(null);
   const [showReviewDialog, setShowReviewDialog] = useState(false);
@@ -54,13 +56,15 @@ const Bills = () => {
   useEffect(() => {
     fetchBills();
     fetchPendingBills();
-  }, [pagination.skip, statusFilter]);
+  }, [pagination.skip, statusFilter, dateFrom, dateTo]);
 
   const fetchBills = async () => {
     setLoading(true);
     try {
       let url = `${API_URL}/bills?skip=${pagination.skip}&limit=${pagination.limit}`;
       if (statusFilter && statusFilter !== 'all') url += `&status=${statusFilter}`;
+      if (dateFrom) url += `&start_date=${dateFrom}`;
+      if (dateTo) url += `&end_date=${dateTo}`;
       
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -399,23 +403,52 @@ const Bills = () => {
           </TabsList>
 
           {activeTab === 'all' && (
-            <Select value={statusFilter} onValueChange={(value) => {
-              setStatusFilter(value);
-              setPagination(prev => ({ ...prev, skip: 0 }));
-            }}>
-              <SelectTrigger className="w-[180px]" data-testid="status-filter">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="auto_approved">Auto Approved</SelectItem>
-                <SelectItem value="manual_review">Manual Review</SelectItem>
-                <SelectItem value="pending_review">Pending Review</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="duplicate">Duplicate</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => { setDateFrom(e.target.value); setPagination(p => ({ ...p, skip: 0 })); }}
+                className="w-[160px]"
+                placeholder="From"
+                data-testid="bills-date-from"
+              />
+              <span className="text-sm text-slate-400">→</span>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => { setDateTo(e.target.value); setPagination(p => ({ ...p, skip: 0 })); }}
+                className="w-[160px]"
+                placeholder="To"
+                data-testid="bills-date-to"
+              />
+              {(dateFrom || dateTo) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setDateFrom(''); setDateTo(''); setPagination(p => ({ ...p, skip: 0 })); }}
+                  data-testid="bills-date-clear"
+                >
+                  Clear dates
+                </Button>
+              )}
+              <Select value={statusFilter} onValueChange={(value) => {
+                setStatusFilter(value);
+                setPagination(prev => ({ ...prev, skip: 0 }));
+              }}>
+                <SelectTrigger className="w-[180px]" data-testid="status-filter">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="auto_approved">Auto Approved</SelectItem>
+                  <SelectItem value="manual_review">Manual Review</SelectItem>
+                  <SelectItem value="pending_review">Pending Review</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                  <SelectItem value="duplicate">Duplicate</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           )}
         </div>
 

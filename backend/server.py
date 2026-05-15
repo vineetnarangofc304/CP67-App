@@ -674,11 +674,32 @@ QR_CODES = [
         "prefilled_message": "Hi! I need parking validation",
         "category": "parking",
         "description": "Scan at parking entry for exit validation QR"
+    },
+    {
+        "qr_code_id": "QR0124008",
+        "location": "Marketing Campaign",
+        "source_code": "SRC_MARKETING",
+        "prefilled_message": "I want to register in CP 67 Loyalty Program Homeland Advantage",
+        "category": "loyalty",
+        "description": "For external marketing campaigns (Insta/FB/print ads)",
+        "clean_text": True
     }
 ]
 
 # Message to source mapping (for tracking without visible source code)
 MESSAGE_TO_SOURCE = {qr["prefilled_message"].lower(): qr for qr in QR_CODES}
+
+
+def _build_wa_link(qr: dict) -> str:
+    """Build the wa.me link for a QR. If qr['clean_text'] is true, drop the
+    visible ' | SRC_XXX' tracking suffix (attribution still works via the
+    MESSAGE_TO_SOURCE map)."""
+    from urllib.parse import quote
+    msg = qr["prefilled_message"]
+    if not qr.get("clean_text"):
+        msg = f"{msg} | {qr['source_code']}"
+    return f"https://wa.me/{WHATSAPP_NUMBER}?text={quote(msg)}"
+
 
 WHATSAPP_NUMBER = os.environ.get('WHATSAPP_NUMBER', '917347576767')
 
@@ -842,7 +863,7 @@ async def get_qr_codes(category: Optional[str] = None, payload: dict = Depends(v
             stats_data = parking_stats[0] if parking_stats else {}
             qr_data = {
                 **qr,
-                "whatsapp_link": f"https://wa.me/{WHATSAPP_NUMBER}?text={qr['prefilled_message'].replace(' ', '%20')}%20%7C%20{qr['source_code']}",
+                "whatsapp_link": _build_wa_link(qr),
                 "scans": stats_data.get("total_sessions", 0),
                 "registrations": 0,  # Parking doesn't affect registrations
                 "bill_uploads": 0,   # Parking doesn't affect bill uploads
@@ -852,7 +873,7 @@ async def get_qr_codes(category: Optional[str] = None, payload: dict = Depends(v
         else:
             # Regular loyalty QR codes
             stats = await db.qr_analytics.find_one({"qr_code_id": qr["qr_code_id"]}, {"_id": 0})
-            whatsapp_link = f"https://wa.me/{WHATSAPP_NUMBER}?text={qr['prefilled_message'].replace(' ', '%20')}%20%7C%20{qr['source_code']}"
+            whatsapp_link = _build_wa_link(qr)
             qr_data = {
                 **qr,
                 "whatsapp_link": whatsapp_link,
@@ -868,7 +889,7 @@ async def get_qr_links():
     """Get WhatsApp links for all QR codes - PUBLIC endpoint for website integration"""
     links = []
     for qr in QR_CODES:
-        whatsapp_link = f"https://wa.me/{WHATSAPP_NUMBER}?text={qr['prefilled_message'].replace(' ', '%20')}%20%7C%20{qr['source_code']}"
+        whatsapp_link = _build_wa_link(qr)
         links.append({
             "location": qr["location"],
             "source_code": qr["source_code"],
@@ -892,7 +913,7 @@ async def generate_qr_image(qr_code_id: str):
     if not qr_data:
         raise HTTPException(status_code=404, detail="QR code not found")
     
-    whatsapp_link = f"https://wa.me/{WHATSAPP_NUMBER}?text={qr_data['prefilled_message'].replace(' ', '%20')}%20%7C%20{qr_data['source_code']}"
+    whatsapp_link = _build_wa_link(qr_data)
     
     qr = qrcode.QRCode(version=1, box_size=10, border=5)
     qr.add_data(whatsapp_link)
@@ -2365,21 +2386,36 @@ async def get_bills(
     limit: int = 50,
     status: Optional[str] = None,
     qr_source: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     payload: dict = Depends(verify_jwt_token)
 ):
     """Get all bills with pagination and filters"""
     query = {}
     if status:
         query["status"] = status
-    
+
     # If filtering by QR source, we need to look up users first
     if qr_source:
         user_ids = await db.users.distinct("id", {"first_touch_source": qr_source})
         query["user_id"] = {"$in": user_ids}
-    
+
+    # Date range filter on created_at (ISO string compare works since stored as ISO)
+    if start_date or end_date:
+        date_q = {}
+        if start_date:
+            date_q["$gte"] = start_date
+        if end_date:
+            # Make end inclusive to end-of-day
+            if len(end_date) == 10:  # YYYY-MM-DD
+                date_q["$lte"] = end_date + "T23:59:59.999Z"
+            else:
+                date_q["$lte"] = end_date
+        query["created_at"] = date_q
+
     total = await db.bills.count_documents(query)
     bills = await db.bills.find(query, {"_id": 0}).skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
-    
+
     return {"bills": bills, "total": total, "skip": skip, "limit": limit}
 
 @api_router.get("/bills/by-qr/{qr_code_id}")

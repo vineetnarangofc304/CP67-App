@@ -62,6 +62,10 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (May 15, 2026 - Session 9)
+- **Marketing Campaign QR**: New QR (`QR0124008`, source `SRC_MARKETING`, location `Marketing Campaign`) with prefilled text `"I want to register in CP 67 Loyalty Program Homeland Advantage"`. Added `clean_text` flag to QR_CODES — when true, the `wa.me` link drops the visible `| SRC_X` tracking suffix so the message users see in WhatsApp is clean for external advertising. Source attribution still works via the existing `MESSAGE_TO_SOURCE` map. Other QRs unchanged (backward-compatible). Added shared `_build_wa_link(qr)` helper to centralise link construction.
+- **Bill Management date filter**: `/api/bills` now accepts `start_date` and `end_date` (ISO strings, end inclusive to end-of-day). Admin Bills page "All Bills" tab now has two `<input type="date">` pickers + a "Clear dates" button that works alongside the status filter.
+
 ## Recently Fixed (May 14, 2026 - Session 8)
 - **Play Store package name fix**: Rebuilt the production AAB with `packageId=com.fundle.cp67` (Google Play Console rejected the previous `com.homelandadvantage.cp67` since the listing was created under `Fundle`). Same signing key reused so future updates work. Updated `assetlinks.json` to match the new package name and republished it under `/app/frontend/public/.well-known/` on preview. **Production needs a redeploy** for the new assetlinks.json + new download files (`/downloads/cp67-mall.aab` and `/downloads/cp67-mall.apk`) to go live at `cp67bot.fundlexperiences.com`.
 
