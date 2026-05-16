@@ -7668,15 +7668,6 @@ androidx.viewpager.widget.ViewPager$SavedState
 androidx.viewpager.widget.ViewPager$SimpleOnPageChangeListener
 androidx.viewpager.widget.ViewPager$ViewPositionComparator
 androidx.viewpager.widget.ViewPager
-com.fundle.cp67.R$bool
-com.fundle.cp67.R$color
-com.fundle.cp67.R$drawable
-com.fundle.cp67.R$integer
-com.fundle.cp67.R$mipmap
-com.fundle.cp67.R$raw
-com.fundle.cp67.R$string
-com.fundle.cp67.R$xml
-com.fundle.cp67.R
 com.google.androidbrowserhelper.BuildConfig
 com.google.androidbrowserhelper.R$drawable:
     private void <init>()
@@ -10286,6 +10277,15 @@ com.google.j2objc.annotations.WeakOuter
 com.google.thirdparty.publicsuffix.PublicSuffixPatterns
 com.google.thirdparty.publicsuffix.PublicSuffixType
 com.google.thirdparty.publicsuffix.TrieParser
+com.homelandadvantage.cp67.R$bool
+com.homelandadvantage.cp67.R$color
+com.homelandadvantage.cp67.R$drawable
+com.homelandadvantage.cp67.R$integer
+com.homelandadvantage.cp67.R$mipmap
+com.homelandadvantage.cp67.R$raw
+com.homelandadvantage.cp67.R$string
+com.homelandadvantage.cp67.R$xml
+com.homelandadvantage.cp67.R
 kotlin.ArrayIntrinsicsKt
 kotlin.BuilderInference
 kotlin.CharCodeJVMKt
