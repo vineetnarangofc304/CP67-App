@@ -2877,6 +2877,85 @@ Please add the brand "{brand_name}" to TagnPay panel, then click "Reprocess" in 
         return False
 
 # ======================== KARIX WHATSAPP HELPER ========================
+KARIX_SMS_API_URL = os.environ.get('KARIX_SMS_API_URL', 'https://pod2-japi.instaalerts.zone/httpapi/QueryStringReceiver')
+KARIX_SMS_API_KEY = os.environ.get('KARIX_SMS_API_KEY', '')
+KARIX_SMS_SENDER_ID = os.environ.get('KARIX_SMS_SENDER_ID', 'CP67')
+KARIX_SMS_DLT_ENTITY_ID = os.environ.get('KARIX_SMS_DLT_ENTITY_ID', '')
+OTP_DEV_BYPASS = os.environ.get('OTP_DEV_BYPASS', '')
+
+
+async def send_otp_sms(phone_10: str, otp: str) -> dict:
+    """Send OTP SMS via Karix HTTP API using DLT-approved template:
+    'Your verification OTP is (OTP) Use this at CP67 Mall.'
+    `phone_10` is the 10-digit Indian mobile number (without country code).
+    """
+    if not KARIX_SMS_API_KEY:
+        logger.error("Karix SMS API key not configured")
+        return {"success": False, "error": "SMS gateway not configured"}
+
+    text = f"Your verification OTP is {otp} Use this at CP67 Mall."
+    params = {
+        "ver": "1.0",
+        "key": KARIX_SMS_API_KEY,
+        "encrpt": "0",
+        "dest": phone_10,
+        "send": KARIX_SMS_SENDER_ID,
+        "dlt_entity_id": KARIX_SMS_DLT_ENTITY_ID,
+        "text": text,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(KARIX_SMS_API_URL, params=params)
+            body = (resp.text or "").strip()
+            logger.info(f"Karix SMS to {phone_10}: status={resp.status_code} body={body[:200]}")
+            # Karix QueryStringReceiver returns text containing 'Statuscode=200' and 'Platform Accepted' on success
+            body_upper = body.upper()
+            is_ok = resp.status_code == 200 and ("STATUSCODE=200" in body_upper or "PLATFORM ACCEPTED" in body_upper or body_upper.startswith("OK"))
+            return {"success": is_ok, "status_code": resp.status_code, "response": body}
+    except Exception as e:
+        logger.error(f"Karix SMS send error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+async def store_otp(phone_10: str, otp: str) -> None:
+    """Persist OTP with 5-minute expiry. Replaces any prior OTP for this phone."""
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(minutes=5)
+    await db.otp_codes.update_one(
+        {"phone": phone_10},
+        {"$set": {
+            "phone": phone_10,
+            "otp": otp,
+            "created_at": now.isoformat(),
+            "expires_at": expires.isoformat(),
+            "attempts": 0,
+        }},
+        upsert=True,
+    )
+
+
+async def verify_stored_otp(phone_10: str, otp: str) -> bool:
+    """Verify OTP against the stored record. Increments attempt counter,
+    blocks after 5 failed attempts, deletes record on success or expiry."""
+    rec = await db.otp_codes.find_one({"phone": phone_10}, {"_id": 0})
+    if not rec:
+        return False
+    try:
+        expires_at = datetime.fromisoformat(rec["expires_at"])
+    except Exception:
+        expires_at = None
+    if expires_at and expires_at < datetime.now(timezone.utc):
+        await db.otp_codes.delete_one({"phone": phone_10})
+        return False
+    if rec.get("attempts", 0) >= 5:
+        await db.otp_codes.delete_one({"phone": phone_10})
+        return False
+    if str(rec.get("otp")) == str(otp):
+        await db.otp_codes.delete_one({"phone": phone_10})
+        return True
+    await db.otp_codes.update_one({"phone": phone_10}, {"$inc": {"attempts": 1}})
+    return False
+
 
 async def send_whatsapp_text(phone: str, message: str):
     """Send simple text WhatsApp message via Karix RCM API"""

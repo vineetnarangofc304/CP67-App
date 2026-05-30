@@ -62,6 +62,13 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (May 30, 2026 - Session 10)
+- **Real SMS OTP via Karix HTTP API**: Consumer login OTP now sends a real SMS instead of relying on TagnPay. Generates a 6-digit OTP locally, stores it in `otp_codes` collection with 5-min expiry + max-5-attempt lockout, and sends via Karix `QueryStringReceiver` endpoint (`https://pod2-japi.instaalerts.zone/httpapi/QueryStringReceiver`) using sender ID `CP67`. DLT-approved template: `Your verification OTP is {OTP} Use this at CP67 Mall.`
+- **Dev bypass**: OTP `1234` (`OTP_DEV_BYPASS` env var) still works for QA / testing agent / sideload tests.
+- **`/api/consumer/auth/verify-otp`** no longer hits TagnPay for verification — uses the local stored OTP. TagnPay sync still happens in `send-otp` (best-effort, non-blocking).
+- **New env vars** in `/app/backend/.env`: `KARIX_SMS_API_URL`, `KARIX_SMS_API_KEY`, `KARIX_SMS_SENDER_ID`, `KARIX_SMS_DLT_ENTITY_ID`, `OTP_DEV_BYPASS`.
+- **Tested**: Karix returned `Statuscode=200 & Platform Accepted` for the test sends. Dev OTP `1234` returns JWT token. Wrong OTP returns 400.
+
 ## Recently Fixed (May 15, 2026 - Session 9)
 - **Marketing Campaign QR**: New QR (`QR0124008`, source `SRC_MARKETING`, location `Marketing Campaign`) with prefilled text `"I want to register in CP 67 Loyalty Program Homeland Advantage"`. Added `clean_text` flag to QR_CODES — when true, the `wa.me` link drops the visible `| SRC_X` tracking suffix so the message users see in WhatsApp is clean for external advertising. Source attribution still works via the existing `MESSAGE_TO_SOURCE` map. Other QRs unchanged (backward-compatible). Added shared `_build_wa_link(qr)` helper to centralise link construction.
 - **Bill Management date filter**: `/api/bills` now accepts `start_date` and `end_date` (ISO strings, end inclusive to end-of-day). Admin Bills page "All Bills" tab now has two `<input type="date">` pickers + a "Clear dates" button that works alongside the status filter.

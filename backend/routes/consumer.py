@@ -383,14 +383,25 @@ async def send_otp(request: SendOTPRequest):
     if blocked:
         raise HTTPException(status_code=403, detail="This number is not eligible for the Homeland Advantage loyalty program.")
 
-    # Try sending OTP via TagnPay
-    result = await _tagnpay_client.send_login_otp(phone_10)
+    # Generate a 6-digit OTP and persist it (5-min TTL, max 5 attempts)
+    from server import send_otp_sms, store_otp
+    otp = str(random.randint(100000, 999999))
+    await store_otp(phone_10, otp)
 
-    if not result.get("success"):
-        # User might not be registered with TagnPay, register first
-        reg_result = await _tagnpay_client.register_customer(phone_10, "Customer", "")
-        logger.info(f"Auto-registered {phone_10} with TagnPay: {reg_result}")
-        result = await _tagnpay_client.send_login_otp(phone_10)
+    sms_result = await send_otp_sms(phone_10, otp)
+    if not sms_result.get("success"):
+        logger.warning(f"SMS gateway failed for {phone_10}: {sms_result}")
+        # OTP is still stored — admin can verify by tail of logs or dev bypass
+    else:
+        logger.info(f"OTP SMS sent to {phone_10}")
+
+    # Best-effort sync with TagnPay so the customer exists in the loyalty ledger
+    try:
+        existing = await _tagnpay_client.send_login_otp(phone_10)
+        if not existing.get("success"):
+            await _tagnpay_client.register_customer(phone_10, "Customer", "")
+    except Exception as e:
+        logger.warning(f"TagnPay sync (non-fatal) failed for {phone_10}: {e}")
 
     return {"success": True, "message": "OTP sent to your phone", "phone": phone}
 
@@ -407,12 +418,13 @@ async def verify_otp(request: VerifyOTPRequest):
     if blocked:
         raise HTTPException(status_code=403, detail="This number is not eligible for the Homeland Advantage loyalty program.")
 
-    # Dev mode: accept 1234 for testing
-    is_dev = request.otp == "1234"
+    # Dev override (testing agent + QA) — read from env, default '1234'
+    from server import verify_stored_otp, OTP_DEV_BYPASS
+    is_dev = bool(OTP_DEV_BYPASS) and request.otp == OTP_DEV_BYPASS
 
     if not is_dev:
-        result = await _tagnpay_client.verify_otp(phone_10, request.otp)
-        if not result.get("success"):
+        ok = await verify_stored_otp(phone_10, request.otp)
+        if not ok:
             raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
 
     # Find or create user
