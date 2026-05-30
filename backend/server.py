@@ -2881,12 +2881,13 @@ KARIX_SMS_API_URL = os.environ.get('KARIX_SMS_API_URL', 'https://pod2-japi.insta
 KARIX_SMS_API_KEY = os.environ.get('KARIX_SMS_API_KEY', '')
 KARIX_SMS_SENDER_ID = os.environ.get('KARIX_SMS_SENDER_ID', 'CP67')
 KARIX_SMS_DLT_ENTITY_ID = os.environ.get('KARIX_SMS_DLT_ENTITY_ID', '')
+KARIX_SMS_DLT_TEMPLATE_ID = os.environ.get('KARIX_SMS_DLT_TEMPLATE_ID', '')
 OTP_DEV_BYPASS = os.environ.get('OTP_DEV_BYPASS', '')
 
 
 async def send_otp_sms(phone_10: str, otp: str) -> dict:
     """Send OTP SMS via Karix HTTP API using DLT-approved template:
-    'Your verification OTP is (OTP) Use this at CP67 Mall.'
+    'Your verification OTP is {#var#} Use this at CP67 Mall.'
     `phone_10` is the 10-digit Indian mobile number (without country code).
     """
     if not KARIX_SMS_API_KEY:
@@ -2901,6 +2902,7 @@ async def send_otp_sms(phone_10: str, otp: str) -> dict:
         "dest": phone_10,
         "send": KARIX_SMS_SENDER_ID,
         "dlt_entity_id": KARIX_SMS_DLT_ENTITY_ID,
+        "dlt_template_id": KARIX_SMS_DLT_TEMPLATE_ID,
         "text": text,
     }
     try:
