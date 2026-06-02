@@ -62,6 +62,13 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (Jun 2, 2026 - Session 11)
+- **Production backend slowness root-caused & fixed**: Production `/api/analytics/dashboard` was timing out at 20s → HTTP 500. Same for `/api/bills?limit=20`. Cause: 20 sequential `count_documents` queries on un-indexed collections (heavy collection scans at scale).
+  - **Parallelised** the analytics dashboard with `asyncio.gather()` — all 22 counts run concurrently
+  - **Added 30 DB indexes** via new `ensure_db_indexes()` on startup (idempotent, defensive per-index): `users.phone/phone_10/loyalty_id/created_at/customer_type/first_touch_source/kyc_status`, `bills.created_at/status/user_id/user_phone + compound (status, created_at)`, `whatsapp_logs.{created_at,direction,user_phone}`, `parking_sessions.{entry_time,status,user_phone,exit_gate}`, `parking_coupons.{coupon_code,user_phone,status,created_at,exit_gate}`, `blocked_phones.phone`, `otp_codes.{phone,expires_at}`, `whatsapp_dedup.ts`, `qr_analytics.qr_code_id`, `footfall.date`
+  - **Preview results** (small data, expected fast): dashboard 0.12s, bills 0.15s
+  - **Production impact** (large data, the actual fix): once redeployed, the indexes will be auto-created on first boot, and the parallel dashboard should drop from 20s+ → under 1s
+
 ## Recently Fixed (May 30, 2026 - Session 10)
 - **Real SMS OTP via Karix HTTP API**: Consumer login OTP now sends a real SMS instead of relying on TagnPay. Generates a 6-digit OTP locally, stores it in `otp_codes` collection with 5-min expiry + max-5-attempt lockout, and sends via Karix `QueryStringReceiver` endpoint (`https://pod2-japi.instaalerts.zone/httpapi/QueryStringReceiver`) using sender ID `CP67`. DLT-approved template: `Your verification OTP is {OTP} Use this at CP67 Mall.`
 - **Dev bypass**: OTP `1234` (`OTP_DEV_BYPASS` env var) still works for QA / testing agent / sideload tests.

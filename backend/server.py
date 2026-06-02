@@ -5486,50 +5486,48 @@ async def get_parking_coupon_qr(coupon_code: str):
 
 @api_router.get("/analytics/dashboard")
 async def get_dashboard_stats(payload: dict = Depends(verify_jwt_token)):
-    """Get dashboard overview statistics"""
-    # Total users
-    total_users = await db.users.count_documents({})
-    registered_users = await db.users.count_documents({"kyc_status": True})
-    
-    # New vs Existing customers
-    new_customers = await db.users.count_documents({"customer_type": "new"})
-    existing_customers = await db.users.count_documents({"customer_type": "existing"})
-    # For users without customer_type field (legacy), count as new
-    legacy_users = await db.users.count_documents({"customer_type": {"$exists": False}})
-    new_customers += legacy_users
-    
-    # Bills stats
-    total_bills = await db.bills.count_documents({})
-    auto_approved = await db.bills.count_documents({"status": "auto_approved"})
-    manual_review = await db.bills.count_documents({"status": "manual_review"})
-    pending_review = await db.bills.count_documents({"status": "pending_review"})
-    approved = await db.bills.count_documents({"status": "approved"})
-    rejected = await db.bills.count_documents({"status": "rejected"})
-    duplicate = await db.bills.count_documents({"status": "duplicate"})
-    
-    # Points issued
-    points_pipeline = [
-        {"$group": {"_id": None, "total": {"$sum": "$points_issued"}}}
-    ]
-    points_result = await db.bills.aggregate(points_pipeline).to_list(1)
-    total_points_issued = points_result[0]["total"] if points_result else 0
-    
-    # QR stats
-    qr_stats = await db.qr_analytics.find({}, {"_id": 0}).to_list(10)
-    total_scans = sum(q.get("scans", 0) for q in qr_stats)
-    
-    # WhatsApp stats
-    total_messages = await db.whatsapp_logs.count_documents({})
-    inbound = await db.whatsapp_logs.count_documents({"direction": "inbound"})
-    outbound = await db.whatsapp_logs.count_documents({"direction": "outbound"})
-    
-    # Today's stats
+    """Get dashboard overview statistics (parallelised for fast response)."""
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-    today_users = await db.users.count_documents({"created_at": {"$gte": today_start}})
-    today_new_customers = await db.users.count_documents({"created_at": {"$gte": today_start}, "customer_type": "new"})
-    today_existing_customers = await db.users.count_documents({"created_at": {"$gte": today_start}, "customer_type": "existing"})
-    today_bills = await db.bills.count_documents({"created_at": {"$gte": today_start}})
-    
+
+    points_pipeline = [{"$group": {"_id": None, "total": {"$sum": "$points_issued"}}}]
+
+    # Run every count in parallel
+    results = await asyncio.gather(
+        db.users.count_documents({}),
+        db.users.count_documents({"kyc_status": True}),
+        db.users.count_documents({"customer_type": "new"}),
+        db.users.count_documents({"customer_type": "existing"}),
+        db.users.count_documents({"customer_type": {"$exists": False}}),
+        db.bills.count_documents({}),
+        db.bills.count_documents({"status": "auto_approved"}),
+        db.bills.count_documents({"status": "manual_review"}),
+        db.bills.count_documents({"status": "pending_review"}),
+        db.bills.count_documents({"status": "approved"}),
+        db.bills.count_documents({"status": "rejected"}),
+        db.bills.count_documents({"status": "duplicate"}),
+        db.bills.aggregate(points_pipeline).to_list(1),
+        db.qr_analytics.find({}, {"_id": 0}).to_list(10),
+        db.whatsapp_logs.count_documents({}),
+        db.whatsapp_logs.count_documents({"direction": "inbound"}),
+        db.whatsapp_logs.count_documents({"direction": "outbound"}),
+        db.users.count_documents({"created_at": {"$gte": today_start}}),
+        db.users.count_documents({"created_at": {"$gte": today_start}, "customer_type": "new"}),
+        db.users.count_documents({"created_at": {"$gte": today_start}, "customer_type": "existing"}),
+        db.bills.count_documents({"created_at": {"$gte": today_start}}),
+        _get_footfall_stats(),
+    )
+
+    (total_users, registered_users, new_customers_raw, existing_customers, legacy_users,
+     total_bills, auto_approved, manual_review, pending_review, approved, rejected, duplicate,
+     points_result, qr_stats,
+     total_messages, inbound, outbound,
+     today_users, today_new_customers, today_existing_customers, today_bills,
+     footfall) = results
+
+    new_customers = new_customers_raw + legacy_users
+    total_points_issued = points_result[0]["total"] if points_result else 0
+    total_scans = sum(q.get("scans", 0) for q in qr_stats)
+
     return {
         "users": {
             "total": total_users,
@@ -5562,7 +5560,7 @@ async def get_dashboard_stats(payload: dict = Depends(verify_jwt_token)):
             "inbound": inbound,
             "outbound": outbound
         },
-        "footfall": await _get_footfall_stats()
+        "footfall": footfall
     }
 
 
@@ -6324,6 +6322,55 @@ async def startup_seed():
     # Start background expiry loop
     import asyncio
     asyncio.create_task(_parking_expiry_loop())
+    # Ensure DB indexes for fast queries (idempotent)
+    await ensure_db_indexes()
+
+
+async def ensure_db_indexes():
+    """Create indexes on hot query paths. Idempotent — safe on every boot.
+    Each index is created independently so one failure doesn't block the rest."""
+    index_specs = [
+        ("users", "phone", {}),
+        ("users", "phone_10", {}),
+        ("users", "loyalty_id", {}),
+        ("users", "created_at", {}),
+        ("users", "customer_type", {}),
+        ("users", "first_touch_source", {}),
+        ("users", "kyc_status", {}),
+        ("bills", "created_at", {}),
+        ("bills", "status", {}),
+        ("bills", "user_id", {}),
+        ("bills", "user_phone", {}),
+        ("bills", [("status", 1), ("created_at", -1)], {}),
+        ("whatsapp_logs", "created_at", {}),
+        ("whatsapp_logs", "direction", {}),
+        ("whatsapp_logs", "user_phone", {}),
+        ("parking_sessions", "entry_time", {}),
+        ("parking_sessions", "status", {}),
+        ("parking_sessions", "user_phone", {}),
+        ("parking_sessions", "exit_gate", {}),
+        ("parking_coupons", "coupon_code", {}),
+        ("parking_coupons", "user_phone", {}),
+        ("parking_coupons", "status", {}),
+        ("parking_coupons", "created_at", {}),
+        ("parking_coupons", "exit_gate", {}),
+        ("blocked_phones", "phone", {}),
+        ("otp_codes", "phone", {}),
+        ("otp_codes", "expires_at", {}),
+        ("whatsapp_dedup", "ts", {}),
+        ("qr_analytics", "qr_code_id", {}),
+        ("footfall", "date", {}),
+    ]
+
+    async def _safe_create(col, key, kwargs):
+        try:
+            await db[col].create_index(key, **kwargs)
+        except Exception as e:
+            logger.warning(f"Index {col}.{key} skip: {e}")
+
+    await asyncio.gather(*(_safe_create(c, k, kw) for c, k, kw in index_specs))
+    logger.info("DB indexes ensured")
+
 
 # Static file serving for uploads
 from fastapi.staticfiles import StaticFiles
