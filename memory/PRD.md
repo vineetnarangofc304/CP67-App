@@ -62,6 +62,10 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (Jun 4, 2026 - Session 12)
+- **Karix SMS DLT entity ID configured**: `KARIX_SMS_DLT_ENTITY_ID=1701172802304667512` (Principal Entity ID) added to `/app/backend/.env`. Karix HTTP API call now passes both `dlt_entity_id` and `dlt_template_id=1707172914885560615` so SMS should land on real handsets via Implicit DLT route. Header `CP67`, template `Your verification OTP is {#var#} Use this at CP67 Mall.`
+- **Phone masking for parking gate staff**: In `/api/parking/sessions` and `/api/export/parking`, when the JWT belongs to `parking1` or `parking2` (gate set), `user_phone` is masked as `XXXXXX0001` (last 4 digits visible). Admin still sees full numbers — this is JWT-claim based, no UI changes needed. Tested with both admin and parking1 logins.
+
 ## Recently Fixed (Jun 2, 2026 - Session 11)
 - **Production backend slowness root-caused & fixed**: Production `/api/analytics/dashboard` was timing out at 20s → HTTP 500. Same for `/api/bills?limit=20`. Cause: 20 sequential `count_documents` queries on un-indexed collections (heavy collection scans at scale).
   - **Parallelised** the analytics dashboard with `asyncio.gather()` — all 22 counts run concurrently

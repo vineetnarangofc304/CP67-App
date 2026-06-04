@@ -5385,6 +5385,15 @@ async def export_parking(
     # Sort by entry_date+entry_time descending (raw ISO sorting via IST string is OK because we kept original key)
     rows.sort(key=lambda r: (r["entry_date"], r["entry_time"]), reverse=True)
 
+    # Mask phones for parking-gate staff (admin sees full numbers)
+    if user_gate:
+        for r in rows:
+            ph = r.get("phone")
+            if ph:
+                digits = "".join(ch for ch in str(ph) if ch.isdigit())
+                last_10 = digits[-10:] if len(digits) >= 10 else digits
+                r["phone"] = ("X" * max(len(last_10) - 4, 0)) + last_10[-4:] if last_10 else ""
+
     if not rows:
         return Response(content="No parking records found", media_type="text/plain")
 
@@ -6210,7 +6219,16 @@ async def get_parking_sessions(
                 s["exit_time"] = xt.astimezone(IST).isoformat()
             except Exception:
                 pass
-    
+
+    # Mask phone numbers for parking-gate staff. Admin sees full numbers.
+    if user_gate:
+        for s in paginated:
+            ph = s.get("user_phone")
+            if ph:
+                digits = "".join(ch for ch in str(ph) if ch.isdigit())
+                last_10 = digits[-10:] if len(digits) >= 10 else digits
+                s["user_phone"] = ("X" * max(len(last_10) - 4, 0)) + last_10[-4:] if last_10 else ""
+
     # Calculate stats (gate-filtered for parking staff)
     pkg_stat_q = {"status": "active"}
     coupon_stat_q = {"used": False, "status": {"$ne": "expired"}}
