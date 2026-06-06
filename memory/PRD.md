@@ -62,6 +62,15 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (Jun 6, 2026 - Session 13)
+
+Three production issues + a critical perf fix:
+
+- **OTP delay during app login fixed (was 20s, now 0.2s)**: Karix SMS endpoint occasionally takes 30+ seconds. Both the Karix SMS send AND the TagnPay sync now run as FastAPI `BackgroundTasks` — the OTP response returns immediately. OTP is still stored in `otp_codes` collection before the response so verify-otp works deterministically even if SMS takes a few extra seconds to land.
+- **"Source" column blank in User report fixed**: When users registered through the SMS-OTP App flow (not WhatsApp), `first_touch_source` was never set. Now (a) consumer login accepts `?src=` / `?qr=` query params from the URL (e.g. marketing campaign QR landing pages), preserved in localStorage across the OTP step, (b) defaults to `SRC_APP` if no source provided, (c) one-time backfill on startup tagged 6 existing legacy users with `SRC_APP`. Added internal `SRC_APP` pseudo-QR (`internal: true`, hidden from public QR endpoints).
+- **Admin login "body stream already read" error fixed**: On production behind Cloudflare, `fetch()` would mark the response body as already-read for non-200 responses. Migrated admin login + token-validation to `XMLHttpRequest` (same pattern as consumer login). Wrong password now shows clean "Invalid credentials" toast.
+- **Cleaned up pre-existing lint debt**: Removed duplicate `Lakme Salon` dict key, unused locals (`current_month`, `not_found`, `pan`, `now`), bare `except:` → `except Exception:`, redefined `get_whatsapp_logs` (deleted the dumber second copy), 4 unused f-strings. Backend lint is now clean.
+
 ## Recently Fixed (Jun 4, 2026 - Session 12)
 - **Karix SMS DLT entity ID configured**: `KARIX_SMS_DLT_ENTITY_ID=1701172802304667512` (Principal Entity ID) added to `/app/backend/.env`. Karix HTTP API call now passes both `dlt_entity_id` and `dlt_template_id=1707172914885560615` so SMS should land on real handsets via Implicit DLT route. Header `CP67`, template `Your verification OTP is {#var#} Use this at CP67 Mall.`
 - **Phone masking for parking gate staff**: In `/api/parking/sessions` and `/api/export/parking`, when the JWT belongs to `parking1` or `parking2` (gate set), `user_phone` is masked as `XXXXXX0001` (last 4 digits visible). Admin still sees full numbers — this is JWT-claim based, no UI changes needed. Tested with both admin and parking1 logins.

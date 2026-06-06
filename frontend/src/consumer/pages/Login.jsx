@@ -47,7 +47,19 @@ export default function Login() {
     if (otp.length < 4) { setError('Enter valid OTP'); return; }
     setLoading(true);
     setError('');
-    
+
+    // Capture marketing-attribution params (?src=SRC_MARKETING&qr=QR0124008) — set
+    // when a customer scans a marketing QR / clicks an ad. Stored once in localStorage
+    // so it survives the OTP step + page refreshes.
+    let source = null, qrCode = null;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      source = params.get('src') || params.get('source') || localStorage.getItem('cp67_src');
+      qrCode = params.get('qr') || params.get('qr_code') || localStorage.getItem('cp67_qr');
+      if (source) localStorage.setItem('cp67_src', source);
+      if (qrCode) localStorage.setItem('cp67_qr', qrCode);
+    } catch { /* SSR safety */ }
+
     // Use XMLHttpRequest to avoid fetch body stream issues
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${API}/auth/verify-otp`, true);
@@ -58,6 +70,11 @@ export default function Login() {
       if (xhr.status >= 200 && xhr.status < 300) {
         if (data.success && data.token) {
           login(data.token, data.user);
+          // Clear the attribution params now that they've been persisted on the user
+          try {
+            localStorage.removeItem('cp67_src');
+            localStorage.removeItem('cp67_qr');
+          } catch { /* ignore */ }
           if (data.is_new || !data.user.onboarding_complete) {
             navigate('/app/onboarding', { replace: true });
           } else {
@@ -75,7 +92,12 @@ export default function Login() {
       setError('Network error. Please try again.');
       setLoading(false);
     };
-    xhr.send(JSON.stringify({ phone: phone.replace(/\D/g, '').slice(-10), otp }));
+    xhr.send(JSON.stringify({
+      phone: phone.replace(/\D/g, '').slice(-10),
+      otp,
+      source,
+      qr_code: qrCode,
+    }));
   };
 
   return (
@@ -170,7 +192,7 @@ export default function Login() {
         )}
 
         <p className="login-terms">
-          By continuing, you agree to CP67's <span className="login-terms-link" onClick={() => navigate('/app/legal')} data-testid="terms-link">Terms of Service</span> and Privacy Policy
+          By continuing, you agree to CP67&apos;s <span className="login-terms-link" onClick={() => navigate('/app/legal')} data-testid="terms-link">Terms of Service</span> and Privacy Policy
         </p>
       </div>
     </motion.div>

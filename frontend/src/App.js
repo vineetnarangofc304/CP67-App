@@ -34,51 +34,80 @@ const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (token) {
-      fetch(`${API_URL}/admin/me`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-        .then(res => {
-          if (res.ok) return res.json();
-          throw new Error('Invalid token');
-        })
-        .then(data => {
-          setUser(data);
-          setLoading(false);
-        })
-        .catch(() => {
-          localStorage.removeItem('cp67_token');
-          setToken(null);
-          setLoading(false);
-        });
-    } else {
-      setLoading(false);
+    if (!token) {
+      queueMicrotask(() => setLoading(false));
+      return;
     }
+    let cancelled = false;
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `${API_URL}/admin/me`, true);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.onload = () => {
+      if (cancelled) return;
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { setUser(JSON.parse(xhr.responseText)); } catch { /* ignore */ }
+      } else {
+        localStorage.removeItem('cp67_token');
+        setToken(null);
+      }
+      setLoading(false);
+    };
+    xhr.onerror = () => {
+      if (cancelled) return;
+      localStorage.removeItem('cp67_token');
+      setToken(null);
+      setLoading(false);
+    };
+    try { xhr.send(); } catch { queueMicrotask(() => setLoading(false)); }
+    return () => { cancelled = true; };
   }, [token]);
 
-  const login = async (username, password) => {
-    const response = await fetch(`${API_URL}/admin/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Login failed');
+  // Helper that uses XHR to fully avoid Chrome's fetch "body stream already read"
+  // issue seen behind Cloudflare on production for non-200 responses.
+  const _xhrPost = (url, body, extraHeaders = {}) => new Promise((resolve) => {
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url, true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      Object.entries(extraHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+      xhr.onload = () => {
+        let data = {};
+        try { data = xhr.responseText ? JSON.parse(xhr.responseText) : {}; } catch { /* ignore */ }
+        resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300, data });
+      };
+      xhr.onerror = () => resolve({ status: 0, ok: false, data: {} });
+      xhr.send(body);
+    } catch {
+      resolve({ status: 0, ok: false, data: {} });
     }
-    const data = await response.json();
+  });
+
+  const _xhrGet = (url, extraHeaders = {}) => new Promise((resolve) => {
+    try {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      Object.entries(extraHeaders).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+      xhr.onload = () => {
+        let data = {};
+        try { data = xhr.responseText ? JSON.parse(xhr.responseText) : {}; } catch { /* ignore */ }
+        resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300, data });
+      };
+      xhr.onerror = () => resolve({ status: 0, ok: false, data: {} });
+      xhr.send();
+    } catch {
+      resolve({ status: 0, ok: false, data: {} });
+    }
+  });
+
+  const login = async (username, password) => {
+    const { ok, status, data } = await _xhrPost(`${API_URL}/admin/login`, JSON.stringify({ username, password }));
+    if (!ok || !data.token) {
+      throw new Error(data.detail || (status === 0 ? 'Network error. Please try again.' : `Login failed (HTTP ${status})`));
+    }
     localStorage.setItem('cp67_token', data.token);
     setToken(data.token);
-    // Fetch full user profile to get role
-    const meRes = await fetch(`${API_URL}/admin/me`, {
-      headers: { 'Authorization': `Bearer ${data.token}` }
-    });
-    if (meRes.ok) {
-      const meData = await meRes.json();
-      setUser(meData);
-    } else {
-      setUser({ username: data.username });
-    }
+    const meResp = await _xhrGet(`${API_URL}/admin/me`, { 'Authorization': `Bearer ${data.token}` });
+    setUser(meResp.ok ? meResp.data : { username: data.username });
     return data;
   };
 

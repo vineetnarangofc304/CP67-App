@@ -512,8 +512,6 @@ async def analyze_bill_image(image_base64: str) -> Dict:
         # Get current date for context
         current_date = datetime.now().strftime("%Y-%m-%d")
         current_year = datetime.now().year
-        current_month = datetime.now().month
-        
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"bill-ocr-{uuid.uuid4()}",
@@ -683,6 +681,15 @@ QR_CODES = [
         "category": "loyalty",
         "description": "For external marketing campaigns (Insta/FB/print ads)",
         "clean_text": True
+    },
+    {
+        "qr_code_id": "QR0124009",
+        "location": "App / Direct",
+        "source_code": "SRC_APP",
+        "prefilled_message": "(App / direct registration — no QR scan)",
+        "category": "loyalty",
+        "description": "Default source for users who register directly on the mobile App (without scanning a QR)",
+        "internal": True
     }
 ]
 
@@ -845,6 +852,9 @@ async def get_qr_codes(category: Optional[str] = None, payload: dict = Depends(v
     """Get all QR codes with stats"""
     qr_list = []
     for qr in QR_CODES:
+        # Skip internal-only QRs (e.g. SRC_APP — not a real printable QR)
+        if qr.get("internal"):
+            continue
         # Filter by category if specified
         if category and qr.get("category") != category:
             continue
@@ -889,6 +899,8 @@ async def get_qr_links():
     """Get WhatsApp links for all QR codes - PUBLIC endpoint for website integration"""
     links = []
     for qr in QR_CODES:
+        if qr.get("internal"):
+            continue
         whatsapp_link = _build_wa_link(qr)
         links.append({
             "location": qr["location"],
@@ -1160,8 +1172,7 @@ async def bulk_mark_existing(
 ):
     """Bulk mark phone numbers as 'existing' customers from Fundle export"""
     updated_count = 0
-    not_found = []
-    
+
     for phone in phone_numbers:
         # Normalize phone - add 91 prefix if needed
         clean_phone = ''.join(filter(str.isdigit, phone))
@@ -1211,7 +1222,7 @@ async def import_fundle_customers(
                     upsert=True
                 )
                 inserted_count += 1
-            except:
+            except Exception:
                 pass
     
     return {
@@ -1253,7 +1264,7 @@ async def upload_fundle_excel(
         if 'e+' in val_str.lower() or 'e-' in val_str.lower():
             try:
                 val_str = str(int(float(val_str)))
-            except:
+            except Exception:
                 pass
         
         # Remove common prefixes/suffixes
@@ -1302,7 +1313,7 @@ async def upload_fundle_excel(
             logger.info("Processing as CSV file...")
             try:
                 content_str = content.decode('utf-8')
-            except:
+            except Exception:
                 content_str = content.decode('latin-1')
             
             reader = csv.reader(io.StringIO(content_str))
@@ -1440,7 +1451,7 @@ async def upload_fundle_chunk(
                             upsert=True
                         )
                         imported += 1
-                except:
+                except Exception:
                     pass
     
     logger.info(f"Chunk imported: {imported} numbers")
@@ -2137,7 +2148,7 @@ async def upload_brands_excel(
                     brand_name = cols[brand_col].strip().strip('"')
                     try:
                         atv = float(cols[atv_col].strip().strip('"').replace(',', ''))
-                    except:
+                    except Exception:
                         atv = 0
                     if brand_name and brand_name.lower() not in ['', 'nan', 'none', 'brand', 'brand name']:
                         brands_data.append({"brand_name": brand_name, "atv": atv})
@@ -2178,7 +2189,7 @@ async def upload_brands_excel(
                     brand_name = str(row[brand_col] or '').strip()
                     try:
                         atv = float(row[atv_col] or 0)
-                    except:
+                    except Exception:
                         atv = 0
                     if brand_name and brand_name.lower() not in ['', 'nan', 'none', 'brand', 'brand name']:
                         brands_data.append({"brand_name": brand_name, "atv": atv})
@@ -2301,7 +2312,7 @@ async def sync_fundle_customers(payload: dict = Depends(verify_jwt_token)):
     
     return {
         "success": True,
-        "message": f"Force synced users with fundle_customers list",
+        "message": "Force synced users with fundle_customers list",
         "fundle_customers_count": len(phone_set_10),
         "total_users": len(all_users),
         "updated_to_existing": updated_count,
@@ -2496,8 +2507,9 @@ async def get_pending_bills(payload: dict = Depends(verify_jwt_token)):
         }},
         {"$sort": {"created_at": 1}}
     ]
-    bills = await db.bills.aggregate(pipeline).to_list(100)
-    return bills
+    bills_list = await db.bills.aggregate(pipeline).to_list(100)
+    # $project already drops _id; map to plain dicts so the EB lint stays happy
+    return [dict(b) for b in bills_list]
 
 @api_router.get("/bills/{bill_id}")
 async def get_bill_details(bill_id: str, payload: dict = Depends(verify_jwt_token)):
@@ -2906,7 +2918,7 @@ async def send_otp_sms(phone_10: str, otp: str) -> dict:
         "text": text,
     }
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=8.0) as client:
             resp = await client.get(KARIX_SMS_API_URL, params=params)
             body = (resp.text or "").strip()
             logger.info(f"Karix SMS to {phone_10}: status={resp.status_code} body={body[:200]}")
@@ -3201,7 +3213,7 @@ async def upload_media_to_karix(image_base64: str, filename: str = "qrcode.png")
                     if media_id:
                         logger.info(f"Media uploaded successfully, ID: {media_id}")
                         return media_id
-                except:
+                except Exception:
                     pass
             
             logger.warning("Media upload failed, will try direct send")
@@ -3850,7 +3862,7 @@ Processing your rewards... ⏳"""
             # NOT a CP67 bill - reject (per revised flow document)
             rejection_reason = "Bill is not from CP67 Mall. Only CP67 Mall bills are eligible for rewards."
             
-            reject_msg = f"""Bill Cannot Be Processed
+            reject_msg = """Bill Cannot Be Processed
 
 This bill is not eligible under the Homeland Advantage program.
 
@@ -4728,7 +4740,7 @@ async def simulate_whatsapp_message(request: WhatsAppMessageRequest, payload: di
                 upsert=True
             )
         
-        response_message = f"""Welcome to Homeland Advantage – CP67 Mall! 
+        response_message = """Welcome to Homeland Advantage – CP67 Mall! 
 
 To complete your registration, please share:
 1 Your Name
@@ -4746,7 +4758,7 @@ Example: Rahul Kumar | ABCDE1234F"""
                 parts = [p.strip() for p in request.message.split('|')]
                 if len(parts) >= 2:
                     name = parts[0]
-                    pan = parts[1]
+                    # pan = parts[1]  # captured but not currently persisted
                     
                     # Update user
                     await db.users.update_one(
@@ -4783,7 +4795,7 @@ Welcome to a world of advantage & experiences crafted just for you!
 NAME | PAN_NUMBER
 Example: Rahul Kumar | ABCDE1234F"""
             else:
-                response_message = f"""Welcome back! To complete registration, please share:
+                response_message = """Welcome back! To complete registration, please share:
 1 Your Name
 2 Your PAN Card Number
 
@@ -5723,24 +5735,6 @@ async def get_daily_stats(
     
     return list(reversed(stats))
 
-@api_router.get("/whatsapp/logs")
-async def get_whatsapp_logs(
-    skip: int = 0,
-    limit: int = 100,
-    phone: Optional[str] = None,
-    payload: dict = Depends(verify_jwt_token)
-):
-    """Get WhatsApp interaction logs"""
-    query = {}
-    if phone:
-        phone_clean = re.sub(r'[^0-9]', '', phone)
-        query["user_phone"] = {"$regex": phone_clean}
-    
-    total = await db.whatsapp_logs.count_documents(query)
-    logs = await db.whatsapp_logs.find(query, {"_id": 0}).skip(skip).limit(limit).sort("timestamp", -1).to_list(limit)
-    
-    return {"logs": logs, "total": total, "skip": skip, "limit": limit}
-
 # ======================== PARKING ROUTES ========================
 
 async def process_parking_entry(phone: str, name: Optional[str], background_tasks: BackgroundTasks):
@@ -6388,6 +6382,23 @@ async def ensure_db_indexes():
 
     await asyncio.gather(*(_safe_create(c, k, kw) for c, k, kw in index_specs))
     logger.info("DB indexes ensured")
+
+    # One-time backfill: users that registered through the App (or any flow that
+    # forgot to attribute a source) get tagged as SRC_APP so the User report
+    # never shows a blank "Source" column.
+    try:
+        backfilled = await db.users.update_many(
+            {"$or": [
+                {"first_touch_source": {"$exists": False}},
+                {"first_touch_source": None},
+                {"first_touch_source": ""},
+            ]},
+            {"$set": {"first_touch_source": "SRC_APP"}},
+        )
+        if backfilled.modified_count:
+            logger.info(f"Backfilled first_touch_source=SRC_APP on {backfilled.modified_count} users")
+    except Exception as e:
+        logger.warning(f"user-source backfill skipped: {e}")
 
 
 # Static file serving for uploads

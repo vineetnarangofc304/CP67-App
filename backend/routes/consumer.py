@@ -107,7 +107,6 @@ BRAND_LOGO_MAP = {
     "Nailashes": "nailashes.in", "Love Child by Masaba": "lovelychild.in",
     "Oud Arabia": "oudarabia.com", "Oud by Idol": "oudbyidol.com",
     "Pilgrim": "discover.pilgrim.com", "The Man Company": "themancompany.com",
-    "Lakme Salon": "lakmesalon.in",
 }
 
 async def _migrate_brand_logos():
@@ -326,6 +325,8 @@ class SendOTPRequest(BaseModel):
 class VerifyOTPRequest(BaseModel):
     phone: str
     otp: str
+    source: Optional[str] = None        # e.g. SRC_MARKETING, SRC_BRANDS, captured from ?src= query param on login
+    qr_code: Optional[str] = None       # e.g. QR0124008
 
 class UpdateProfileRequest(BaseModel):
     name: Optional[str] = None
@@ -372,7 +373,7 @@ async def get_current_consumer(credentials: HTTPAuthorizationCredentials = Depen
 # ==================== AUTH ROUTES ====================
 
 @consumer_router.post("/auth/send-otp")
-async def send_otp(request: SendOTPRequest):
+async def send_otp(request: SendOTPRequest, background_tasks: BackgroundTasks):
     phone = request.phone.strip().replace(" ", "").replace("-", "")
     if not phone.startswith("91"):
         phone = "91" + phone
@@ -388,20 +389,28 @@ async def send_otp(request: SendOTPRequest):
     otp = str(random.randint(100000, 999999))
     await store_otp(phone_10, otp)
 
-    sms_result = await send_otp_sms(phone_10, otp)
-    if not sms_result.get("success"):
-        logger.warning(f"SMS gateway failed for {phone_10}: {sms_result}")
-        # OTP is still stored — admin can verify by tail of logs or dev bypass
-    else:
-        logger.info(f"OTP SMS sent to {phone_10}")
+    # Send the SMS in the background — Karix occasionally takes 30+ seconds, and
+    # we don't want the user staring at a loading spinner on the login screen.
+    async def _send_sms_bg(p10: str, code: str):
+        try:
+            res = await send_otp_sms(p10, code)
+            if res.get("success"):
+                logger.info(f"OTP SMS sent to {p10}")
+            else:
+                logger.warning(f"SMS gateway failed for {p10}: {res}")
+        except Exception as e:
+            logger.warning(f"SMS send error for {p10}: {e}")
+    background_tasks.add_task(_send_sms_bg, phone_10, otp)
 
-    # Best-effort sync with TagnPay so the customer exists in the loyalty ledger
-    try:
-        existing = await _tagnpay_client.send_login_otp(phone_10)
-        if not existing.get("success"):
-            await _tagnpay_client.register_customer(phone_10, "Customer", "")
-    except Exception as e:
-        logger.warning(f"TagnPay sync (non-fatal) failed for {phone_10}: {e}")
+    # TagnPay sync also runs in the background.
+    async def _tagnpay_bg_sync(p10: str):
+        try:
+            existing = await _tagnpay_client.send_login_otp(p10)
+            if not existing.get("success"):
+                await _tagnpay_client.register_customer(p10, "Customer", "")
+        except Exception as e:
+            logger.warning(f"TagnPay sync (non-fatal) failed for {p10}: {e}")
+    background_tasks.add_task(_tagnpay_bg_sync, phone_10)
 
     return {"success": True, "message": "OTP sent to your phone", "phone": phone}
 
@@ -436,6 +445,12 @@ async def verify_otp(request: VerifyOTPRequest):
     is_new = False
     if not user:
         is_new = True
+        # Default to SRC_APP if no source code was passed in (= direct app open).
+        source_code = (request.source or "SRC_APP").strip().upper()
+        if not source_code.startswith("SRC_"):
+            source_code = "SRC_APP"
+        qr_code_id = request.qr_code.strip() if request.qr_code else None
+
         user = {
             "id": str(uuid.uuid4()),
             "phone": phone,
@@ -452,15 +467,27 @@ async def verify_otp(request: VerifyOTPRequest):
             "total_earned_points": 0,
             "referral_code": f"CP{phone_10[-6:]}",
             "referred_by": None,
+            "first_touch_source": source_code,
+            "first_touch_qr": qr_code_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_active": datetime.now(timezone.utc).isoformat()
         }
         await _db.users.insert_one(user)
     else:
-        await _db.users.update_one(
-            {"id": user["id"]},
-            {"$set": {"last_active": datetime.now(timezone.utc).isoformat(), "app_registered": True}}
-        )
+        update_set = {
+            "last_active": datetime.now(timezone.utc).isoformat(),
+            "app_registered": True,
+        }
+        # Backfill source if missing for older users registered before this fix
+        if not user.get("first_touch_source"):
+            update_set["first_touch_source"] = (
+                request.source.strip().upper() if request.source else "SRC_APP"
+            )
+            if not update_set["first_touch_source"].startswith("SRC_"):
+                update_set["first_touch_source"] = "SRC_APP"
+        if not user.get("first_touch_qr") and request.qr_code:
+            update_set["first_touch_qr"] = request.qr_code.strip()
+        await _db.users.update_one({"id": user["id"]}, {"$set": update_set})
 
     token = create_consumer_token(user["id"], phone)
 
@@ -620,7 +647,6 @@ async def get_home(current_user=Depends(get_current_consumer)):
 
     # Trending offers
     offers = []
-    now = datetime.now(timezone.utc).isoformat()
     async for o in _db.offers.find({"is_active": True}, {"_id": 0}).sort("created_at", -1).limit(6):
         offers.append(o)
 
@@ -991,7 +1017,7 @@ Return ONLY valid JSON:
                 "amount": amount,
                 "ocr_confidence": confidence,
                 "ocr_raw_data": ocr_data,
-                "rejection_reason": f"High value bill - requires manual verification"
+                "rejection_reason": "High value bill - requires manual verification"
             }})
             await send_app_notification(user_id, "Bill Under Review",
                 f"Your bill of Rs.{amount:,.0f} from {store_name} is under review. Points will be credited within 24-48 hours.", "bill")
@@ -1011,7 +1037,7 @@ Return ONLY valid JSON:
                 "amount": amount,
                 "ocr_confidence": confidence,
                 "ocr_raw_data": ocr_data,
-                "rejection_reason": f"Bill amount exceeds brand ATV"
+                "rejection_reason": "Bill amount exceeds brand ATV"
             }})
             await send_app_notification(user_id, "Bill Under Review",
                 f"Your bill from {store_name} is under review for validation. Points will be credited within 24-48 hours.", "bill")
