@@ -62,6 +62,23 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (Jun 10, 2026 - Session 14)
+
+Two User-report issues from the screenshot:
+
+- **Case 1 — Blank Source column fixed (forwards + backwards)**:
+  - When users register via WhatsApp **without** a recognised QR-tagged message, the system was storing `first_touch_source=None`. Now defaults to `"SRC_WHATSAPP"` at all 3 user-creation sites (QR registration flow, parking QR flow, generic webhook message creation).
+  - Startup backfill upgraded — splits existing blank-source users into `SRC_APP` (if `app_registered=true`) or `SRC_WHATSAPP` otherwise.
+
+- **Case 2 — "Pending" status fixed**:
+  - Root cause: `kyc_status` was set to `True` only when TagnPay/Fundle remote registration succeeded. For users with unusual phone formats (e.g. Australian `61...`), Fundle rejected them → `kyc_status=False` → UI showed "Pending" even though the user was fully functional in our system.
+  - Decoupled local registration from TagnPay sync: `kyc_status=True` the moment a user engages with CP67. TagnPay sync status now tracked separately in `fundle_registered` field (added to `UserData` model).
+  - Startup backfill flips any existing `kyc_status=False/missing` to `True`. All 3 WhatsApp user-creation sites + consumer app verify-otp now set `kyc_status=True` directly.
+
+**Tested on preview**: All 7 users show "Registered", all have non-blank source (`SRC_APP × 6, SRC_MARKETING × 1`). New user via `?src=SRC_BRANDS` correctly tagged.
+
+**Lint clean** (backend & consumer).
+
 ## Recently Fixed (Jun 6, 2026 - Session 13)
 
 Three production issues + a critical perf fix:

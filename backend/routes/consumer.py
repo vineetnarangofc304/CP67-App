@@ -462,6 +462,7 @@ async def verify_otp(request: VerifyOTPRequest):
             "tier": "Bronze",
             "customer_type": "new",
             "app_registered": True,
+            "kyc_status": True,  # registered locally in CP67
             "onboarding_complete": False,
             "balance_points": 0,
             "total_earned_points": 0,

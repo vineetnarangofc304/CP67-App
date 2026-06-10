@@ -82,6 +82,7 @@ class UserData(BaseModel):
     first_touch_message: Optional[str] = None
     registration_time: Optional[str] = None
     kyc_status: bool = False
+    fundle_registered: bool = False
     customer_type: str = "new"  # "new" = registered via our system, "existing" = already in Fundle
     balance_points: float = 0.0
     total_earned_points: float = 0.0
@@ -3337,30 +3338,32 @@ async def process_new_user_registration(phone: str, profile_name: str, source_co
             source="WhatsApp"
         )
         logger.info(f"Fundle registration result for {mobile_10}: {reg_result}")
-        
+
         if reg_result.get("success"):
             fundle_registered = True
-            customer_type = "new"  # Confirmed new customer registered via our system
-            # Get initial points after registration
+            customer_type = "new"
             points_result = await tagnpay_client.get_customer_points(mobile_10)
             if points_result.get("success") and points_result.get("data"):
                 balance_points = points_result["data"].get("balance_points", 0)
         else:
-            # Fundle registration failed - still proceed with local registration
             logger.warning(f"Fundle registration failed for {mobile_10}, proceeding with local registration. Error: {reg_result.get('error')}")
             fundle_registered = False
-            customer_type = "new"  # Still a new customer to our system
-    
-    # Create user in our DB
+            customer_type = "new"
+
+    # Create user in our DB. kyc_status now represents "registered locally in CP67"
+    # — independent of whether the Fundle/TagnPay sync succeeded. That lets users
+    # show as "Registered" in the admin report even when TagnPay returns an error
+    # (e.g. unusual phone format). We track Fundle sync status separately.
     new_user = UserData(
         phone=phone,
         name=profile_name or "Customer",
-        kyc_status=fundle_registered,  # True if Fundle registration succeeded
-        customer_type=customer_type,  # "new" or "existing"
+        kyc_status=True,  # local registration is complete the moment they engage
+        fundle_registered=fundle_registered,
+        customer_type=customer_type,
         registration_time=datetime.now(timezone.utc).isoformat(),
-        first_touch_source=source_code,
+        first_touch_source=source_code or "SRC_WHATSAPP",  # never leave blank
         first_touch_qr=qr_data["qr_code_id"] if qr_data else None,
-        first_touch_message="QR Scan Registration",
+        first_touch_message="QR Scan Registration" if qr_data else "WhatsApp Direct",
         balance_points=balance_points
     )
     await db.users.insert_one(new_user.model_dump())
@@ -3483,10 +3486,11 @@ Use the menu below to explore your rewards!"""
         new_user = UserData(
             phone=phone,
             name=profile_name or "Customer",
-            kyc_status=fundle_registered,
+            kyc_status=True,
+            fundle_registered=fundle_registered,
             customer_type="new",
             registration_time=datetime.now(timezone.utc).isoformat(),
-            first_touch_source=source_code,
+            first_touch_source=source_code or "SRC_PARKING",
             first_touch_qr=qr_data["qr_code_id"] if qr_data else None,
             first_touch_message="Parking QR Registration",
             balance_points=0
@@ -4726,7 +4730,7 @@ async def simulate_whatsapp_message(request: WhatsAppMessageRequest, payload: di
         qr_data = next((qr for qr in QR_CODES if qr["source_code"] == source_code), None)
         new_user = UserData(
             phone=phone,
-            first_touch_source=source_code,
+            first_touch_source=source_code or "SRC_WHATSAPP",
             first_touch_qr=qr_data["qr_code_id"] if qr_data else None,
             first_touch_message=request.message
         )
@@ -6383,22 +6387,51 @@ async def ensure_db_indexes():
     await asyncio.gather(*(_safe_create(c, k, kw) for c, k, kw in index_specs))
     logger.info("DB indexes ensured")
 
-    # One-time backfill: users that registered through the App (or any flow that
-    # forgot to attribute a source) get tagged as SRC_APP so the User report
-    # never shows a blank "Source" column.
+    # One-time backfills so the admin User report doesn't show blanks/Pending
+    # for users that registered before these flags were enforced.
     try:
-        backfilled = await db.users.update_many(
-            {"$or": [
-                {"first_touch_source": {"$exists": False}},
-                {"first_touch_source": None},
-                {"first_touch_source": ""},
-            ]},
+        # 1) Backfill first_touch_source: app users → SRC_APP, everyone else → SRC_WHATSAPP
+        app_backfill = await db.users.update_many(
+            {
+                "$or": [
+                    {"first_touch_source": {"$exists": False}},
+                    {"first_touch_source": None},
+                    {"first_touch_source": ""},
+                ],
+                "app_registered": True,
+            },
             {"$set": {"first_touch_source": "SRC_APP"}},
         )
-        if backfilled.modified_count:
-            logger.info(f"Backfilled first_touch_source=SRC_APP on {backfilled.modified_count} users")
+        wa_backfill = await db.users.update_many(
+            {
+                "$or": [
+                    {"first_touch_source": {"$exists": False}},
+                    {"first_touch_source": None},
+                    {"first_touch_source": ""},
+                ]
+            },
+            {"$set": {"first_touch_source": "SRC_WHATSAPP"}},
+        )
+        # 2) Backfill kyc_status=True for any user with a phone number — being in our
+        # system at all means they completed local registration. TagnPay sync status
+        # is tracked separately via the `fundle_registered` field.
+        kyc_backfill = await db.users.update_many(
+            {
+                "$or": [
+                    {"kyc_status": {"$exists": False}},
+                    {"kyc_status": False},
+                    {"kyc_status": None},
+                ]
+            },
+            {"$set": {"kyc_status": True}},
+        )
+        if app_backfill.modified_count or wa_backfill.modified_count or kyc_backfill.modified_count:
+            logger.info(
+                f"User backfill: app={app_backfill.modified_count}, "
+                f"whatsapp={wa_backfill.modified_count}, kyc={kyc_backfill.modified_count}"
+            )
     except Exception as e:
-        logger.warning(f"user-source backfill skipped: {e}")
+        logger.warning(f"user report backfill skipped: {e}")
 
 
 # Static file serving for uploads
