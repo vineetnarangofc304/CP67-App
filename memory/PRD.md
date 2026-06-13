@@ -62,6 +62,9 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (Jun 11, 2026 - Session 15)
+- **OTP input box count fixed (4 → 6)**: Karix SMS sends a 6-digit OTP per the DLT-approved template, but the consumer login UI only had 4 boxes — users could not enter the 6th digit. Expanded `consumer/pages/Login.jsx` to 6 boxes, narrowed the box width (44px) so it fits on small phones, added paste / SMS-autofill handling (paste a 6-digit code into any box and it auto-distributes), kept the 4-digit dev bypass (`1234`) working. CSS updated.
+
 ## Recently Fixed (Jun 10, 2026 - Session 14)
 
 Two User-report issues from the screenshot:

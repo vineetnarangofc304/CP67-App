@@ -464,15 +464,16 @@
 
 .login-otp-inputs {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   justify-content: center;
+  flex-wrap: nowrap;
 }
 
 .login-otp-box {
-  width: 56px;
-  height: 64px;
+  width: 44px;
+  height: 56px;
   text-align: center;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   border: 2px solid var(--cp-border);
   border-radius: var(--cp-radius-sm);
@@ -480,6 +481,13 @@
   outline: none;
   color: var(--cp-text);
   transition: border-color 0.2s;
+  -moz-appearance: textfield;
+}
+
+.login-otp-box::-webkit-outer-spin-button,
+.login-otp-box::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .login-otp-box:focus {

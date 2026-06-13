@@ -44,7 +44,7 @@ export default function Login() {
   };
 
   const verifyOTP = async () => {
-    if (otp.length < 4) { setError('Enter valid OTP'); return; }
+    if (otp.length !== 4 && otp.length !== 6) { setError('Enter the 6-digit OTP'); return; }
     setLoading(true);
     setError('');
 
@@ -152,10 +152,11 @@ export default function Login() {
         ) : (
           <div className="login-input-group">
             <div className="login-otp-inputs">
-              {[0, 1, 2, 3].map(i => (
+              {[0, 1, 2, 3, 4, 5].map(i => (
                 <input
                   key={i}
                   type="tel"
+                  inputMode="numeric"
                   maxLength={1}
                   className="login-otp-box"
                   value={otp[i] || ''}
@@ -163,10 +164,28 @@ export default function Login() {
                   autoFocus={i === 0}
                   onChange={e => {
                     const v = e.target.value.replace(/\D/g, '');
+                    // If the input fired with multiple chars (paste / SMS autofill),
+                    // distribute them across boxes starting from i.
+                    if (v.length > 1) {
+                      const next = (otp.slice(0, i) + v).replace(/\D/g, '').slice(0, 6);
+                      setOtp(next);
+                      const focusIdx = Math.min(next.length, 5);
+                      const inputs = e.target.parentElement.querySelectorAll('input');
+                      inputs[focusIdx]?.focus();
+                      return;
+                    }
                     const newOtp = otp.split('');
                     newOtp[i] = v;
                     setOtp(newOtp.join(''));
-                    if (v && i < 3) e.target.nextElementSibling?.focus();
+                    if (v && i < 5) e.target.nextElementSibling?.focus();
+                  }}
+                  onPaste={e => {
+                    e.preventDefault();
+                    const txt = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+                    if (!txt) return;
+                    setOtp(txt);
+                    const inputs = e.currentTarget.parentElement.querySelectorAll('input');
+                    inputs[Math.min(txt.length, 5)]?.focus();
                   }}
                   onKeyDown={e => {
                     if (e.key === 'Backspace' && !otp[i] && i > 0) {
@@ -180,7 +199,7 @@ export default function Login() {
             <button
               className="login-submit"
               onClick={verifyOTP}
-              disabled={loading || otp.length < 4}
+              disabled={loading || (otp.length !== 4 && otp.length !== 6)}
               data-testid="verify-otp-btn"
             >
               {loading ? 'Verifying...' : 'Verify & Continue'}
