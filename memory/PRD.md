@@ -62,6 +62,21 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (Jun 17, 2026 - Session 17) — Reprocess False-Failure
+- **"Failed to reprocess bill" toast was showing even when reprocess succeeded** (Reliance Trends bill in screenshot was already approved with +9532 pts, tagged `admin_reprocess`, but toast still said failed). Two root causes:
+  - Backend: reprocess was re-uploading the 180 KB base64 bill image to Fundle on every retry, adding 20–30s of latency on a flaky remote → response often arrived after Cloudflare/ingress cut the connection. **Removed the image attachment from reprocess** — Fundle already has it from the original upload. Request payload drops from ~180 KB → ~1 KB.
+  - Frontend: `fetch().json()` would throw → the catch block displayed a generic "Failed to reprocess bill" toast that didn't reflect the actual backend state. **Migrated to XMLHttpRequest** with explicit `onload`/`onerror`/`ontimeout` handlers, 90s timeout, and an "always refresh" pattern — even on a perceived failure, the list refetches to show the real status. Error messages now distinguish "Fundle slow" vs "actual error" vs "network hiccup".
+
+## Recently Fixed (Jun 15, 2026 - Session 16) — PRODUCTION PERF EMERGENCY
+- **Bills section + Admin "billion years to reload"** root cause: each bill carried a **180 KB inline base64 `image_url`** in the `/api/bills` and `/api/bills/pending-review` responses. A 50-bill page = ~10 MB transferred. `/pending-review` was returning HTTP 500 on prod (likely BSON 16 MB doc limit blown by `$project` retaining all images).
+  - **Backend**: Both list endpoints now exclude `image_url` and `ocr_raw_data`. New `/api/bills/{id}/image` for on-demand fetch. Production responses should drop from ~10 MB → ~50 KB.
+  - **Frontend**: Pending bill card and All Bills row thumbnail now show a "Click to view bill image" placeholder. Clicking opens the review dialog which lazy-loads the image via `/bills/{id}/image`.
+  - **Result on preview**: `/api/bills?limit=50` = **0.14s** (was 7.5s on prod), `/api/bills/pending-review` = **0.13s** (was 500 on prod).
+- **"Failed to reprocess" comes very often** root cause: `/api/bills/{id}/reprocess` made up to 4 sequential TagnPay calls (60s timeout each) → up to 240s wall time → Cloudflare 524 → toast.
+  - Tightened `TagnPayClient.earn_points` timeout from 60s → **25s**.
+  - Removed the redundant 2nd `get_customer_points` call after a successful `earn_points` (we already know the points earned + the local balance was just incremented).
+  - WhatsApp success message moved to background — admin response returns immediately on success.
+
 ## Recently Fixed (Jun 11, 2026 - Session 15)
 - **OTP input box count fixed (4 → 6)**: Karix SMS sends a 6-digit OTP per the DLT-approved template, but the consumer login UI only had 4 boxes — users could not enter the 6th digit. Expanded `consumer/pages/Login.jsx` to 6 boxes, narrowed the box width (44px) so it fits on small phones, added paste / SMS-autofill handling (paste a 6-digit code into any box and it auto-distributes), kept the 4-digit dev bypass (`1234`) working. CSS updated.
 

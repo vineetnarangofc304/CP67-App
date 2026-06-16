@@ -95,13 +95,27 @@ const Bills = () => {
     }
   };
 
-  const openReviewDialog = (bill) => {
+  const openReviewDialog = async (bill) => {
     setSelectedBill(bill);
     setRejectionReason('');
     setAdminNotes('');
     setPointsOverride('');
     setSendWhatsapp(true);
     setShowReviewDialog(true);
+    // Lazy-load the bill image so the list endpoint stays cheap.
+    if (!bill.image_url && bill.id) {
+      try {
+        const res = await fetch(`${API_URL}/bills/${bill.id}/image`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const d = await res.json();
+          if (d.image_url) {
+            setSelectedBill(prev => prev && prev.id === bill.id ? { ...prev, image_url: d.image_url } : prev);
+          }
+        }
+      } catch { /* ignore — bill detail still shows even without the image */ }
+    }
   };
 
   const processBill = async (action) => {
@@ -156,28 +170,40 @@ const Bills = () => {
     }
   };
 
-  const reprocessBill = async (billId) => {
-    try {
-      const response = await fetch(`${API_URL}/bills/${billId}/reprocess`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const result = await response.json();
-      
-      if (result.success) {
+  const reprocessBill = (billId) => {
+    // Use XHR so we can distinguish HTTP errors from network/Cloudflare timeouts.
+    // Failed-toast was firing even when the backend had already approved the bill
+    // (the response just arrived after Cloudflare's ingress timeout).
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_URL}/bills/${billId}/reprocess`, true);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 90000; // 90s — Fundle can be slow but we'll know within this window
+    xhr.onload = () => {
+      let result = {};
+      try { result = xhr.responseText ? JSON.parse(xhr.responseText) : {}; } catch { /* non-JSON */ }
+      if (xhr.status >= 200 && xhr.status < 300 && result.success) {
         toast.success(`Bill reprocessed! ${result.points_earned} points credited.`);
-        fetchBills();
-        fetchPendingBills();
+      } else if (result.error) {
+        toast.error(`Reprocess failed: ${result.error}`);
       } else {
-        toast.error(result.error || 'Reprocess failed - brand may still not be in Fundle');
+        toast.error('Reprocess failed — please refresh the page to see the latest status.');
       }
-    } catch (error) {
-      toast.error('Failed to reprocess bill');
-    }
+      // Always refresh — backend may have approved even if the response was lost
+      fetchBills();
+      fetchPendingBills();
+    };
+    xhr.onerror = () => {
+      toast.error('Network hiccup. Refresh — the bill may have been processed.');
+      fetchBills();
+      fetchPendingBills();
+    };
+    xhr.ontimeout = () => {
+      toast.error('Fundle is slow today. Refreshing — your reprocess may still be running.');
+      fetchBills();
+      fetchPendingBills();
+    };
+    try { xhr.send(); } catch { toast.error('Could not send reprocess request.'); }
   };
 
   const formatDate = (dateStr) => {
@@ -257,21 +283,16 @@ const Bills = () => {
     return (
       <Card className="border-slate-200 shadow-none overflow-hidden">
         <div className="grid md:grid-cols-3 gap-0">
-          {/* Bill Image */}
-          <div className="bg-slate-100 p-4 flex items-center justify-center min-h-[200px]">
-            {bill.image_url ? (
-              <img 
-                src={bill.image_url} 
-                alt="Bill" 
-                className="max-w-full max-h-[250px] object-contain rounded-lg shadow-md cursor-pointer hover:opacity-90"
-                onClick={() => openReviewDialog(bill)}
-              />
-            ) : (
-              <div className="text-slate-400 flex flex-col items-center">
-                <ImageIcon className="h-16 w-16 mb-2" />
-                <span>No image</span>
-              </div>
-            )}
+          {/* Bill Image (lazy-loaded when admin clicks "View") */}
+          <div
+            className="bg-slate-100 p-4 flex items-center justify-center min-h-[200px] cursor-pointer hover:bg-slate-200/70 transition-colors"
+            onClick={() => openReviewDialog(bill)}
+            data-testid={`pending-bill-thumb-${bill.id}`}
+          >
+            <div className="text-slate-500 flex flex-col items-center text-center">
+              <ImageIcon className="h-12 w-12 mb-2 text-slate-400" />
+              <p className="text-xs font-medium">{bill.has_image === false ? 'No image' : 'Click to view bill image'}</p>
+            </div>
           </div>
 
           {/* Bill Details */}
@@ -492,15 +513,12 @@ const Bills = () => {
                   <Card key={bill.id} className="border-slate-200 shadow-none">
                     <CardContent className="p-4">
                       <div className="flex items-center gap-4">
-                        {/* Thumbnail */}
-                        <div className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0">
-                          {bill.image_url ? (
-                            <img src={bill.image_url} alt="Bill" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Receipt className="h-6 w-6 text-slate-400" />
-                            </div>
-                          )}
+                        {/* Thumbnail placeholder — image loads on demand when admin clicks the row */}
+                        <div
+                          className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden flex-shrink-0 flex items-center justify-center cursor-pointer hover:bg-slate-200"
+                          onClick={() => openReviewDialog(bill)}
+                        >
+                          <Receipt className="h-6 w-6 text-slate-400" />
                         </div>
 
                         {/* Details */}

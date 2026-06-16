@@ -422,7 +422,7 @@ class TagnPayClient:
                 temp_file.close()
                 temp_file_path = temp_file.name
             
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=25.0) as client:
                 # Build form data - pass store name from bill OCR to both brand fields
                 brand_name = store_name or "CP67 Mall"
                 data = {
@@ -2426,7 +2426,15 @@ async def get_bills(
         query["created_at"] = date_q
 
     total = await db.bills.count_documents(query)
-    bills = await db.bills.find(query, {"_id": 0}).skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
+    # Drop the inline base64 image_url from list responses — it's ~180 KB per
+    # bill and turns a 50-item page into 10 MB. Admin UI fetches the image
+    # on demand via /api/bills/{id}/image when the row is expanded.
+    projection = {
+        "_id": 0,
+        "image_url": 0,
+        "ocr_raw_data": 0,
+    }
+    bills = await db.bills.find(query, projection).skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
 
     return {"bills": bills, "total": total, "skip": skip, "limit": limit}
 
@@ -2470,6 +2478,8 @@ async def get_bills_by_qr(
 @api_router.get("/bills/pending-review")
 async def get_pending_bills(payload: dict = Depends(verify_jwt_token)):
     """Get bills pending manual review with full details"""
+    # Pending review list: omit the inline image_url + heavy ocr_raw_data — admin
+    # loads them on-demand via /api/bills/{id}/image and /api/bills/{id}.
     pipeline = [
         {"$match": {"status": {"$in": ["manual_review", "pending_review"]}}},
         {"$lookup": {
@@ -2493,12 +2503,10 @@ async def get_pending_bills(payload: dict = Depends(verify_jwt_token)):
             "amount": 1,
             "tax": 1,
             "status": 1,
-            "image_url": 1,
             "image_hash": 1,
             "ocr_confidence": 1,
-            "ocr_raw_data": 1,
+            "has_image": {"$cond": [{"$ifNull": ["$image_url", False]}, True, False]},
             "system_rejection_reason": "$rejection_reason",
-            "rejection_reason": 1,
             "invoice_mobile": 1,
             "processed_by": 1,
             "processed_by_username": 1,
@@ -2511,6 +2519,16 @@ async def get_pending_bills(payload: dict = Depends(verify_jwt_token)):
     bills_list = await db.bills.aggregate(pipeline).to_list(100)
     # $project already drops _id; map to plain dicts so the EB lint stays happy
     return [dict(b) for b in bills_list]
+
+
+@api_router.get("/bills/{bill_id}/image")
+async def get_bill_image(bill_id: str, payload: dict = Depends(verify_jwt_token)):
+    """Return just the inline base64 image for a single bill (loaded on demand
+    by the admin UI). Keeps list endpoints cheap."""
+    b = await db.bills.find_one({"id": bill_id}, {"_id": 0, "image_url": 1, "image_hash": 1})
+    if not b:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    return {"image_url": b.get("image_url"), "image_hash": b.get("image_hash")}
 
 @api_router.get("/bills/{bill_id}")
 async def get_bill_details(bill_id: str, payload: dict = Depends(verify_jwt_token)):
@@ -2761,13 +2779,12 @@ async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks, payloa
     bill_no = bill.get("bill_no", "")
     bill_date = bill.get("bill_date", "")
     amount = float(bill.get("amount", 0))
-    image_url = bill.get("image_url", "")
-    
-    # Extract base64 from image URL if present
+    # IMPORTANT: do NOT re-upload the bill image to Fundle on reprocess. The image
+    # was already attached on first upload (and would add 180 KB of base64 payload
+    # to a flaky remote call, regularly causing the admin UI to time out and show
+    # "Failed to reprocess" — even when Fundle eventually credits the points).
     image_base64 = None
-    if image_url and image_url.startswith("data:"):
-        image_base64 = image_url.split(",")[1] if "," in image_url else None
-    
+
     # STEP 3: Call TagnPay earn-points API
     earn_result = await tagnpay_client.earn_points(
         mobile_number=mobile_10,
@@ -2798,20 +2815,18 @@ async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks, payloa
                     "processed_by": "admin_reprocess"
                 }}
             )
-            
-            # Update user points
+
+            # Update user points locally
             await db.users.update_one(
                 {"id": user["id"]},
                 {"$inc": {"balance_points": points_earned, "total_earned_points": points_earned}}
             )
-            
-            # Get updated balance
-            points_result = await tagnpay_client.get_customer_points(mobile_10)
-            total_balance = 0
-            if points_result.get("success") and points_result.get("data"):
-                total_balance = int(points_result["data"].get("balance_points", 0))
-            
-            # Send success message to user
+
+            # Send success WhatsApp message in the background so the admin
+            # response returns immediately (it doesn't have to wait on Karix).
+            user_doc_after = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
+            total_balance = int((user_doc_after or {}).get("balance_points", 0))
+
             success_msg = f""" *Points Credited!*
 
 Your bill has been processed:
@@ -2823,10 +2838,10 @@ Your bill has been processed:
  Total Balance: {total_balance}
 
 Thank you for your patience! """
-            
+
             buttons = [{"id": "upload_bill", "title": "Upload Bill"}]
             background_tasks.add_task(send_whatsapp_buttons, phone, success_msg, buttons)
-            
+
             return {"success": True, "points_earned": points_earned, "message": "Bill reprocessed successfully"}
         else:
             # Still failing - check why
