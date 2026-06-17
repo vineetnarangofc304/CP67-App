@@ -1,8 +1,13 @@
-[{
-      "relation": ["delegate_permission/common.handle_all_urls"],
-      "target": {
-        "namespace": "android_app",
-        "package_name": "com.homelandadvantage.cp67",
-        "sha256_cert_fingerprints": ["32:BF:48:D0:63:E1:4C:64:26:7B:59:1B:45:50:97:AE:46:F1:8F:E9:EE:35:4C:B6:BE:BB:03:23:5C:31:40:5E"]
-      }
-    }]
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.homelandadvantage.cp67",
+      "sha256_cert_fingerprints": [
+        "30:82:31:A1:0B:C8:3E:AA:CC:9A:8C:5E:E0:4F:CA:77:9D:2F:00:6D:57:15:85:8E:F7:5B:5A:12:EE:E9:74:0A",
+        "32:BF:48:D0:63:E1:4C:64:26:7B:59:1B:45:50:97:AE:46:F1:8F:E9:EE:35:4C:B6:BE:BB:03:23:5C:31:40:5E"
+      ]
+    }
+  }
+]

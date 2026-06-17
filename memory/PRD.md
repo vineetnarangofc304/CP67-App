@@ -62,6 +62,9 @@ A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of
 - **PK001 location code**: Parking QR registrations now use `loc_id: PK001` for TagnPay/Fundle registration
 - **Two-Gate Exit System**: Two separate logins (`parking1`/`parking2`) each assigned to Gate 1 / Gate 2. Validations auto-tagged with exit gate. Reports filtered by gate. Admin sees all. QR codes available at `/api/parking/exit-qr/gate1` and `/api/parking/exit-qr/gate2`.
 
+## Recently Fixed (Jun 17, 2026 - Session 18) — TWA URL Bar
+- **TWA showed Chrome address bar despite earlier assetlinks fix**: Root cause was Google Play App Signing — when you upload the AAB, Google re-signs the installed app with their own signing key. The installed app sends Google's SHA-256, not ours. Added Google's Play App Signing SHA-256 (`30:82:31:A1:0B:C8:3E:AA:CC:9A:8C:5E:E0:4F:CA:77:9D:2F:00:6D:57:15:85:8E:F7:5B:5A:12:EE:E9:74:0A`) to `assetlinks.json` alongside our upload-key SHA. Both fingerprints now in the file — sideloaded APK + Play-Store-installed app both verify. Requires production redeploy + clearing app storage on the test device.
+
 ## Recently Fixed (Jun 17, 2026 - Session 17) — Reprocess False-Failure
 - **"Failed to reprocess bill" toast was showing even when reprocess succeeded** (Reliance Trends bill in screenshot was already approved with +9532 pts, tagged `admin_reprocess`, but toast still said failed). Two root causes:
   - Backend: reprocess was re-uploading the 180 KB base64 bill image to Fundle on every retry, adding 20–30s of latency on a flaky remote → response often arrived after Cloudflare/ingress cut the connection. **Removed the image attachment from reprocess** — Fundle already has it from the original upload. Request payload drops from ~180 KB → ~1 KB.
