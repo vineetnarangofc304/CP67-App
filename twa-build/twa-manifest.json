@@ -20,8 +20,8 @@
     "path": "/app/twa-build/android.keystore",
     "alias": "android"
   },
-  "appVersionName": "1",
-  "appVersionCode": 1,
+  "appVersionName": "1.1",
+  "appVersionCode": 2,
   "shortcuts": [],
   "generatorApp": "unknown",
   "webManifestUrl": "https://cp67bot.fundlexperiences.com/manifest.json",
@@ -47,5 +47,5 @@
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "1"
+  "appVersion": "1.1"
 }

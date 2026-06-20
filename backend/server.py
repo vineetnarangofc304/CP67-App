@@ -2870,6 +2870,264 @@ Thank you for your patience! """
         
         return {"success": False, "error": error_msg, "points_earned": 0}
 
+
+# ======================== BULK REPROCESS ========================
+
+class BulkReprocessRequest(BaseModel):
+    """Request body for bulk-reprocessing failed/stuck bills.
+
+    Use `from_date`/`to_date` (YYYY-MM-DD) to scope to a window.
+    `statuses` defaults to manual_review + pending_review.
+    `re_ocr=True` re-runs OCR on the stored image before re-applying rules
+    (use this for bills that were broken by an outage like the missing
+    EMERGENT_LLM_KEY on prod).
+    """
+    from_date: Optional[str] = None
+    to_date: Optional[str] = None
+    statuses: Optional[List[str]] = None
+    re_ocr: bool = True
+    dry_run: bool = False
+    limit: int = 200
+    send_whatsapp: bool = True
+
+
+async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag: bool,
+                                 background_tasks: BackgroundTasks) -> dict:
+    """Reprocess one bill: optionally re-OCR, re-apply rules, push to Fundle.
+    Returns {bill_id, action, status, points, error}."""
+    bill_id = bill.get("id")
+    user = await db.users.find_one({"id": bill.get("user_id")})
+    if not user:
+        return {"bill_id": bill_id, "action": "skipped", "status": bill.get("status"),
+                "points": 0, "error": "User not found"}
+
+    phone = bill.get("user_phone") or user.get("phone") or ""
+    mobile_10 = phone[2:] if phone.startswith("91") and len(phone) == 12 else phone[-10:]
+
+    store_name = bill.get("store_name") or "Unknown"
+    bill_no = bill.get("bill_no") or ""
+    bill_date = bill.get("bill_date") or ""
+    amount = float(bill.get("amount") or 0)
+
+    update_payload = {
+        "reprocessed_at": datetime.now(timezone.utc).isoformat(),
+        "reprocessed_by": "admin_bulk"
+    }
+
+    # ----- Step 1: Re-run OCR if requested AND image is available -----
+    if re_ocr:
+        image_url = bill.get("image_url") or ""
+        image_base64 = None
+        if image_url.startswith("data:"):
+            # data:image/jpeg;base64,xxxxx
+            try:
+                image_base64 = image_url.split(",", 1)[1]
+            except Exception:
+                image_base64 = None
+        elif image_url.startswith("base64:"):
+            image_base64 = image_url[7:]
+        elif image_url.startswith("http"):
+            try:
+                async with httpx.AsyncClient(timeout=20.0) as cx:
+                    r = await cx.get(image_url)
+                    if r.status_code == 200:
+                        image_base64 = base64.b64encode(r.content).decode()
+            except Exception as e:
+                logger.warning(f"Bulk reprocess image download failed for {bill_id}: {e}")
+
+        if image_base64:
+            ocr_result = await analyze_bill_image(image_base64)
+            if ocr_result.get("success") and ocr_result.get("data"):
+                d = ocr_result["data"]
+                # Only override fields if OCR returned something useful
+                store_name = d.get("store_name") or store_name
+                bill_no = d.get("bill_no") or bill_no
+                bill_date = d.get("bill_date") or bill_date
+                try:
+                    new_amount = float(d.get("amount") or 0)
+                    if new_amount > 0:
+                        amount = new_amount
+                except (TypeError, ValueError):
+                    pass
+                update_payload.update({
+                    "store_name": store_name,
+                    "bill_no": bill_no,
+                    "bill_date": bill_date,
+                    "amount": amount,
+                    "ocr_confidence": d.get("confidence_score", bill.get("ocr_confidence", 0)),
+                    "ocr_raw_data": d,
+                })
+            else:
+                logger.info(f"Bulk reprocess: OCR still failing for {bill_id}: {ocr_result.get('error')}")
+        else:
+            logger.info(f"Bulk reprocess: no image available for {bill_id}, skipping re-OCR")
+
+    # ----- Step 2: Ensure customer is registered in Fundle -----
+    try:
+        points_result = await tagnpay_client.get_customer_points(mobile_10)
+    except Exception as e:
+        points_result = {"success": False, "error": str(e)}
+    if not points_result.get("success") or points_result.get("data") is None:
+        try:
+            await tagnpay_client.register_customer(
+                mobile_number=mobile_10,
+                name=user.get("name", "Customer"),
+                pan_number="",
+                source="WhatsApp-BulkReprocess"
+            )
+        except Exception as e:
+            logger.warning(f"Bulk reprocess: Fundle register failed for {mobile_10}: {e}")
+
+    # ----- Step 3: Apply bill-age rule (15 days) -----
+    if bill_date:
+        try:
+            bd = datetime.strptime(bill_date, "%Y-%m-%d")
+            days_old = (datetime.now() - bd).days
+            if days_old > 15:
+                update_payload.update({
+                    "status": "rejected",
+                    "rejection_reason": f"Bill is {days_old} days old (limit: 15 days)"
+                })
+                await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
+                return {"bill_id": bill_id, "action": "rejected",
+                        "status": "rejected", "points": 0,
+                        "error": f"Bill {days_old} days old"}
+        except Exception:
+            pass
+
+    # ----- Step 4: Try to earn points via TagnPay -----
+    if amount <= 0 or not bill_no:
+        # Still missing key data — leave for manual review
+        update_payload["status"] = "manual_review"
+        update_payload["rejection_reason"] = "OCR could not extract amount/bill_no; manual review required"
+        await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
+        return {"bill_id": bill_id, "action": "manual_review",
+                "status": "manual_review", "points": 0,
+                "error": "Missing amount/bill_no after OCR"}
+
+    try:
+        earn_result = await tagnpay_client.earn_points(
+            mobile_number=mobile_10,
+            bill_amount=amount,
+            bill_number=bill_no,
+            bill_date=bill_date or datetime.now().strftime("%Y-%m-%d"),
+            store_name=store_name,
+            bill_image_base64=None  # do NOT resend image (180KB payload)
+        )
+    except Exception as e:
+        earn_result = {"success": False, "error": str(e)}
+
+    points_earned = 0
+    if earn_result.get("success") and earn_result.get("data"):
+        points_earned = int(earn_result["data"].get("earned_points", 0) or 0)
+
+    if points_earned > 0:
+        update_payload.update({
+            "status": "approved",
+            "points_issued": points_earned,
+            "rejection_reason": None,
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+            "processed_by": "admin_bulk_reprocess"
+        })
+        await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
+
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$inc": {"balance_points": points_earned, "total_earned_points": points_earned}}
+        )
+
+        if send_whatsapp_flag and phone:
+            try:
+                total_balance_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
+                total_balance = int((total_balance_doc or {}).get("balance_points", 0))
+                msg = (f"Good news! Your bill has been processed.\n\n"
+                       f"Store: {store_name}\nBill No: {bill_no}\nAmount: \u20b9{amount:.0f}\n"
+                       f"Points Earned: {points_earned}\nTotal Balance: {total_balance}\n\n"
+                       f"Thank you for your patience.")
+                background_tasks.add_task(send_whatsapp_text, phone, msg)
+            except Exception as e:
+                logger.warning(f"Bulk reprocess WhatsApp send failed: {e}")
+
+        return {"bill_id": bill_id, "action": "approved",
+                "status": "approved", "points": points_earned, "error": None}
+
+    # Fundle returned 0 or failed — leave/update reason
+    err = earn_result.get("error") or (earn_result.get("data") or {}).get("message") or "Fundle returned 0 points"
+    update_payload["rejection_reason"] = err[:300]
+    # Keep status as it was unless it's a brand-not-found which we keep pending
+    await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
+    return {"bill_id": bill_id, "action": "kept_pending",
+            "status": bill.get("status"), "points": 0, "error": err[:200]}
+
+
+@api_router.post("/admin/bills/bulk-reprocess")
+async def bulk_reprocess_bills(request: BulkReprocessRequest,
+                                background_tasks: BackgroundTasks,
+                                payload: dict = Depends(verify_jwt_token)):
+    """Bulk reprocess failed/stuck bills in a date window.
+
+    Returns a per-bill summary. Use `dry_run=True` to preview the candidate
+    list without mutating anything.
+    """
+    # Build query
+    statuses = request.statuses or ["manual_review", "pending_review"]
+    q: Dict[str, Any] = {"status": {"$in": statuses}}
+
+    # Date filter on `created_at` (ISO string in DB)
+    if request.from_date or request.to_date:
+        date_q: Dict[str, Any] = {}
+        if request.from_date:
+            date_q["$gte"] = request.from_date  # ISO date prefix-compare works
+        if request.to_date:
+            # inclusive end-of-day
+            date_q["$lte"] = request.to_date + "T23:59:59.999Z"
+        q["created_at"] = date_q
+
+    cursor = db.bills.find(q, {"_id": 0}).sort("created_at", 1).limit(max(1, min(request.limit, 500)))
+    bills = await cursor.to_list(length=None)
+
+    if request.dry_run:
+        return {
+            "dry_run": True,
+            "candidates": len(bills),
+            "bills": [{
+                "id": b.get("id"),
+                "status": b.get("status"),
+                "user_phone": b.get("user_phone"),
+                "store_name": b.get("store_name"),
+                "amount": b.get("amount"),
+                "created_at": b.get("created_at"),
+                "has_image": bool(b.get("image_url")),
+            } for b in bills]
+        }
+
+    results = []
+    summary = {"approved": 0, "rejected": 0, "manual_review": 0, "kept_pending": 0, "skipped": 0}
+    total_points = 0
+    for b in bills:
+        try:
+            res = await _reprocess_single_bill(
+                b, re_ocr=request.re_ocr,
+                send_whatsapp_flag=request.send_whatsapp,
+                background_tasks=background_tasks
+            )
+        except Exception as e:
+            logger.exception(f"Bulk reprocess error on bill {b.get('id')}")
+            res = {"bill_id": b.get("id"), "action": "skipped",
+                   "status": b.get("status"), "points": 0, "error": str(e)[:200]}
+        results.append(res)
+        summary[res.get("action", "skipped")] = summary.get(res.get("action", "skipped"), 0) + 1
+        total_points += int(res.get("points") or 0)
+
+    return {
+        "dry_run": False,
+        "processed": len(results),
+        "summary": summary,
+        "total_points_credited": total_points,
+        "results": results,
+    }
+
+
 # Karix API Key
 KARIX_API_KEY = os.environ.get('WHATSAPP_API_KEY', '')
 

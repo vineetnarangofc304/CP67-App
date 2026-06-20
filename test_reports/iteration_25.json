@@ -1,0 +1,63 @@
+{
+  "summary": "Iteration 25 - Bulk Reprocess + 90-day JWT + Web Push subscribe/unsubscribe/status + sw.js validated. All 15 backend tests pass; admin Bulk Reprocess UI + consumer login flow work end-to-end on the preview URL.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Bulk Reprocess modal", "issues": ["Uses native browser date pickers (HTML <input type='date'>) rather than the shadcn Calendar component — acceptable for admin tooling but inconsistent with the rest of the design system."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration25_bulk_reprocess_push.py",
+    "/app/test_reports/pytest/iteration25_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 6727 lines — consider splitting bulk-reprocess + helpers into a dedicated routes/admin_bills.py module for maintainability.",
+    "Bulk reprocess date filter uses string-prefix comparison on created_at (ISO strings). Works but is fragile if created_at format ever changes; consider parsing to datetime and using $gte/$lte with real Date objects.",
+    "BulkReprocessRequest accepts arbitrary strings for from_date/to_date with no Pydantic validation — invalid input doesn't 500 (good) but silently filters nothing. Consider validating YYYY-MM-DD with a field_validator and returning 422.",
+    "push_unsubscribe ignores `keys` payload (only uses endpoint+user_id) — fine, but the PushSubscriptionRequest model requires the same shape for both endpoints; consider a leaner UnsubscribeRequest with only `endpoint`.",
+    "NotificationPrompt only renders when Notification.permission==='default' (correct), but there is no test hook to verify it mounts — consider exposing the notif-prompt testid via a debug query string for QA.",
+    "sw.js (54 lines) is fine; verify push payload schema is documented before backend starts sending pushes (Firebase VAPID work is deferred)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration25_bulk_reprocess_push.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% (all critical flows verified)"
+  },
+  "test_credentials": {
+    "consumer": "Phone: 9876543210, OTP: 1234",
+    "admin": "Username: admin, Password: CP67Admin@2025"
+  },
+  "seed_data_creation": "Push subscription docs created+cleaned up under endpoint='test-ep-iteration25-A' for the consumer test user.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Bulk Reprocess endpoint at POST /api/admin/bills/bulk-reprocess; dry_run returns {dry_run, candidates, bills[]}, real run returns {processed, summary{approved,rejected,kept_pending,skipped,manual_review}, total_points_credited, results[]}. Idempotent — re-running on same bills does not double-credit (verified). Consumer JWT TTL is 90 days (decoded exp claim matches within 2-day slack). Web Push endpoints under /api/consumer/push/{subscribe,unsubscribe,status} — subscribe upserts on endpoint (no duplicates). /sw.js served from frontend root, contains push + notificationclick handlers. Preview DB had 1 test bill in pending_review state used for dry-run preview verification.",
+  "features_tested": {
+    "admin_login": "PASS - returns JWT",
+    "bulk_reprocess_no_auth": "PASS - 401/403 without token",
+    "bulk_reprocess_dry_run": "PASS - returns candidates=1, bills[] shape verified for date range covering 2026-06-18..19 (0) and wide range (1)",
+    "bulk_reprocess_real_run": "PASS - returns processed/summary/total_points_credited/results",
+    "bulk_reprocess_idempotency": "PASS - second run did not credit additional points",
+    "bulk_reprocess_bad_date": "PASS - does not 500 on invalid date strings",
+    "consumer_jwt_90_days": "PASS - exp - now ≈ 90*86400 (within ±2 days)",
+    "consumer_profile": "PASS - 200 with auth",
+    "push_subscribe": "PASS - {success: true}, status reflects subscribed=true",
+    "push_subscribe_idempotent": "PASS - endpoints count does not grow on duplicate subscribe",
+    "push_unsubscribe": "PASS - removes record",
+    "push_endpoints_require_auth": "PASS - 401/403 without token",
+    "existing_admin_bills": "PASS",
+    "existing_pending_review": "PASS",
+    "sw_js_reachable": "PASS - HTTP 200, contains 'push' + 'notificationclick' handlers",
+    "admin_ui_bulk_modal": "PASS - data-testids open-bulk-reprocess-btn, bulk-from-date, bulk-to-date, bulk-dry-run-btn, bulk-run-btn, bulk-dry-run-preview all present and functional; toast 'Found 1 candidate bill(s)' visible",
+    "admin_ui_per_bill_reprocess": "PASS - per-bill Reprocess button still present on pending bills",
+    "consumer_ui_login": "PASS - phone 9876543210 + OTP 1234 → /app/home, 6 OTP boxes rendered, verify-otp-btn works",
+    "consumer_ui_routes": "PASS - /app/wallet, /app/profile, /app/upload load with 0 console errors after login"
+  }
+}

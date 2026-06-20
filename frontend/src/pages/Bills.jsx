@@ -53,6 +53,18 @@ const Bills = () => {
   const [sendWhatsapp, setSendWhatsapp] = useState(true);
   const [activeTab, setActiveTab] = useState('pending');
 
+  // ----- Bulk Reprocess (date-range) state -----
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const yesterdayISO = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkFrom, setBulkFrom] = useState(yesterdayISO);
+  const [bulkTo, setBulkTo] = useState(todayISO);
+  const [bulkReOcr, setBulkReOcr] = useState(true);
+  const [bulkSendWA, setBulkSendWA] = useState(true);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkDryRun, setBulkDryRun] = useState(null);   // { candidates, bills } or null
+  const [bulkResult, setBulkResult] = useState(null);    // { summary, results, total_points_credited }
+
   useEffect(() => {
     fetchBills();
     fetchPendingBills();
@@ -204,6 +216,52 @@ const Bills = () => {
       fetchPendingBills();
     };
     try { xhr.send(); } catch { toast.error('Could not send reprocess request.'); }
+  };
+
+  // -------- Bulk Reprocess (date range) --------
+  const callBulkReprocess = async (dryRun) => {
+    setBulkRunning(true);
+    if (dryRun) setBulkDryRun(null); else setBulkResult(null);
+    try {
+      const res = await fetch(`${API_URL}/admin/bills/bulk-reprocess`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from_date: bulkFrom || null,
+          to_date: bulkTo || null,
+          statuses: ['manual_review', 'pending_review'],
+          re_ocr: bulkReOcr,
+          send_whatsapp: bulkSendWA,
+          dry_run: dryRun,
+          limit: 300
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'Bulk reprocess failed');
+        return;
+      }
+      if (dryRun) {
+        setBulkDryRun(data);
+        toast.success(`Found ${data.candidates} candidate bill(s)`);
+      } else {
+        setBulkResult(data);
+        const s = data.summary || {};
+        toast.success(
+          `Done. Approved ${s.approved || 0} • Rejected ${s.rejected || 0} • Pending ${s.kept_pending || 0} • Total points: ${data.total_points_credited || 0}`
+        );
+        // refresh lists
+        fetchBills();
+        fetchPendingBills();
+      }
+    } catch {
+      toast.error('Network error while bulk reprocessing');
+    } finally {
+      setBulkRunning(false);
+    }
   };
 
   const formatDate = (dateStr) => {
@@ -423,6 +481,20 @@ const Bills = () => {
             <TabsTrigger value="all" data-testid="tab-all-bills">All Bills</TabsTrigger>
           </TabsList>
 
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
+              onClick={() => { setBulkOpen(true); setBulkDryRun(null); setBulkResult(null); }}
+              data-testid="open-bulk-reprocess-btn"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Bulk Reprocess
+            </Button>
+          </div>
+        </div>
+        <div className="flex items-center justify-end -mt-2">
           {activeTab === 'all' && (
             <div className="flex flex-wrap items-center gap-2">
               <Input
@@ -769,6 +841,109 @@ const Bills = () => {
                 <CheckCircle className="h-4 w-4" />
               )}
               Approve & Credit Points
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Reprocess Dialog */}
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-['Manrope']">Bulk Reprocess Failed Bills</DialogTitle>
+            <p className="text-sm text-slate-500 mt-1">
+              Re-runs OCR + all rules on bills stuck in <strong>Manual Review</strong> or <strong>Pending Review</strong> in the selected window.
+              Use this after fixing an outage (e.g. missing OCR key).
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">From date</Label>
+                <Input
+                  type="date"
+                  value={bulkFrom}
+                  onChange={(e) => setBulkFrom(e.target.value)}
+                  data-testid="bulk-from-date"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">To date</Label>
+                <Input
+                  type="date"
+                  value={bulkTo}
+                  onChange={(e) => setBulkTo(e.target.value)}
+                  data-testid="bulk-to-date"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center space-x-2">
+                <Checkbox id="bulk-re-ocr" checked={bulkReOcr} onCheckedChange={setBulkReOcr} />
+                <label htmlFor="bulk-re-ocr" className="text-sm">Re-run OCR on bill image</label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox id="bulk-wa" checked={bulkSendWA} onCheckedChange={setBulkSendWA} />
+                <label htmlFor="bulk-wa" className="text-sm">Send WhatsApp on approval</label>
+              </div>
+            </div>
+
+            {/* Dry-run preview */}
+            {bulkDryRun && (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-60 overflow-y-auto" data-testid="bulk-dry-run-preview">
+                <p className="text-sm font-semibold mb-2">
+                  Dry-run preview — {bulkDryRun.candidates} candidate bill(s)
+                </p>
+                {(bulkDryRun.bills || []).slice(0, 50).map((b) => (
+                  <div key={b.id} className="text-xs flex items-center justify-between border-b border-slate-100 py-1">
+                    <span className="truncate">{b.user_phone} • {b.store_name || 'Unknown'} • ₹{b.amount || 0}</span>
+                    <span className="text-slate-400">{(b.created_at || '').slice(0, 10)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Execution result */}
+            {bulkResult && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3" data-testid="bulk-result">
+                <p className="text-sm font-semibold mb-2 text-green-800">Reprocess complete</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div><span className="text-slate-500">Approved:</span> <strong>{bulkResult.summary?.approved || 0}</strong></div>
+                  <div><span className="text-slate-500">Rejected:</span> <strong>{bulkResult.summary?.rejected || 0}</strong></div>
+                  <div><span className="text-slate-500">Pending:</span> <strong>{bulkResult.summary?.kept_pending || 0}</strong></div>
+                  <div><span className="text-slate-500">Skipped:</span> <strong>{bulkResult.summary?.skipped || 0}</strong></div>
+                </div>
+                <p className="text-xs mt-2 text-green-700">
+                  Total points credited: <strong>{bulkResult.total_points_credited || 0}</strong>
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 mt-4">
+            <Button variant="outline" onClick={() => setBulkOpen(false)} disabled={bulkRunning}>
+              Close
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => callBulkReprocess(true)}
+              disabled={bulkRunning || !bulkFrom}
+              data-testid="bulk-dry-run-btn"
+              className="gap-2"
+            >
+              {bulkRunning ? <div className="animate-spin h-4 w-4 border-b-2 border-slate-700 rounded-full" /> : <Eye className="h-4 w-4" />}
+              Preview Candidates
+            </Button>
+            <Button
+              onClick={() => callBulkReprocess(false)}
+              disabled={bulkRunning || !bulkFrom}
+              className="gap-2 bg-blue-600 hover:bg-blue-700"
+              data-testid="bulk-run-btn"
+            >
+              {bulkRunning ? <div className="animate-spin h-4 w-4 border-b-2 border-white rounded-full" /> : <RefreshCw className="h-4 w-4" />}
+              Run Reprocess
             </Button>
           </DialogFooter>
         </DialogContent>

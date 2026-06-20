@@ -19,11 +19,41 @@ This folder contains the Trusted Web Activity (TWA) wrapper for the CP67 Mall PW
 | Package ID     | `com.homelandadvantage.cp67`                                   |
 | App Name       | `CP67 Mall`                                                    |
 | Launcher       | `CP67 Mall`                                                    |
-| Version        | `1` (`appVersionCode=1`, `appVersionName=1`)                   |
+| Version        | `1.1` (`appVersionCode=2`, `appVersionName=1.1`)               |
 | Host           | `mall-engage-preview.preview.emergentagent.com`                |
 | Start URL      | `/app/welcome`                                                 |
 | Theme color    | `#2C1810`                                                      |
 | Background     | `#FDF6EE`                                                      |
+
+## Permissions added in v1.1
+
+| Permission                              | Reason                                  |
+| --------------------------------------- | --------------------------------------- |
+| `android.permission.POST_NOTIFICATIONS` | Web Push & in-app notifications         |
+| `android.permission.CAMERA`             | In-app bill capture via `getUserMedia`  |
+| `android.permission.INTERNET`           | Standard network access                 |
+
+> If the v1.0 build is already published and live, you must **rebuild**
+> (`./gradlew bundleRelease`) so the new `CAMERA` permission ships to users.
+> Without it, the in-app camera button silently fails on some Android devices.
+
+## Rebuild steps
+
+```bash
+cd /app/twa-build
+./gradlew bundleRelease     # produces app/build/outputs/bundle/release/app-release.aab
+./gradlew assembleRelease   # produces app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+Sign the APK if needed:
+
+```bash
+$ANDROID_HOME/build-tools/<version>/apksigner sign \
+  --ks android.keystore --ks-key-alias android \
+  --ks-pass pass:CP67Mall@2025 --key-pass pass:CP67Mall@2025 \
+  --out app-release-signed.apk \
+  app/build/outputs/apk/release/app-release-unsigned.apk
+```
 
 ## Signing key (KEEP SAFE)
 

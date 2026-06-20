@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import BottomNav from './components/BottomNav';
 import SideDrawer from './components/SideDrawer';
+import NotificationPrompt from './components/NotificationPrompt';
 import Welcome from './pages/Welcome';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
@@ -49,11 +50,17 @@ const ConsumerAuthProvider = ({ children }) => {
         setUser(data);
         return data;
       }
-      throw new Error('Invalid token');
+      // Only clear the session if the server explicitly says the token is bad.
+      // Anything else (5xx, network blip, TagnPay timeout) must NOT log the user out —
+      // this was the root cause of "OTP every reopen" reported by CP67 team.
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem('cp67_consumer_token');
+        setToken(null);
+        setUser(null);
+      }
+      return null;
     } catch {
-      localStorage.removeItem('cp67_consumer_token');
-      setToken(null);
-      setUser(null);
+      // Network error: keep token, user can retry. Don't force re-login.
       return null;
     }
   }, []);
@@ -106,41 +113,49 @@ export default function ConsumerApp() {
 
   return (
     <ConsumerAuthProvider>
-      <div className="consumer-app">
-        <SideDrawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            <Route path="welcome" element={<Welcome />} />
-            <Route path="login" element={<Login />} />
-            <Route path="onboarding" element={<ProtectedConsumer><Onboarding /></ProtectedConsumer>} />
-            <Route path="home" element={<ProtectedConsumer><Home onMenuOpen={() => setDrawerOpen(true)} /></ProtectedConsumer>} />
-            <Route path="stores" element={<ProtectedConsumer><Stores /></ProtectedConsumer>} />
-            <Route path="stores/:storeId" element={<ProtectedConsumer><StoreDetail /></ProtectedConsumer>} />
-            <Route path="wallet" element={<ProtectedConsumer><Wallet /></ProtectedConsumer>} />
-            <Route path="upload" element={<ProtectedConsumer><BillUpload /></ProtectedConsumer>} />
-            <Route path="events" element={<ProtectedConsumer><Events /></ProtectedConsumer>} />
-            <Route path="offers" element={<ProtectedConsumer><Offers /></ProtectedConsumer>} />
-            <Route path="profile" element={<ProtectedConsumer><Profile /></ProtectedConsumer>} />
-            <Route path="notifications" element={<ProtectedConsumer><Notifications /></ProtectedConsumer>} />
-            <Route path="transactions" element={<ProtectedConsumer><Transactions /></ProtectedConsumer>} />
-            <Route path="bill-history" element={<ProtectedConsumer><BillHistory /></ProtectedConsumer>} />
-            <Route path="rewards" element={<ProtectedConsumer><Rewards /></ProtectedConsumer>} />
-            <Route path="help" element={<ProtectedConsumer><HelpSupport /></ProtectedConsumer>} />
-            <Route path="legal" element={<Legal />} />
-            <Route path="notification-settings" element={<ProtectedConsumer><NotificationPrefs /></ProtectedConsumer>} />
-            <Route path="mall-map" element={<ProtectedConsumer><MallMap /></ProtectedConsumer>} />
-            <Route path="amenities" element={<ProtectedConsumer><Amenities /></ProtectedConsumer>} />
-            <Route path="referrals" element={<ProtectedConsumer><Referrals /></ProtectedConsumer>} />
-            <Route path="redeem-brands" element={<ProtectedConsumer><RedeemBrands /></ProtectedConsumer>} />
-            <Route path="redeem" element={<ProtectedConsumer><RedeemBrands /></ProtectedConsumer>} />
-            <Route path="tier-journey" element={<ProtectedConsumer><TierJourney /></ProtectedConsumer>} />
-            <Route path="program" element={<ProgramInfo />} />
-            <Route path="" element={<Navigate to="/app/welcome" replace />} />
-            <Route path="*" element={<Navigate to="/app/home" replace />} />
-          </Routes>
-        </AnimatePresence>
-        {showBottomNav && <BottomNav />}
-      </div>
+      <ConsumerShell drawerOpen={drawerOpen} setDrawerOpen={setDrawerOpen} showBottomNav={showBottomNav} location={location} />
     </ConsumerAuthProvider>
+  );
+}
+
+function ConsumerShell({ drawerOpen, setDrawerOpen, showBottomNav, location }) {
+  const { token } = useConsumerAuth();
+  return (
+    <div className="consumer-app">
+      <SideDrawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      {token && <NotificationPrompt token={token} />}
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          <Route path="welcome" element={<Welcome />} />
+          <Route path="login" element={<Login />} />
+          <Route path="onboarding" element={<ProtectedConsumer><Onboarding /></ProtectedConsumer>} />
+          <Route path="home" element={<ProtectedConsumer><Home onMenuOpen={() => setDrawerOpen(true)} /></ProtectedConsumer>} />
+          <Route path="stores" element={<ProtectedConsumer><Stores /></ProtectedConsumer>} />
+          <Route path="stores/:storeId" element={<ProtectedConsumer><StoreDetail /></ProtectedConsumer>} />
+          <Route path="wallet" element={<ProtectedConsumer><Wallet /></ProtectedConsumer>} />
+          <Route path="upload" element={<ProtectedConsumer><BillUpload /></ProtectedConsumer>} />
+          <Route path="events" element={<ProtectedConsumer><Events /></ProtectedConsumer>} />
+          <Route path="offers" element={<ProtectedConsumer><Offers /></ProtectedConsumer>} />
+          <Route path="profile" element={<ProtectedConsumer><Profile /></ProtectedConsumer>} />
+          <Route path="notifications" element={<ProtectedConsumer><Notifications /></ProtectedConsumer>} />
+          <Route path="transactions" element={<ProtectedConsumer><Transactions /></ProtectedConsumer>} />
+          <Route path="bill-history" element={<ProtectedConsumer><BillHistory /></ProtectedConsumer>} />
+          <Route path="rewards" element={<ProtectedConsumer><Rewards /></ProtectedConsumer>} />
+          <Route path="help" element={<ProtectedConsumer><HelpSupport /></ProtectedConsumer>} />
+          <Route path="legal" element={<Legal />} />
+          <Route path="notification-settings" element={<ProtectedConsumer><NotificationPrefs /></ProtectedConsumer>} />
+          <Route path="mall-map" element={<ProtectedConsumer><MallMap /></ProtectedConsumer>} />
+          <Route path="amenities" element={<ProtectedConsumer><Amenities /></ProtectedConsumer>} />
+          <Route path="referrals" element={<ProtectedConsumer><Referrals /></ProtectedConsumer>} />
+          <Route path="redeem-brands" element={<ProtectedConsumer><RedeemBrands /></ProtectedConsumer>} />
+          <Route path="redeem" element={<ProtectedConsumer><RedeemBrands /></ProtectedConsumer>} />
+          <Route path="tier-journey" element={<ProtectedConsumer><TierJourney /></ProtectedConsumer>} />
+          <Route path="program" element={<ProgramInfo />} />
+          <Route path="" element={<Navigate to="/app/welcome" replace />} />
+          <Route path="*" element={<Navigate to="/app/home" replace />} />
+        </Routes>
+      </AnimatePresence>
+      {showBottomNav && <BottomNav />}
+    </div>
   );
 }

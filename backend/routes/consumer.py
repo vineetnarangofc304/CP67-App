@@ -352,7 +352,7 @@ class FavoriteRequest(BaseModel):
 # ==================== AUTH HELPERS ====================
 
 def create_consumer_token(user_id: str, phone: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(days=30)
+    expire = datetime.now(timezone.utc) + timedelta(days=90)
     data = {"sub": user_id, "phone": phone, "type": "consumer", "exp": expire}
     return jwt.encode(data, _jwt_secret, algorithm=_jwt_algorithm)
 
@@ -1150,6 +1150,62 @@ async def mark_all_read(current_user=Depends(get_current_consumer)):
         {"$set": {"is_read": True}}
     )
     return {"success": True}
+
+
+# ==================== PUSH NOTIFICATION SUBSCRIPTIONS ====================
+# Stores Web Push subscription endpoints so that backend can send pushes
+# (via FCM/Web Push) once a VAPID key + service-account JSON are configured.
+# The save endpoint is also useful for analytics ("how many users opted-in").
+
+class PushSubscriptionRequest(BaseModel):
+    endpoint: str
+    keys: Optional[Dict[str, str]] = None  # { p256dh, auth }
+    user_agent: Optional[str] = None
+    platform: Optional[str] = None  # 'pwa' | 'twa' | 'web'
+
+
+@consumer_router.post("/push/subscribe")
+async def push_subscribe(payload: PushSubscriptionRequest,
+                          current_user=Depends(get_current_consumer)):
+    """Save (idempotently) the user's push subscription endpoint."""
+    user_id = current_user["sub"]
+    phone = current_user.get("phone")
+    doc = {
+        "user_id": user_id,
+        "phone": phone,
+        "endpoint": payload.endpoint,
+        "keys": payload.keys or {},
+        "user_agent": payload.user_agent or "",
+        "platform": payload.platform or "pwa",
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    await _db.push_subscriptions.update_one(
+        {"endpoint": payload.endpoint},
+        {"$set": doc, "$setOnInsert": {"created_at": doc["updated_at"]}},
+        upsert=True
+    )
+    # Flag user as having opted in to push so we can target them later
+    await _db.users.update_one(
+        {"id": user_id},
+        {"$set": {"push_opt_in": True, "push_opt_in_at": doc["updated_at"]}}
+    )
+    return {"success": True}
+
+
+@consumer_router.post("/push/unsubscribe")
+async def push_unsubscribe(payload: PushSubscriptionRequest,
+                            current_user=Depends(get_current_consumer)):
+    await _db.push_subscriptions.delete_many({
+        "user_id": current_user["sub"],
+        "endpoint": payload.endpoint
+    })
+    return {"success": True}
+
+
+@consumer_router.get("/push/status")
+async def push_status(current_user=Depends(get_current_consumer)):
+    count = await _db.push_subscriptions.count_documents({"user_id": current_user["sub"]})
+    return {"subscribed": count > 0, "endpoints": count}
 
 
 # ==================== TRANSACTIONS ====================
