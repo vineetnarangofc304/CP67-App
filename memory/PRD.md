@@ -166,13 +166,33 @@ Three production issues + a critical perf fix:
 - **Logo Syncing**: Admin-uploaded logos (data: URLs) no longer overwritten by startup migration
 - **Brands Filtering**: Featured stores only show eligible, active brands
 
+## Phase 16 (Current Session - Feb 21, 2026) — CP67 Team Feedback Fixes
+
+### Backend
+- **Bulk Reprocess Failed Bills** (`POST /api/admin/bills/bulk-reprocess`): admin-only date-range endpoint that re-runs OCR on stored images for bills stuck in `manual_review`/`pending_review`, re-applies all rules (15-day age, blocklist, mismatch, brand check), pushes to TagnPay, and notifies customers on success. Supports `dry_run=true` for safe preview. Idempotent (no double-credit).
+- **Consumer JWT TTL: 30d → 90d** in `routes/consumer.py:create_consumer_token` — addresses CP67 feedback "users have to OTP every reopen".
+- **Resilient profile fetch** in ConsumerApp: only clears token on 401/403, NOT on 5xx/network errors (root cause of phantom logouts).
+- **Web Push subscription endpoints** (`/api/consumer/push/{subscribe,unsubscribe,status}`): stores Web Push subscriptions for future FCM-based delivery. Idempotent upsert on endpoint.
+
+### Frontend (Admin)
+- New "Bulk Reprocess" button on `/bills` opens a dialog with date pickers, "Re-run OCR" + "Send WhatsApp on approval" toggles, "Preview Candidates" (dry-run) and "Run Reprocess" actions, with a result summary panel.
+
+### Frontend (Consumer PWA)
+- **Service Worker** (`/public/sw.js`): push + notificationclick handlers ready (delivery requires VAPID/FCM keys).
+- **NotificationPrompt** modal: first-launch friendly prompt requesting notification permission; on grant, auto-subscribes the device. Falls back to a PWA install guide modal (iOS Safari + Android Chrome variants) when the user isn't running in standalone mode.
+
+### TWA (Android v1.1)
+- AndroidManifest now requests `android.permission.CAMERA`, `android.permission.POST_NOTIFICATIONS`, `android.permission.INTERNET` and declares optional camera features so the in-app bill capture works on Android.
+- Bumped `appVersionCode=2`, `appVersionName="1.1"` — requires rebuild via `./gradlew bundleRelease`.
+
 ## Upcoming Tasks (P1)
 - Campaign-aware bill processing: Auto-apply multipliers during active campaigns
-- PWA Installation Guide: Modal for mall visitors on "Add to Home Screen"
+- Web Push delivery: configure VAPID keypair + Firebase project; add backend send endpoint
+- Native "Settings" deep-link from TWA so users access app settings instead of Chrome's
 
 ## Future Tasks (P2)
 - Automate Footfall Data via Email Parser
-- Refactor monolithic server.py (5400+ lines → modular /routes, /services, /models)
+- **Refactor monolithic server.py** (6700+ lines → `/routes/admin_bills.py`, `/services/ocr.py`, `/services/tagnpay.py`)
 - Brand/Store Dashboard (separate brand login)
 - Advanced Analytics (RFM, CLV, AI Concierge)
 
