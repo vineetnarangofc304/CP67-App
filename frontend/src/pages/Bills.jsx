@@ -64,6 +64,7 @@ const Bills = () => {
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkDryRun, setBulkDryRun] = useState(null);   // { candidates, bills } or null
   const [bulkResult, setBulkResult] = useState(null);    // { summary, results, total_points_credited }
+  const [bulkProgress, setBulkProgress] = useState(null); // { processed, total, summary } during async job
 
   useEffect(() => {
     fetchBills();
@@ -221,7 +222,12 @@ const Bills = () => {
   // -------- Bulk Reprocess (date range) --------
   const callBulkReprocess = async (dryRun) => {
     setBulkRunning(true);
-    if (dryRun) setBulkDryRun(null); else setBulkResult(null);
+    if (dryRun) {
+      setBulkDryRun(null);
+    } else {
+      setBulkResult(null);
+      setBulkProgress(null);
+    }
     try {
       const res = await fetch(`${API_URL}/admin/bills/bulk-reprocess`, {
         method: 'POST',
@@ -242,26 +248,75 @@ const Bills = () => {
       const data = await res.json();
       if (!res.ok) {
         toast.error(data.detail || 'Bulk reprocess failed');
+        setBulkRunning(false);
         return;
       }
       if (dryRun) {
         setBulkDryRun(data);
         toast.success(`Found ${data.candidates} candidate bill(s)`);
+        setBulkRunning(false);
       } else {
-        setBulkResult(data);
-        const s = data.summary || {};
-        toast.success(
-          `Done. Approved ${s.approved || 0} • Rejected ${s.rejected || 0} • Pending ${s.kept_pending || 0} • Total points: ${data.total_points_credited || 0}`
-        );
-        // refresh lists
-        fetchBills();
-        fetchPendingBills();
+        // Async job started — poll for status
+        if (data.job_id) {
+          toast.success(`Started reprocessing ${data.total} bill(s) in background…`);
+          await pollBulkReprocessJob(data.job_id, data.total);
+        } else {
+          // Backwards-compat: old synchronous response
+          setBulkResult(data);
+          fetchBills();
+          fetchPendingBills();
+          setBulkRunning(false);
+        }
       }
     } catch {
       toast.error('Network error while bulk reprocessing');
-    } finally {
       setBulkRunning(false);
     }
+  };
+
+  const pollBulkReprocessJob = async (jobId, totalExpected) => {
+    setBulkProgress({ processed: 0, total: totalExpected, summary: {} });
+    let attempts = 0;
+    const maxAttempts = 600; // 600 * 3s = 30 min upper bound
+    while (attempts < maxAttempts) {
+      attempts += 1;
+      try {
+        const res = await fetch(`${API_URL}/admin/bills/bulk-reprocess/${jobId}/status`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const job = await res.json();
+          setBulkProgress({
+            processed: job.processed || 0,
+            total: job.total || totalExpected,
+            summary: job.summary || {}
+          });
+          if (job.status === 'completed') {
+            setBulkResult({
+              summary: job.summary,
+              total_points_credited: job.total_points_credited,
+              processed: job.processed,
+            });
+            setBulkProgress(null);
+            setBulkRunning(false);
+            const s = job.summary || {};
+            toast.success(
+              `Done. Approved ${s.approved || 0} • Rejected ${s.rejected || 0} • Pending ${s.kept_pending || 0} • Points: ${job.total_points_credited || 0}`
+            );
+            fetchBills();
+            fetchPendingBills();
+            return;
+          }
+        }
+      } catch {
+        // transient network error — keep polling
+      }
+      // Wait 3 seconds before next poll
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    // Timed out polling — keep dialog open, user can refresh manually
+    toast.error('Reprocessing is taking longer than expected. Please refresh the page in a few minutes.');
+    setBulkRunning(false);
   };
 
   const formatDate = (dateStr) => {
@@ -902,6 +957,34 @@ const Bills = () => {
                     <span className="text-slate-400">{(b.created_at || '').slice(0, 10)}</span>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Live progress */}
+            {bulkProgress && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3" data-testid="bulk-progress">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-semibold text-blue-800">
+                    Processing… {bulkProgress.processed} / {bulkProgress.total}
+                  </p>
+                  <span className="text-xs text-blue-600">
+                    Don’t close this window
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-blue-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 transition-all duration-500"
+                    style={{ width: `${bulkProgress.total ? Math.round((bulkProgress.processed / bulkProgress.total) * 100) : 0}%` }}
+                  />
+                </div>
+                {bulkProgress.summary && (
+                  <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
+                    <div><span className="text-slate-500">Approved:</span> <strong className="text-green-700">{bulkProgress.summary.approved || 0}</strong></div>
+                    <div><span className="text-slate-500">Rejected:</span> <strong className="text-red-700">{bulkProgress.summary.rejected || 0}</strong></div>
+                    <div><span className="text-slate-500">Pending:</span> <strong className="text-amber-700">{bulkProgress.summary.kept_pending || 0}</strong></div>
+                    <div><span className="text-slate-500">Skipped:</span> <strong className="text-slate-700">{bulkProgress.summary.skipped || 0}</strong></div>
+                  </div>
+                )}
               </div>
             )}
 

@@ -3101,31 +3101,99 @@ async def bulk_reprocess_bills(request: BulkReprocessRequest,
             } for b in bills]
         }
 
-    results = []
+    # Real run: start a background job and return job_id immediately so the
+    # admin UI doesn't get killed by Cloudflare's ~100s edge timeout. The UI
+    # then polls /bulk-reprocess/{job_id}/status for live progress.
+    job_id = str(uuid.uuid4())
+    job_doc = {
+        "id": job_id,
+        "status": "running",
+        "total": len(bills),
+        "processed": 0,
+        "summary": {"approved": 0, "rejected": 0, "manual_review": 0, "kept_pending": 0, "skipped": 0},
+        "total_points_credited": 0,
+        "results": [],
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "finished_at": None,
+        "started_by": payload.get("username") or "admin",
+        "options": {"re_ocr": request.re_ocr, "send_whatsapp": request.send_whatsapp,
+                    "from_date": request.from_date, "to_date": request.to_date},
+    }
+    await db.bulk_reprocess_jobs.insert_one(job_doc)
+
+    # asyncio.create_task is safer than FastAPI's BackgroundTasks here because
+    # BackgroundTasks runs *after* the response is sent but is still bound to
+    # the request lifecycle on some setups. We want a fully detached task.
+    asyncio.create_task(_run_bulk_reprocess_job(job_id, bills, request.re_ocr, request.send_whatsapp))
+
+    return {
+        "dry_run": False,
+        "job_id": job_id,
+        "status": "running",
+        "total": len(bills),
+        "message": "Started in background. Poll /bulk-reprocess/{job_id}/status for progress."
+    }
+
+
+async def _run_bulk_reprocess_job(job_id: str, bills: List[dict],
+                                   re_ocr: bool, send_whatsapp_flag: bool):
+    """Background worker: processes each bill, persists progress to DB after every
+    iteration so the UI can poll for live updates."""
+    from fastapi import BackgroundTasks as _BG
+    bg = _BG()  # fake container so _reprocess_single_bill can queue WA messages
     summary = {"approved": 0, "rejected": 0, "manual_review": 0, "kept_pending": 0, "skipped": 0}
     total_points = 0
-    for b in bills:
+    results: List[dict] = []
+    for idx, b in enumerate(bills, 1):
         try:
             res = await _reprocess_single_bill(
-                b, re_ocr=request.re_ocr,
-                send_whatsapp_flag=request.send_whatsapp,
-                background_tasks=background_tasks
+                b, re_ocr=re_ocr, send_whatsapp_flag=send_whatsapp_flag, background_tasks=bg
             )
         except Exception as e:
             logger.exception(f"Bulk reprocess error on bill {b.get('id')}")
             res = {"bill_id": b.get("id"), "action": "skipped",
                    "status": b.get("status"), "points": 0, "error": str(e)[:200]}
         results.append(res)
-        summary[res.get("action", "skipped")] = summary.get(res.get("action", "skipped"), 0) + 1
+        action = res.get("action", "skipped")
+        summary[action] = summary.get(action, 0) + 1
         total_points += int(res.get("points") or 0)
+        # Persist progress (so the UI can poll)
+        await db.bulk_reprocess_jobs.update_one(
+            {"id": job_id},
+            {"$set": {
+                "processed": idx,
+                "summary": summary,
+                "total_points_credited": total_points,
+            }}
+        )
+    # Mark complete + store final results
+    await db.bulk_reprocess_jobs.update_one(
+        {"id": job_id},
+        {"$set": {
+            "status": "completed",
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+            "results": results[-200:],  # cap to last 200 to keep doc small
+        }}
+    )
+    # Run any queued WhatsApp tasks (BackgroundTasks normally runs them after response;
+    # since we're detached, run them inline).
+    try:
+        for t in bg.tasks:
+            try:
+                await t.func(*t.args, **t.kwargs)
+            except Exception as e:
+                logger.warning(f"Bulk reprocess WA task failed: {e}")
+    except Exception:
+        pass
 
-    return {
-        "dry_run": False,
-        "processed": len(results),
-        "summary": summary,
-        "total_points_credited": total_points,
-        "results": results,
-    }
+
+@api_router.get("/admin/bills/bulk-reprocess/{job_id}/status")
+async def bulk_reprocess_status(job_id: str, payload: dict = Depends(verify_jwt_token)):
+    """Poll endpoint: returns the live state of a bulk-reprocess job."""
+    job = await db.bulk_reprocess_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 
 # Karix API Key
