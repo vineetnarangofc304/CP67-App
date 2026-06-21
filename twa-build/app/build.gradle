@@ -150,9 +150,20 @@ android {
 
         
     }
+    signingConfigs {
+        release {
+            storeFile file('../android.keystore')
+            storePassword 'CP67Mall@2025'
+            keyAlias 'android'
+            keyPassword 'CP67Mall@2025'
+            v1SigningEnabled true
+            v2SigningEnabled true
+        }
+    }
     buildTypes {
         release {
             minifyEnabled true
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {
