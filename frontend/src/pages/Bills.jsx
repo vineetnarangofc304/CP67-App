@@ -222,43 +222,46 @@ const Bills = () => {
   };
 
   // -------- Force Credit (manual approval, bypassing Fundle) --------
-  // Use when Fundle returns 0 points but admin wants to credit the customer
-  // anyway (e.g. brand still being added to Fundle master, customer
-  // goodwill, etc.). Credits locally + sends WhatsApp.
+  // Auto-calculates points via brand category + bill amount range
+  // (same logic as the consumer-facing tier earn-rate table). Admin just
+  // confirms — no manual point entry, so there's no risk of wrong values.
   const forceCreditBill = async (bill) => {
-    const defaultPts = Math.max(1, Math.round((Number(bill.amount) || 0) * 0.01));
-    const input = window.prompt(
-      `Force credit this bill?\n\nStore: ${bill.store_name || 'Unknown'}\nAmount: ₹${bill.amount || 0}\nUser: ${bill.user_phone}\n\nEnter points to credit (default 1% = ${defaultPts}):`,
-      String(defaultPts)
-    );
-    if (input === null) return; // user cancelled
-    const pts = parseInt(input, 10);
-    if (!pts || pts <= 0) {
-      toast.error('Enter a valid positive points value');
+    // Fetch the auto-calculated points first
+    let preview;
+    try {
+      const r = await fetch(`${API_URL}/admin/bills/${bill.id}/force-credit-preview`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!r.ok) { toast.error('Could not calculate points'); return; }
+      preview = await r.json();
+    } catch {
+      toast.error('Network error fetching point calculation');
       return;
     }
+
+    const msg = (
+      `Force credit this bill?\n\n` +
+      `Store: ${bill.store_name || 'Unknown'}\n` +
+      `Amount: ₹${bill.amount || 0}\n` +
+      `Category: ${preview.category}${preview.brand_found ? '' : ' (brand not in master — defaulted to retail)'}\n` +
+      `Rate: ${preview.rate_pct}% (${preview.rate_basis}, range ₹${preview.range_label})\n` +
+      `Points to credit: ${preview.calculated_points}\n\n` +
+      `Fundle will be bypassed. Continue?`
+    );
+    if (!window.confirm(msg)) return;
+
     try {
-      const res = await fetch(`${API_URL}/bills/${bill.id}/process`, {
+      const res = await fetch(`${API_URL}/admin/bills/${bill.id}/force-credit`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          bill_id: bill.id,
-          action: 'approve',
-          points_override: pts,
-          send_whatsapp: true,
-          admin_notes: 'Force credited by admin (Fundle returned 0 points)'
-        })
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        toast.success(`Force credited! ${data.points_issued || pts} pts to ${bill.user_phone}`);
+        toast.success(`Force credited! ${data.points_issued} pts to ${bill.user_phone}`);
         fetchBills();
         fetchPendingBills();
       } else {
-        toast.error(data.detail || 'Force credit failed');
+        toast.error(data.detail || data.error || 'Force credit failed');
       }
     } catch {
       toast.error('Network error during force credit');
@@ -1015,33 +1018,19 @@ const Bills = () => {
               </div>
             </div>
 
-            {/* Force-credit override (skips Fundle) */}
+            {/* Force-credit override (skips Fundle, uses auto-calc) */}
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
               <div className="flex items-center space-x-2">
                 <Checkbox id="bulk-force-credit" checked={bulkForceCredit} onCheckedChange={setBulkForceCredit} data-testid="bulk-force-credit-toggle" />
                 <label htmlFor="bulk-force-credit" className="text-sm font-medium text-amber-800">
-                  Force Credit (bypass Fundle, credit locally)
+                  Force Credit (bypass Fundle, use brand-category earn rate)
                 </label>
               </div>
               {bulkForceCredit && (
-                <div className="mt-2 ml-6 flex items-center gap-2">
-                  <Label className="text-xs text-amber-700">Credit % of bill amount:</Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    max="100"
-                    value={bulkForceCreditPct}
-                    onChange={(e) => setBulkForceCreditPct(e.target.value)}
-                    className="w-20 h-8 text-sm"
-                    data-testid="bulk-force-credit-pct"
-                  />
-                  <span className="text-xs text-amber-700">% (e.g. 1 = 1% of bill total)</span>
-                </div>
-              )}
-              {bulkForceCredit && (
                 <p className="text-xs text-amber-700 mt-2 ml-6">
-                  ⚠ Use this only when Fundle returns 0 points (brand not registered yet, etc.).
+                  ⚠ Points auto-calculated per bill using <strong>brand category × bill amount range</strong>
+                  (Retail 10-35% / Jewellery 5-17.5%, matching the tier earn-rate table).
+                  Use only when Fundle returns 0 points (brand not registered yet, etc.).
                   Points are credited locally and may diverge from Fundle until the brand is added.
                 </p>
               )}

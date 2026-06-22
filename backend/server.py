@@ -2873,6 +2873,77 @@ Thank you for your patience! """
 
 # ======================== BULK REPROCESS ========================
 
+# Tier × category earn-rate table (single bill amount → rate %).
+# Source of truth: tier journey table on the consumer app. The rate is decided
+# by the bill amount range (NOT user's accumulated tier), matching how
+# Fundle calculates earned_points for each individual transaction.
+_EARN_RATES = [
+    # (max_amount_inclusive, retail_pct, jewellery_pct)
+    (10_000,    10.0,   5.0),
+    (25_000,    15.0,   7.5),
+    (75_000,    20.0,  10.0),
+    (150_000,   25.0,  12.5),
+    (300_000,   30.0,  15.0),
+    (500_000,   32.5,  16.25),
+    (float("inf"), 35.0, 17.5),
+]
+_JEWELLERY_CATEGORIES = {"jewellery", "electronics"}
+
+
+async def _compute_auto_points(amount: float, store_name: Optional[str]) -> Dict[str, Any]:
+    """Compute force-credit points using the brand category + bill amount range.
+
+    Returns {points, rate_pct, category, range_label, brand_found}.
+    Falls back to retail rate if the brand is unknown.
+    """
+    amt = float(amount or 0)
+    if amt <= 0:
+        return {"points": 0, "rate_pct": 0, "category": "Unknown",
+                "range_label": "n/a", "brand_found": False}
+
+    brand_category = None
+    brand_found = False
+    if store_name:
+        # Case-insensitive partial match against brand_name
+        norm = store_name.strip().lower()
+        brand = await db.brands.find_one(
+            {"$or": [
+                {"brand_name": {"$regex": f"^{re.escape(store_name)}$", "$options": "i"}},
+                {"brand_name": {"$regex": re.escape(norm), "$options": "i"}}
+            ]},
+            {"_id": 0, "category": 1, "brand_name": 1}
+        )
+        if brand:
+            brand_category = (brand.get("category") or "").strip()
+            brand_found = True
+
+    is_jewellery = (brand_category or "").lower() in _JEWELLERY_CATEGORIES
+    rate_key = "jewellery" if is_jewellery else "retail"
+
+    rate_pct = 10.0
+    range_label = "≤ 10,000"
+    for idx, (ceiling, retail_pct, jewellery_pct) in enumerate(_EARN_RATES):
+        if amt <= ceiling:
+            rate_pct = jewellery_pct if is_jewellery else retail_pct
+            # Build a nice label
+            prev = 0 if idx == 0 else _EARN_RATES[idx - 1][0]
+            if ceiling == float("inf"):
+                range_label = f"> {int(prev):,}"
+            else:
+                range_label = f"{int(prev)+1 if prev>0 else 0:,} - {int(ceiling):,}"
+            break
+
+    points = int(round(amt * rate_pct / 100.0))
+    return {
+        "points": max(1, points),  # never credit zero on a non-zero bill
+        "rate_pct": rate_pct,
+        "category": brand_category or "Unknown",
+        "range_label": range_label,
+        "brand_found": brand_found,
+        "rate_basis": rate_key,
+    }
+
+
 class BulkReprocessRequest(BaseModel):
     """Request body for bulk-reprocessing failed/stuck bills.
 
@@ -3018,14 +3089,21 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
 
     # ----- FORCE CREDIT MODE: skip Fundle, credit locally -----
     if force_credit:
-        points_earned = max(1, int(amount * (force_credit_percent / 100.0)))
+        # Use auto-calc based on brand category + bill amount range,
+        # matching the consumer-facing tier earn-rate table.
+        auto = await _compute_auto_points(amount, store_name)
+        points_earned = int(auto["points"])
         update_payload.update({
             "status": "approved",
             "points_issued": points_earned,
             "rejection_reason": None,
             "processed_at": datetime.now(timezone.utc).isoformat(),
             "processed_by": "admin_bulk_force_credit",
-            "admin_notes": f"Force credited by admin: amount * {force_credit_percent}% = {points_earned} pts (Fundle bypassed)"
+            "admin_notes": (
+                f"Force credited by admin — {auto['rate_basis']} {auto['rate_pct']}% "
+                f"on {auto['range_label']} ({auto['category']}) = {points_earned} pts. "
+                f"Fundle bypassed."
+            )
         })
         await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
         await db.users.update_one(
@@ -3241,6 +3319,54 @@ async def bulk_reprocess_status(job_id: str, payload: dict = Depends(verify_jwt_
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@api_router.get("/admin/bills/{bill_id}/force-credit-preview")
+async def force_credit_preview(bill_id: str, payload: dict = Depends(verify_jwt_token)):
+    """Returns the auto-calculated force-credit points for this bill (no mutation).
+    Used by the admin UI to show 'You're about to credit X points' before confirm.
+    """
+    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    auto = await _compute_auto_points(float(bill.get("amount") or 0), bill.get("store_name"))
+    return {
+        "bill_id": bill_id,
+        "amount": float(bill.get("amount") or 0),
+        "store_name": bill.get("store_name"),
+        "calculated_points": auto["points"],
+        "rate_pct": auto["rate_pct"],
+        "rate_basis": auto["rate_basis"],
+        "category": auto["category"],
+        "range_label": auto["range_label"],
+        "brand_found": auto["brand_found"],
+    }
+
+
+@api_router.post("/admin/bills/{bill_id}/force-credit")
+async def force_credit_bill(bill_id: str, background_tasks: BackgroundTasks,
+                              payload: dict = Depends(verify_jwt_token)):
+    """Force-credit a single bill using the auto-calculated points (category × range).
+    No admin input needed — system calculates the exact reward per the earn-rate table.
+    """
+    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    if bill.get("status") not in ("manual_review", "pending_review"):
+        raise HTTPException(status_code=400,
+                            detail=f"Bill is in '{bill.get('status')}' state — only pending bills can be force-credited")
+
+    res = await _reprocess_single_bill(
+        bill, re_ocr=False, send_whatsapp_flag=True,
+        background_tasks=background_tasks,
+        force_credit=True, force_credit_percent=0.0  # unused now; kept for sig
+    )
+    return {
+        "success": res.get("action") == "approved",
+        "points_issued": res.get("points", 0),
+        "status": res.get("status"),
+        "error": res.get("error"),
+    }
 
 
 # Karix API Key
