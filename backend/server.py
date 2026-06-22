@@ -2889,12 +2889,23 @@ class BulkReprocessRequest(BaseModel):
     dry_run: bool = False
     limit: int = 200
     send_whatsapp: bool = True
+    # When True, skips Fundle earn_points call and credits locally with
+    # the OCR-extracted amount * `force_credit_percent` / 100. Use this only
+    # after explicit admin approval (e.g. brand still being added to Fundle).
+    force_credit: bool = False
+    force_credit_percent: float = 1.0  # 1% of bill amount by default
 
 
 async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag: bool,
-                                 background_tasks: BackgroundTasks) -> dict:
+                                 background_tasks: BackgroundTasks,
+                                 force_credit: bool = False,
+                                 force_credit_percent: float = 1.0) -> dict:
     """Reprocess one bill: optionally re-OCR, re-apply rules, push to Fundle.
-    Returns {bill_id, action, status, points, error}."""
+    Returns {bill_id, action, status, points, error}.
+
+    If `force_credit=True`, skips Fundle and credits points locally
+    (amount * force_credit_percent / 100). Use for admin overrides.
+    """
     bill_id = bill.get("id")
     user = await db.users.find_one({"id": bill.get("user_id")})
     if not user:
@@ -3004,6 +3015,36 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
         return {"bill_id": bill_id, "action": "manual_review",
                 "status": "manual_review", "points": 0,
                 "error": "Missing amount/bill_no after OCR"}
+
+    # ----- FORCE CREDIT MODE: skip Fundle, credit locally -----
+    if force_credit:
+        points_earned = max(1, int(amount * (force_credit_percent / 100.0)))
+        update_payload.update({
+            "status": "approved",
+            "points_issued": points_earned,
+            "rejection_reason": None,
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+            "processed_by": "admin_bulk_force_credit",
+            "admin_notes": f"Force credited by admin: amount * {force_credit_percent}% = {points_earned} pts (Fundle bypassed)"
+        })
+        await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$inc": {"balance_points": points_earned, "total_earned_points": points_earned}}
+        )
+        if send_whatsapp_flag and phone:
+            try:
+                total_balance_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
+                total_balance = int((total_balance_doc or {}).get("balance_points", 0))
+                msg = (f"Good news! Your bill has been processed.\n\n"
+                       f"Store: {store_name}\nBill No: {bill_no}\nAmount: \u20b9{amount:.0f}\n"
+                       f"Points Earned: {points_earned}\nTotal Balance: {total_balance}\n\n"
+                       f"Thank you for your patience.")
+                background_tasks.add_task(send_whatsapp_text, phone, msg)
+            except Exception as e:
+                logger.warning(f"Force credit WhatsApp send failed: {e}")
+        return {"bill_id": bill_id, "action": "approved",
+                "status": "approved", "points": points_earned, "error": None}
 
     try:
         earn_result = await tagnpay_client.earn_points(
@@ -3124,7 +3165,10 @@ async def bulk_reprocess_bills(request: BulkReprocessRequest,
     # asyncio.create_task is safer than FastAPI's BackgroundTasks here because
     # BackgroundTasks runs *after* the response is sent but is still bound to
     # the request lifecycle on some setups. We want a fully detached task.
-    asyncio.create_task(_run_bulk_reprocess_job(job_id, bills, request.re_ocr, request.send_whatsapp))
+    asyncio.create_task(_run_bulk_reprocess_job(
+        job_id, bills, request.re_ocr, request.send_whatsapp,
+        request.force_credit, request.force_credit_percent
+    ))
 
     return {
         "dry_run": False,
@@ -3136,7 +3180,9 @@ async def bulk_reprocess_bills(request: BulkReprocessRequest,
 
 
 async def _run_bulk_reprocess_job(job_id: str, bills: List[dict],
-                                   re_ocr: bool, send_whatsapp_flag: bool):
+                                   re_ocr: bool, send_whatsapp_flag: bool,
+                                   force_credit: bool = False,
+                                   force_credit_percent: float = 1.0):
     """Background worker: processes each bill, persists progress to DB after every
     iteration so the UI can poll for live updates."""
     from fastapi import BackgroundTasks as _BG
@@ -3147,7 +3193,8 @@ async def _run_bulk_reprocess_job(job_id: str, bills: List[dict],
     for idx, b in enumerate(bills, 1):
         try:
             res = await _reprocess_single_bill(
-                b, re_ocr=re_ocr, send_whatsapp_flag=send_whatsapp_flag, background_tasks=bg
+                b, re_ocr=re_ocr, send_whatsapp_flag=send_whatsapp_flag, background_tasks=bg,
+                force_credit=force_credit, force_credit_percent=force_credit_percent
             )
         except Exception as e:
             logger.exception(f"Bulk reprocess error on bill {b.get('id')}")

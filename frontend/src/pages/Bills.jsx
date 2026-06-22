@@ -61,6 +61,8 @@ const Bills = () => {
   const [bulkTo, setBulkTo] = useState(todayISO);
   const [bulkReOcr, setBulkReOcr] = useState(true);
   const [bulkSendWA, setBulkSendWA] = useState(true);
+  const [bulkForceCredit, setBulkForceCredit] = useState(false);
+  const [bulkForceCreditPct, setBulkForceCreditPct] = useState('1');
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkDryRun, setBulkDryRun] = useState(null);   // { candidates, bills } or null
   const [bulkResult, setBulkResult] = useState(null);    // { summary, results, total_points_credited }
@@ -219,6 +221,50 @@ const Bills = () => {
     try { xhr.send(); } catch { toast.error('Could not send reprocess request.'); }
   };
 
+  // -------- Force Credit (manual approval, bypassing Fundle) --------
+  // Use when Fundle returns 0 points but admin wants to credit the customer
+  // anyway (e.g. brand still being added to Fundle master, customer
+  // goodwill, etc.). Credits locally + sends WhatsApp.
+  const forceCreditBill = async (bill) => {
+    const defaultPts = Math.max(1, Math.round((Number(bill.amount) || 0) * 0.01));
+    const input = window.prompt(
+      `Force credit this bill?\n\nStore: ${bill.store_name || 'Unknown'}\nAmount: ₹${bill.amount || 0}\nUser: ${bill.user_phone}\n\nEnter points to credit (default 1% = ${defaultPts}):`,
+      String(defaultPts)
+    );
+    if (input === null) return; // user cancelled
+    const pts = parseInt(input, 10);
+    if (!pts || pts <= 0) {
+      toast.error('Enter a valid positive points value');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/bills/${bill.id}/process`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          bill_id: bill.id,
+          action: 'approve',
+          points_override: pts,
+          send_whatsapp: true,
+          admin_notes: 'Force credited by admin (Fundle returned 0 points)'
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(`Force credited! ${data.points_issued || pts} pts to ${bill.user_phone}`);
+        fetchBills();
+        fetchPendingBills();
+      } else {
+        toast.error(data.detail || 'Force credit failed');
+      }
+    } catch {
+      toast.error('Network error during force credit');
+    }
+  };
+
   // -------- Bulk Reprocess (date range) --------
   const callBulkReprocess = async (dryRun) => {
     setBulkRunning(true);
@@ -241,6 +287,8 @@ const Bills = () => {
           statuses: ['manual_review', 'pending_review'],
           re_ocr: bulkReOcr,
           send_whatsapp: bulkSendWA,
+          force_credit: bulkForceCredit,
+          force_credit_percent: parseFloat(bulkForceCreditPct) || 1.0,
           dry_run: dryRun,
           limit: 300
         })
@@ -503,15 +551,27 @@ const Bills = () => {
                 Review & Process
               </Button>
               {(bill.status === 'pending_review' || bill.status === 'manual_review') && (
-                <Button 
-                  variant="default"
-                  className="bg-blue-600 hover:bg-blue-700"
-                  onClick={() => reprocessBill(bill.id)}
-                  data-testid={`reprocess-${bill.id}`}
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Reprocess
-                </Button>
+                <>
+                  <Button 
+                    variant="default"
+                    className="bg-blue-600 hover:bg-blue-700"
+                    onClick={() => reprocessBill(bill.id)}
+                    data-testid={`reprocess-${bill.id}`}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Reprocess
+                  </Button>
+                  <Button
+                    variant="default"
+                    className="bg-amber-600 hover:bg-amber-700"
+                    onClick={() => forceCreditBill(bill)}
+                    data-testid={`force-credit-${bill.id}`}
+                    title="Manually credit points if Fundle returned 0 points"
+                  >
+                    <DollarSign className="h-4 w-4 mr-2" />
+                    Force Credit
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -699,6 +759,16 @@ const Bills = () => {
                               >
                                 <RefreshCw className="h-3 w-3 mr-1" />
                                 Reprocess
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="bg-amber-600 hover:bg-amber-700"
+                                onClick={() => forceCreditBill(bill)}
+                                data-testid={`force-credit-all-${bill.id}`}
+                                title="Manually credit points (use when Fundle returned 0 points)"
+                              >
+                                <DollarSign className="h-3 w-3 mr-1" />
+                                Force Credit
                               </Button>
                             </>
                           )}
@@ -943,6 +1013,38 @@ const Bills = () => {
                 <Checkbox id="bulk-wa" checked={bulkSendWA} onCheckedChange={setBulkSendWA} />
                 <label htmlFor="bulk-wa" className="text-sm">Send WhatsApp on approval</label>
               </div>
+            </div>
+
+            {/* Force-credit override (skips Fundle) */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <div className="flex items-center space-x-2">
+                <Checkbox id="bulk-force-credit" checked={bulkForceCredit} onCheckedChange={setBulkForceCredit} data-testid="bulk-force-credit-toggle" />
+                <label htmlFor="bulk-force-credit" className="text-sm font-medium text-amber-800">
+                  Force Credit (bypass Fundle, credit locally)
+                </label>
+              </div>
+              {bulkForceCredit && (
+                <div className="mt-2 ml-6 flex items-center gap-2">
+                  <Label className="text-xs text-amber-700">Credit % of bill amount:</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    max="100"
+                    value={bulkForceCreditPct}
+                    onChange={(e) => setBulkForceCreditPct(e.target.value)}
+                    className="w-20 h-8 text-sm"
+                    data-testid="bulk-force-credit-pct"
+                  />
+                  <span className="text-xs text-amber-700">% (e.g. 1 = 1% of bill total)</span>
+                </div>
+              )}
+              {bulkForceCredit && (
+                <p className="text-xs text-amber-700 mt-2 ml-6">
+                  ⚠ Use this only when Fundle returns 0 points (brand not registered yet, etc.).
+                  Points are credited locally and may diverge from Fundle until the brand is added.
+                </p>
+              )}
             </div>
 
             {/* Dry-run preview */}
