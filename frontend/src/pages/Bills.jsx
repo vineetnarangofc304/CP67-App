@@ -290,8 +290,6 @@ const Bills = () => {
           statuses: ['manual_review', 'pending_review'],
           re_ocr: bulkReOcr,
           send_whatsapp: bulkSendWA,
-          force_credit: bulkForceCredit,
-          force_credit_percent: parseFloat(bulkForceCreditPct) || 1.0,
           dry_run: dryRun,
           limit: 300
         })
@@ -554,27 +552,15 @@ const Bills = () => {
                 Review & Process
               </Button>
               {(bill.status === 'pending_review' || bill.status === 'manual_review') && (
-                <>
-                  <Button 
-                    variant="default"
-                    className="bg-blue-600 hover:bg-blue-700"
-                    onClick={() => reprocessBill(bill.id)}
-                    data-testid={`reprocess-${bill.id}`}
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Reprocess
-                  </Button>
-                  <Button
-                    variant="default"
-                    className="bg-amber-600 hover:bg-amber-700"
-                    onClick={() => forceCreditBill(bill)}
-                    data-testid={`force-credit-${bill.id}`}
-                    title="Manually credit points if Fundle returned 0 points"
-                  >
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    Force Credit
-                  </Button>
-                </>
+                <Button 
+                  variant="default"
+                  className="bg-blue-600 hover:bg-blue-700"
+                  onClick={() => reprocessBill(bill.id)}
+                  data-testid={`reprocess-${bill.id}`}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Reprocess
+                </Button>
               )}
             </div>
           </div>
@@ -762,16 +748,6 @@ const Bills = () => {
                               >
                                 <RefreshCw className="h-3 w-3 mr-1" />
                                 Reprocess
-                              </Button>
-                              <Button
-                                size="sm"
-                                className="bg-amber-600 hover:bg-amber-700"
-                                onClick={() => forceCreditBill(bill)}
-                                data-testid={`force-credit-all-${bill.id}`}
-                                title="Manually credit points (use when Fundle returned 0 points)"
-                              >
-                                <DollarSign className="h-3 w-3 mr-1" />
-                                Force Credit
                               </Button>
                             </>
                           )}
@@ -1016,24 +992,6 @@ const Bills = () => {
                 <Checkbox id="bulk-wa" checked={bulkSendWA} onCheckedChange={setBulkSendWA} />
                 <label htmlFor="bulk-wa" className="text-sm">Send WhatsApp on approval</label>
               </div>
-            </div>
-
-            {/* Force-credit override (skips Fundle, uses auto-calc) */}
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <div className="flex items-center space-x-2">
-                <Checkbox id="bulk-force-credit" checked={bulkForceCredit} onCheckedChange={setBulkForceCredit} data-testid="bulk-force-credit-toggle" />
-                <label htmlFor="bulk-force-credit" className="text-sm font-medium text-amber-800">
-                  Force Credit (bypass Fundle, use brand-category earn rate)
-                </label>
-              </div>
-              {bulkForceCredit && (
-                <p className="text-xs text-amber-700 mt-2 ml-6">
-                  ⚠ Points auto-calculated per bill using <strong>brand category × bill amount range</strong>
-                  (Retail 10-35% / Jewellery 5-17.5%, matching the tier earn-rate table).
-                  Use only when Fundle returns 0 points (brand not registered yet, etc.).
-                  Points are credited locally and may diverge from Fundle until the brand is added.
-                </p>
-              )}
             </div>
 
             {/* Dry-run preview */}

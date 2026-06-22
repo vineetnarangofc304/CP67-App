@@ -2779,11 +2779,22 @@ async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks, payloa
     bill_no = bill.get("bill_no", "")
     bill_date = bill.get("bill_date", "")
     amount = float(bill.get("amount", 0))
-    # IMPORTANT: do NOT re-upload the bill image to Fundle on reprocess. The image
-    # was already attached on first upload (and would add 180 KB of base64 payload
-    # to a flaky remote call, regularly causing the admin UI to time out and show
-    # "Failed to reprocess" — even when Fundle eventually credits the points).
-    image_base64 = None
+    # Send the bill image to Fundle EXACTLY like the WhatsApp upload flow does.
+    # Fundle requires the image for verification — sending None makes it return
+    # "0 points" or "brand not found" even for valid bills.
+    image_url = bill.get("image_url", "") or ""
+    if image_url.startswith("data:"):
+        try:
+            image_base64 = image_url.split(",", 1)[1]
+        except Exception:
+            image_base64 = None
+    elif image_url.startswith("base64:"):
+        image_base64 = image_url[7:]
+    elif image_url:
+        # treat as raw base64 if no scheme prefix
+        image_base64 = image_url
+    else:
+        image_base64 = None
 
     # STEP 3: Call TagnPay earn-points API
     earn_result = await tagnpay_client.earn_points(
@@ -2971,11 +2982,13 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
                                  background_tasks: BackgroundTasks,
                                  force_credit: bool = False,
                                  force_credit_percent: float = 1.0) -> dict:
-    """Reprocess one bill: optionally re-OCR, re-apply rules, push to Fundle.
-    Returns {bill_id, action, status, points, error}.
-
-    If `force_credit=True`, skips Fundle and credits points locally
-    (amount * force_credit_percent / 100). Use for admin overrides.
+    """Reprocess one bill EXACTLY the same way a fresh WhatsApp upload would:
+       1. (Optional) re-OCR the stored image
+       2. Ensure customer is registered with Fundle
+       3. Apply 15-day age rule
+       4. Send to Fundle earn_points with the SAME payload as WhatsApp
+          (mobile, amount, bill_no, bill_date, store_name, AND the bill image)
+       Returns {bill_id, action, status, points, error}.
     """
     bill_id = bill.get("id")
     user = await db.users.find_one({"id": bill.get("user_id")})
@@ -2996,53 +3009,51 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
         "reprocessed_by": "admin_bulk"
     }
 
-    # ----- Step 1: Re-run OCR if requested AND image is available -----
-    if re_ocr:
-        image_url = bill.get("image_url") or ""
-        image_base64 = None
-        if image_url.startswith("data:"):
-            # data:image/jpeg;base64,xxxxx
-            try:
-                image_base64 = image_url.split(",", 1)[1]
-            except Exception:
-                image_base64 = None
-        elif image_url.startswith("base64:"):
-            image_base64 = image_url[7:]
-        elif image_url.startswith("http"):
-            try:
-                async with httpx.AsyncClient(timeout=20.0) as cx:
-                    r = await cx.get(image_url)
-                    if r.status_code == 200:
-                        image_base64 = base64.b64encode(r.content).decode()
-            except Exception as e:
-                logger.warning(f"Bulk reprocess image download failed for {bill_id}: {e}")
+    # ----- Fetch the stored image ONCE — used for both OCR + Fundle call -----
+    image_url = bill.get("image_url") or ""
+    image_base64 = None
+    if image_url.startswith("data:"):
+        try:
+            image_base64 = image_url.split(",", 1)[1]
+        except Exception:
+            image_base64 = None
+    elif image_url.startswith("base64:"):
+        image_base64 = image_url[7:]
+    elif image_url.startswith("http"):
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as cx:
+                r = await cx.get(image_url)
+                if r.status_code == 200:
+                    image_base64 = base64.b64encode(r.content).decode()
+        except Exception as e:
+            logger.warning(f"Bulk reprocess image download failed for {bill_id}: {e}")
 
-        if image_base64:
-            ocr_result = await analyze_bill_image(image_base64)
-            if ocr_result.get("success") and ocr_result.get("data"):
-                d = ocr_result["data"]
-                # Only override fields if OCR returned something useful
-                store_name = d.get("store_name") or store_name
-                bill_no = d.get("bill_no") or bill_no
-                bill_date = d.get("bill_date") or bill_date
-                try:
-                    new_amount = float(d.get("amount") or 0)
-                    if new_amount > 0:
-                        amount = new_amount
-                except (TypeError, ValueError):
-                    pass
-                update_payload.update({
-                    "store_name": store_name,
-                    "bill_no": bill_no,
-                    "bill_date": bill_date,
-                    "amount": amount,
-                    "ocr_confidence": d.get("confidence_score", bill.get("ocr_confidence", 0)),
-                    "ocr_raw_data": d,
-                })
-            else:
-                logger.info(f"Bulk reprocess: OCR still failing for {bill_id}: {ocr_result.get('error')}")
+    # ----- Step 1: Optionally re-run OCR -----
+    if re_ocr and image_base64:
+        ocr_result = await analyze_bill_image(image_base64)
+        if ocr_result.get("success") and ocr_result.get("data"):
+            d = ocr_result["data"]
+            store_name = d.get("store_name") or store_name
+            bill_no = d.get("bill_no") or bill_no
+            bill_date = d.get("bill_date") or bill_date
+            try:
+                new_amount = float(d.get("amount") or 0)
+                if new_amount > 0:
+                    amount = new_amount
+            except (TypeError, ValueError):
+                pass
+            update_payload.update({
+                "store_name": store_name,
+                "bill_no": bill_no,
+                "bill_date": bill_date,
+                "amount": amount,
+                "ocr_confidence": d.get("confidence_score", bill.get("ocr_confidence", 0)),
+                "ocr_raw_data": d,
+            })
         else:
-            logger.info(f"Bulk reprocess: no image available for {bill_id}, skipping re-OCR")
+            logger.info(f"Bulk reprocess: OCR still failing for {bill_id}: {ocr_result.get('error')}")
+    elif re_ocr and not image_base64:
+        logger.info(f"Bulk reprocess: no image available for {bill_id}, skipping re-OCR")
 
     # ----- Step 2: Ensure customer is registered in Fundle -----
     try:
@@ -3077,52 +3088,14 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
         except Exception:
             pass
 
-    # ----- Step 4: Try to earn points via TagnPay -----
+    # ----- Step 4: Send to Fundle earn_points (SAME payload as WhatsApp flow) -----
     if amount <= 0 or not bill_no:
-        # Still missing key data — leave for manual review
         update_payload["status"] = "manual_review"
         update_payload["rejection_reason"] = "OCR could not extract amount/bill_no; manual review required"
         await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
         return {"bill_id": bill_id, "action": "manual_review",
                 "status": "manual_review", "points": 0,
                 "error": "Missing amount/bill_no after OCR"}
-
-    # ----- FORCE CREDIT MODE: skip Fundle, credit locally -----
-    if force_credit:
-        # Use auto-calc based on brand category + bill amount range,
-        # matching the consumer-facing tier earn-rate table.
-        auto = await _compute_auto_points(amount, store_name)
-        points_earned = int(auto["points"])
-        update_payload.update({
-            "status": "approved",
-            "points_issued": points_earned,
-            "rejection_reason": None,
-            "processed_at": datetime.now(timezone.utc).isoformat(),
-            "processed_by": "admin_bulk_force_credit",
-            "admin_notes": (
-                f"Force credited by admin — {auto['rate_basis']} {auto['rate_pct']}% "
-                f"on {auto['range_label']} ({auto['category']}) = {points_earned} pts. "
-                f"Fundle bypassed."
-            )
-        })
-        await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
-        await db.users.update_one(
-            {"id": user["id"]},
-            {"$inc": {"balance_points": points_earned, "total_earned_points": points_earned}}
-        )
-        if send_whatsapp_flag and phone:
-            try:
-                total_balance_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
-                total_balance = int((total_balance_doc or {}).get("balance_points", 0))
-                msg = (f"Good news! Your bill has been processed.\n\n"
-                       f"Store: {store_name}\nBill No: {bill_no}\nAmount: \u20b9{amount:.0f}\n"
-                       f"Points Earned: {points_earned}\nTotal Balance: {total_balance}\n\n"
-                       f"Thank you for your patience.")
-                background_tasks.add_task(send_whatsapp_text, phone, msg)
-            except Exception as e:
-                logger.warning(f"Force credit WhatsApp send failed: {e}")
-        return {"bill_id": bill_id, "action": "approved",
-                "status": "approved", "points": points_earned, "error": None}
 
     try:
         earn_result = await tagnpay_client.earn_points(
@@ -3131,7 +3104,7 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
             bill_number=bill_no,
             bill_date=bill_date or datetime.now().strftime("%Y-%m-%d"),
             store_name=store_name,
-            bill_image_base64=None  # do NOT resend image (180KB payload)
+            bill_image_base64=image_base64  # <-- send image, exactly like WhatsApp upload
         )
     except Exception as e:
         earn_result = {"success": False, "error": str(e)}
