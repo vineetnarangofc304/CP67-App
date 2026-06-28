@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Phone, Shield } from 'lucide-react';
@@ -11,7 +11,14 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const { login } = useConsumerAuth();
+  const { login, token, loading: authLoading } = useConsumerAuth();
+
+  // If session is already valid, skip the Login screen.
+  useEffect(() => {
+    if (!authLoading && token) {
+      navigate('/app/home', { replace: true });
+    }
+  }, [authLoading, token, navigate]);
 
   const sendOTP = async () => {
     if (phone.length < 10) { setError('Enter a valid 10-digit phone number'); return; }

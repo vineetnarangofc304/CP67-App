@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, Gift, ShoppingBag, Star, Sparkles } from 'lucide-react';
+import { useConsumerAuth } from '../ConsumerApp';
 
 const floatingCoins = Array.from({ length: 8 }, (_, i) => ({
   id: i,
@@ -13,6 +14,21 @@ const floatingCoins = Array.from({ length: 8 }, (_, i) => ({
 
 export default function Welcome() {
   const navigate = useNavigate();
+  const { token, loading } = useConsumerAuth();
+
+  // If the user already has a valid session, skip Welcome + Login entirely.
+  // Without this, every TWA cold-start lands at Welcome and forces a new OTP
+  // even though the JWT in localStorage is still valid.
+  useEffect(() => {
+    if (!loading && token) {
+      navigate('/app/home', { replace: true });
+    }
+  }, [loading, token, navigate]);
+
+  if (loading || token) {
+    // Render nothing while we redirect — avoids the flash of Welcome screen.
+    return <div className="consumer-loading"><div className="consumer-spinner" /></div>;
+  }
 
   return (
     <motion.div

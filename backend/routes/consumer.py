@@ -914,43 +914,37 @@ async def upload_bill(
 
 
 async def process_bill_ocr(bill_id: str, image_base64: str, user_id: str, phone: str):
-    """Background task to process bill via Gemini OCR"""
+    """Background task to process bill via Gemini OCR — uses the same
+    analyze_bill_image function as the WhatsApp upload flow (server.py),
+    so the consumer app uses the SAME working OCR pipeline.
+    """
     try:
-        from emergentintegrations.llms.gemini import GeminiConfig, gemini_analyze_image
+        # Import lazily to avoid circular imports (server imports consumer router)
+        from server import analyze_bill_image
 
-        config = GeminiConfig(api_key=_emergent_key, model="gemini-2.0-flash")
+        ocr_result = await analyze_bill_image(image_base64)
+        if not ocr_result.get("success") or not ocr_result.get("data"):
+            err = ocr_result.get("error", "OCR failed")
+            logger.error(f"OCR failed for bill {bill_id}: {err}")
+            await _db.bills.update_one({"id": bill_id}, {"$set": {
+                "status": "manual_review",
+                "rejection_reason": f"OCR failed: {err}"
+            }})
+            await send_app_notification(user_id, "Bill Under Review",
+                "We couldn't auto-read your bill. Our team will review it shortly.", "bill")
+            return
 
-        prompt = """Analyze this shopping bill/receipt image and extract:
-1. Store/Brand name
-2. Bill number / Invoice number
-3. Bill date (in YYYY-MM-DD format)
-4. Total amount (final amount paid)
-5. Is this bill from CP67 Mall, Mohali?
-6. Customer mobile number printed on the bill (10 digits, null if not found)
-
-Return ONLY valid JSON:
-{"store_name": "...", "bill_no": "...", "bill_date": "YYYY-MM-DD", "amount": 0.0, "is_cp67": true/false, "confidence": 0.0, "customer_mobile": "..."}"""
-
-        result = await gemini_analyze_image(
-            config=config,
-            image_base64=image_base64,
-            prompt=prompt
-        )
-
-        # Parse result
-        text = result.strip()
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
-
-        ocr_data = json.loads(text)
-        store_name = ocr_data.get("store_name", "Unknown")
-        bill_no = ocr_data.get("bill_no", "N/A")
-        bill_date = ocr_data.get("bill_date", "")
-        amount = float(ocr_data.get("amount", 0))
-        is_cp67 = ocr_data.get("is_cp67", False)
-        confidence = float(ocr_data.get("confidence", 0))
+        ocr_data = ocr_result["data"]
+        store_name = ocr_data.get("store_name") or "Unknown"
+        bill_no = ocr_data.get("bill_no") or "N/A"
+        bill_date = ocr_data.get("bill_date") or ""
+        try:
+            amount = float(ocr_data.get("amount") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        # analyze_bill_image uses `contains_cp67`, not `is_cp67`
+        is_cp67 = bool(ocr_data.get("contains_cp67") or ocr_data.get("is_cp67"))
+        confidence = float(ocr_data.get("confidence_score") or ocr_data.get("confidence") or 0)
 
         phone_10 = phone[-10:]
 
