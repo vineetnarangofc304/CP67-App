@@ -3,8 +3,8 @@
 # min_api: 21
 # common_typos_disable
 # {"id":"com.android.tools.r8.mapping","version":"2.2"}
-# pg_map_id: f368a5b
-# pg_map_hash: SHA-256 f368a5b5e8242ac3bfb3a461228517dca23a108329996fbbf77ffe6c9c7eadef
+# pg_map_id: 795883a
+# pg_map_hash: SHA-256 795883ac3221969bd0a10170e05a6435de0cc56920739b12bf70f8581fd28ccf
 android.support.customtabs.ICustomTabsCallback -> a.a:
 # {"id":"sourceFile","fileName":"ICustomTabsCallback.java"}
     java.lang.String DESCRIPTOR -> a
@@ -11659,22 +11659,22 @@ androidx.core.R$styleable -> s.c:
     7:70:void <clinit>():0:0 -> <clinit>
 androidx.core.app.ActivityCompat -> androidx.core.app.a:
 # {"id":"sourceFile","fileName":"ActivityCompat.java"}
-    1:7:void requestPermissions(android.app.Activity,java.lang.String[],int):512:512 -> g
-    8:10:void requestPermissions(android.app.Activity,java.lang.String[],int):513:513 -> g
-    11:18:void requestPermissions(android.app.Activity,java.lang.String[],int):514:514 -> g
-    19:24:void requestPermissions(android.app.Activity,java.lang.String[],int):519:519 -> g
-    25:34:void requestPermissions(android.app.Activity,java.lang.String[],int):520:520 -> g
-    35:44:void requestPermissions(android.app.Activity,java.lang.String[],int):521:521 -> g
-    45:56:void requestPermissions(android.app.Activity,java.lang.String[],int):515:515 -> g
-    57:76:void requestPermissions(android.app.Activity,java.lang.String[],int):516:516 -> g
-    77:82:void requestPermissions(android.app.Activity,java.lang.String[],int):526:526 -> g
-    83:90:void requestPermissions(android.app.Activity,java.lang.String[],int):528:528 -> g
-    91:95:void requestPermissions(android.app.Activity,java.lang.String[],int):530:530 -> g
-    96:98:void requestPermissions(android.app.Activity,java.lang.String[],int):533:533 -> g
-    99:110:void requestPermissions(android.app.Activity,java.lang.String[],int):534:534 -> g
-    111:118:void requestPermissions(android.app.Activity,java.lang.String[],int):535:535 -> g
-    119:124:void requestPermissions(android.app.Activity,java.lang.String[],int):540:540 -> g
-    125:128:void requestPermissions(android.app.Activity,java.lang.String[],int):545:545 -> g
+    1:7:void requestPermissions(android.app.Activity,java.lang.String[],int):512:512 -> h
+    8:10:void requestPermissions(android.app.Activity,java.lang.String[],int):513:513 -> h
+    11:18:void requestPermissions(android.app.Activity,java.lang.String[],int):514:514 -> h
+    19:24:void requestPermissions(android.app.Activity,java.lang.String[],int):519:519 -> h
+    25:34:void requestPermissions(android.app.Activity,java.lang.String[],int):520:520 -> h
+    35:44:void requestPermissions(android.app.Activity,java.lang.String[],int):521:521 -> h
+    45:56:void requestPermissions(android.app.Activity,java.lang.String[],int):515:515 -> h
+    57:76:void requestPermissions(android.app.Activity,java.lang.String[],int):516:516 -> h
+    77:82:void requestPermissions(android.app.Activity,java.lang.String[],int):526:526 -> h
+    83:90:void requestPermissions(android.app.Activity,java.lang.String[],int):528:528 -> h
+    91:95:void requestPermissions(android.app.Activity,java.lang.String[],int):530:530 -> h
+    96:98:void requestPermissions(android.app.Activity,java.lang.String[],int):533:533 -> h
+    99:110:void requestPermissions(android.app.Activity,java.lang.String[],int):534:534 -> h
+    111:118:void requestPermissions(android.app.Activity,java.lang.String[],int):535:535 -> h
+    119:124:void requestPermissions(android.app.Activity,java.lang.String[],int):540:540 -> h
+    125:128:void requestPermissions(android.app.Activity,java.lang.String[],int):545:545 -> h
 androidx.core.app.ActivityCompat$Api23Impl -> androidx.core.app.a$a:
 # {"id":"sourceFile","fileName":"ActivityCompat.java"}
     1:2:void onSharedElementsReady(java.lang.Object):914:914 -> a
@@ -11772,14 +11772,19 @@ androidx.core.content.ContextCompat -> androidx.core.content.a:
 # {"id":"sourceFile","fileName":"ContextCompat.java"}
     java.lang.Object sSync -> a
     1:8:void <clinit>():177:177 -> <clinit>
-    1:6:int getColor(android.content.Context,int):528:528 -> a
-    7:11:int getColor(android.content.Context,int):529:529 -> a
-    12:20:int getColor(android.content.Context,int):531:531 -> a
-    1:13:android.content.res.ColorStateList getColorStateList(android.content.Context,int):508:508 -> b
-    1:5:android.graphics.drawable.Drawable getDrawable(android.content.Context,int):485:485 -> c
-    1:5:java.io.File[] getExternalCacheDirs(android.content.Context):466:466 -> d
-    1:5:java.io.File[] getExternalFilesDirs(android.content.Context,java.lang.String):417:417 -> e
-    1:4:void startActivity(android.content.Context,android.content.Intent,android.os.Bundle):295:295 -> f
+    1:5:int checkSelfPermission(android.content.Context,java.lang.String):545:545 -> a
+    6:13:int checkSelfPermission(android.content.Context,java.lang.String):546:546 -> a
+    14:19:int checkSelfPermission(android.content.Context,java.lang.String):547:547 -> a
+    20:33:int checkSelfPermission(android.content.Context,java.lang.String):548:548 -> a
+    34:46:int checkSelfPermission(android.content.Context,java.lang.String):552:552 -> a
+    1:6:int getColor(android.content.Context,int):528:528 -> b
+    7:11:int getColor(android.content.Context,int):529:529 -> b
+    12:20:int getColor(android.content.Context,int):531:531 -> b
+    1:13:android.content.res.ColorStateList getColorStateList(android.content.Context,int):508:508 -> c
+    1:5:android.graphics.drawable.Drawable getDrawable(android.content.Context,int):485:485 -> d
+    1:5:java.io.File[] getExternalCacheDirs(android.content.Context):466:466 -> e
+    1:5:java.io.File[] getExternalFilesDirs(android.content.Context,java.lang.String):417:417 -> f
+    1:4:void startActivity(android.content.Context,android.content.Intent,android.os.Bundle):295:295 -> g
 androidx.core.content.ContextCompat$Api21Impl -> androidx.core.content.a$a:
 # {"id":"sourceFile","fileName":"ContextCompat.java"}
     1:5:java.io.File getCodeCacheDir(android.content.Context):1059:1059 -> a
@@ -24622,6 +24627,112 @@ com.homelandadvantage.cp67.LauncherActivity -> com.homelandadvantage.cp67.Launch
     4:11:void onCreate(android.os.Bundle):38:38 -> onCreate
     12:16:void onCreate(android.os.Bundle):39:39 -> onCreate
     17:20:void onCreate(android.os.Bundle):41:41 -> onCreate
+com.homelandadvantage.cp67.WebViewActivity -> com.homelandadvantage.cp67.WebViewActivity:
+# {"id":"sourceFile","fileName":"WebViewActivity.java"}
+    android.webkit.WebView webView -> a
+    android.webkit.ValueCallback fileUploadCallback -> b
+    android.webkit.PermissionRequest pendingPermissionRequest -> c
+    1:4:void <init>():47:47 -> <init>
+    1:3:android.webkit.ValueCallback access$000(com.homelandadvantage.cp67.WebViewActivity):47:47 -> a
+    1:3:android.webkit.ValueCallback access$002(com.homelandadvantage.cp67.WebViewActivity,android.webkit.ValueCallback):47:47 -> b
+    1:3:android.webkit.PermissionRequest access$102(com.homelandadvantage.cp67.WebViewActivity,android.webkit.PermissionRequest):47:47 -> c
+    1:7:void onActivityResult(int,int,android.content.Intent):186:186 -> onActivityResult
+    8:18:void onActivityResult(int,int,android.content.Intent):188:188 -> onActivityResult
+    19:26:void onActivityResult(int,int,android.content.Intent):191:191 -> onActivityResult
+    27:39:void onActivityResult(int,int,android.content.Intent):192:192 -> onActivityResult
+    40:45:void onActivityResult(int,int,android.content.Intent):193:193 -> onActivityResult
+    46:53:void onActivityResult(int,int,android.content.Intent):194:194 -> onActivityResult
+    54:57:void onActivityResult(int,int,android.content.Intent):195:195 -> onActivityResult
+    58:77:void onActivityResult(int,int,android.content.Intent):197:197 -> onActivityResult
+    78:82:void onActivityResult(int,int,android.content.Intent):201:201 -> onActivityResult
+    83:85:void onActivityResult(int,int,android.content.Intent):202:202 -> onActivityResult
+    1:10:void onBackPressed():208:208 -> onBackPressed
+    11:16:void onBackPressed():209:209 -> onBackPressed
+    17:20:void onBackPressed():211:211 -> onBackPressed
+    1:3:void onCreate(android.os.Bundle):60:60 -> onCreate
+    4:16:void onCreate(android.os.Bundle):63:63 -> onCreate
+    17:29:void onCreate(android.os.Bundle):64:64 -> onCreate
+    30:32:void onCreate(android.os.Bundle):65:65 -> onCreate
+    33:37:void onCreate(android.os.Bundle):67:67 -> onCreate
+    38:46:void onCreate(android.os.Bundle):68:68 -> onCreate
+    47:53:void onCreate(android.os.Bundle):70:70 -> onCreate
+    54:59:void onCreate(android.os.Bundle):71:71 -> onCreate
+    60:64:void onCreate(android.os.Bundle):74:74 -> onCreate
+    65:69:void onCreate(android.os.Bundle):75:75 -> onCreate
+    70:72:void onCreate(android.os.Bundle):77:77 -> onCreate
+    73:79:void onCreate(android.os.Bundle):79:79 -> onCreate
+    80:82:void onCreate(android.os.Bundle):80:80 -> onCreate
+    83:85:void onCreate(android.os.Bundle):81:81 -> onCreate
+    86:88:void onCreate(android.os.Bundle):82:82 -> onCreate
+    89:91:void onCreate(android.os.Bundle):83:83 -> onCreate
+    92:95:void onCreate(android.os.Bundle):84:84 -> onCreate
+    96:98:void onCreate(android.os.Bundle):85:85 -> onCreate
+    99:101:void onCreate(android.os.Bundle):86:86 -> onCreate
+    102:104:void onCreate(android.os.Bundle):87:87 -> onCreate
+    105:107:void onCreate(android.os.Bundle):88:88 -> onCreate
+    108:110:void onCreate(android.os.Bundle):89:89 -> onCreate
+    111:114:void onCreate(android.os.Bundle):90:90 -> onCreate
+    115:117:void onCreate(android.os.Bundle):91:91 -> onCreate
+    118:141:void onCreate(android.os.Bundle):92:92 -> onCreate
+    142:148:void onCreate(android.os.Bundle):96:96 -> onCreate
+    149:159:void onCreate(android.os.Bundle):97:97 -> onCreate
+    160:166:void onCreate(android.os.Bundle):99:99 -> onCreate
+    167:176:void onCreate(android.os.Bundle):102:102 -> onCreate
+    177:186:void onCreate(android.os.Bundle):118:118 -> onCreate
+    187:194:void onCreate(android.os.Bundle):167:167 -> onCreate
+    1:4:void onDestroy():217:217 -> onDestroy
+    5:7:void onDestroy():218:218 -> onDestroy
+    8:13:void onDestroy():219:219 -> onDestroy
+    14:15:void onDestroy():220:220 -> onDestroy
+    16:19:void onDestroy():222:222 -> onDestroy
+    1:7:void onRequestPermissionsResult(int,java.lang.String[],int[]):173:173 -> onRequestPermissionsResult
+    8:11:void onRequestPermissionsResult(int,java.lang.String[],int[]):174:174 -> onRequestPermissionsResult
+    12:19:void onRequestPermissionsResult(int,java.lang.String[],int[]):175:175 -> onRequestPermissionsResult
+    20:29:void onRequestPermissionsResult(int,java.lang.String[],int[]):176:176 -> onRequestPermissionsResult
+    30:33:void onRequestPermissionsResult(int,java.lang.String[],int[]):178:178 -> onRequestPermissionsResult
+    34:36:void onRequestPermissionsResult(int,java.lang.String[],int[]):180:180 -> onRequestPermissionsResult
+com.homelandadvantage.cp67.WebViewActivity$1 -> com.homelandadvantage.cp67.WebViewActivity$a:
+# {"id":"sourceFile","fileName":"WebViewActivity.java"}
+    com.homelandadvantage.cp67.WebViewActivity this$0 -> a
+    1:6:void <init>(com.homelandadvantage.cp67.WebViewActivity):102:102 -> <init>
+    1:4:boolean shouldOverrideUrlLoading(android.webkit.WebView,android.webkit.WebResourceRequest):105:105 -> shouldOverrideUrlLoading
+    5:10:boolean shouldOverrideUrlLoading(android.webkit.WebView,android.webkit.WebResourceRequest):106:106 -> shouldOverrideUrlLoading
+    11:20:boolean shouldOverrideUrlLoading(android.webkit.WebView,android.webkit.WebResourceRequest):108:108 -> shouldOverrideUrlLoading
+    21:34:boolean shouldOverrideUrlLoading(android.webkit.WebView,android.webkit.WebResourceRequest):112:112 -> shouldOverrideUrlLoading
+com.homelandadvantage.cp67.WebViewActivity$2 -> com.homelandadvantage.cp67.WebViewActivity$b:
+# {"id":"sourceFile","fileName":"WebViewActivity.java"}
+    com.homelandadvantage.cp67.WebViewActivity this$0 -> a
+    1:6:void <init>(com.homelandadvantage.cp67.WebViewActivity):118:118 -> <init>
+    4:7:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):125:125 -> a
+      # {"id":"com.android.tools.r8.residualsignature","signature":"(Lcom/homelandadvantage/cp67/WebViewActivity$b;Landroid/webkit/PermissionRequest;)V"}
+    8:16:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):127:127 -> a
+    17:28:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):128:128 -> a
+    29:32:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):131:131 -> a
+    33:42:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):135:135 -> a
+    43:50:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):137:137 -> a
+    51:55:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):139:139 -> a
+    56:67:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):140:140 -> a
+    1:11:void onPermissionRequest(android.webkit.PermissionRequest):121:121 -> onPermissionRequest
+    1:9:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):150:150 -> onShowFileChooser
+    10:18:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):151:151 -> onShowFileChooser
+    19:23:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):153:153 -> onShowFileChooser
+    24:27:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):155:155 -> onShowFileChooser
+    28:32:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):157:157 -> onShowFileChooser
+    33:41:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):158:158 -> onShowFileChooser
+    42:48:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):161:161 -> onShowFileChooser
+com.homelandadvantage.cp67.WebViewActivity$2$$ExternalSyntheticLambda0 -> com.homelandadvantage.cp67.a:
+# {"id":"sourceFile","fileName":"R8$$SyntheticClass"}
+# {"id":"com.android.tools.r8.synthesized"}
+    com.homelandadvantage.cp67.WebViewActivity$2 com.homelandadvantage.cp67.WebViewActivity$2$$InternalSyntheticLambda$1$d7632780b50eeb7c8f75fd6a356a17ea4b35a9c144093e5e12a9d022ffd0918a$0.f$0 -> a
+      # {"id":"com.android.tools.r8.residualsignature","signature":"Lcom/homelandadvantage/cp67/WebViewActivity$b;"}
+      # {"id":"com.android.tools.r8.synthesized"}
+    android.webkit.PermissionRequest com.homelandadvantage.cp67.WebViewActivity$2$$InternalSyntheticLambda$1$d7632780b50eeb7c8f75fd6a356a17ea4b35a9c144093e5e12a9d022ffd0918a$0.f$1 -> b
+      # {"id":"com.android.tools.r8.synthesized"}
+    1:1:void <init>(com.homelandadvantage.cp67.WebViewActivity$2,android.webkit.PermissionRequest):0:0 -> <init>
+      # {"id":"com.android.tools.r8.synthesized"}
+      # {"id":"com.android.tools.r8.residualsignature","signature":"(Lcom/homelandadvantage/cp67/WebViewActivity$b;Landroid/webkit/PermissionRequest;)V"}
+    1:1:void run():0:0 -> run
+      # {"id":"com.android.tools.r8.synthesized"}
 kotlin.Lazy -> N.a:
 # {"id":"sourceFile","fileName":"Lazy.kt"}
     java.lang.Object getValue() -> getValue

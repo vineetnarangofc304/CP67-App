@@ -10,6 +10,7 @@
 -keep class com.homelandadvantage.cp67.Application { <init>(); }
 -keep class com.homelandadvantage.cp67.DelegationService { <init>(); }
 -keep class com.homelandadvantage.cp67.LauncherActivity { <init>(); }
+-keep class com.homelandadvantage.cp67.WebViewActivity { <init>(); }
 -keep class android.widget.Space { <init>(android.content.Context, android.util.AttributeSet); }
 
 -keep class androidx.appcompat.app.AlertController$RecycleListView { <init>(android.content.Context, android.util.AttributeSet); }
@@ -173,6 +174,10 @@
 }
 
 # End of content from /root/.gradle/caches/8.11.1/transforms/183ebbc8ed821348f80a6d36d20b75e3/transformed/appcompat-1.7.0/proguard.txt
+# The proguard configuration file for the following section is /root/.gradle/caches/8.11.1/transforms/be57bd43967b699c12a0f6b8bd2f21c6/transformed/browser-1.9.0-alpha04/proguard.txt
+# Intentionally empty proguard rules to indicate this library is safe to shrink
+
+# End of content from /root/.gradle/caches/8.11.1/transforms/be57bd43967b699c12a0f6b8bd2f21c6/transformed/browser-1.9.0-alpha04/proguard.txt
 # The proguard configuration file for the following section is /root/.gradle/caches/8.11.1/transforms/48bafeae36779f423d74bd8112b18853/transformed/fragment-1.5.4/proguard.txt
 # Copyright (C) 2020 The Android Open Source Project
 #
@@ -195,12 +200,8 @@
 }
 
 # End of content from /root/.gradle/caches/8.11.1/transforms/48bafeae36779f423d74bd8112b18853/transformed/fragment-1.5.4/proguard.txt
-# The proguard configuration file for the following section is /root/.gradle/caches/8.11.1/transforms/be57bd43967b699c12a0f6b8bd2f21c6/transformed/browser-1.9.0-alpha04/proguard.txt
-# Intentionally empty proguard rules to indicate this library is safe to shrink
-
-# End of content from /root/.gradle/caches/8.11.1/transforms/be57bd43967b699c12a0f6b8bd2f21c6/transformed/browser-1.9.0-alpha04/proguard.txt
-# The proguard configuration file for the following section is /root/.gradle/caches/8.11.1/transforms/e3333dea171f507cf27a6711021ecc98/transformed/vectordrawable-animated-1.1.0/proguard.txt
-# Copyright (C) 2016 The Android Open Source Project
+# The proguard configuration file for the following section is /root/.gradle/caches/8.11.1/transforms/2d883c2f9b398e3ed01a138584927eec/transformed/savedstate-1.2.1/proguard.txt
+# Copyright (C) 2019 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -214,32 +215,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# keep setters in VectorDrawables so that animations can still work.
--keepclassmembers class androidx.vectordrawable.graphics.drawable.VectorDrawableCompat$* {
-   void set*(***);
-   *** get*();
+-keepclassmembers,allowobfuscation class * implements androidx.savedstate.SavedStateRegistry$AutoRecreated {
+    <init>();
 }
 
-# End of content from /root/.gradle/caches/8.11.1/transforms/e3333dea171f507cf27a6711021ecc98/transformed/vectordrawable-animated-1.1.0/proguard.txt
-# The proguard configuration file for the following section is /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/proguard.txt
-# Never inline methods, but allow shrinking and obfuscation.
--keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.view.ViewCompat$Api* {
-  <methods>;
-}
--keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.view.WindowInsetsCompat$*Impl* {
-  <methods>;
-}
--keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.app.NotificationCompat$*$Api*Impl {
-  <methods>;
-}
--keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.os.UserHandleCompat$Api*Impl {
-  <methods>;
-}
--keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.widget.EdgeEffectCompat$Api*Impl {
-  <methods>;
-}
-
-# End of content from /root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/proguard.txt
+# End of content from /root/.gradle/caches/8.11.1/transforms/2d883c2f9b398e3ed01a138584927eec/transformed/savedstate-1.2.1/proguard.txt
 # The proguard configuration file for the following section is /root/.gradle/caches/8.11.1/transforms/22a8ec787f47654381fd448fc0dedaa1/transformed/lifecycle-viewmodel-2.6.2/proguard.txt
 -keepclassmembers,allowobfuscation class * extends androidx.lifecycle.ViewModel {
     <init>();
@@ -289,8 +269,8 @@
 }
 
 # End of content from /root/.gradle/caches/8.11.1/transforms/97fbeb2fc45778cc7a5715346a800094/transformed/lifecycle-viewmodel-savedstate-2.6.2/proguard.txt
-# The proguard configuration file for the following section is /root/.gradle/caches/8.11.1/transforms/2d883c2f9b398e3ed01a138584927eec/transformed/savedstate-1.2.1/proguard.txt
-# Copyright (C) 2019 The Android Open Source Project
+# The proguard configuration file for the following section is /root/.gradle/caches/8.11.1/transforms/e3333dea171f507cf27a6711021ecc98/transformed/vectordrawable-animated-1.1.0/proguard.txt
+# Copyright (C) 2016 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -304,11 +284,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
--keepclassmembers,allowobfuscation class * implements androidx.savedstate.SavedStateRegistry$AutoRecreated {
-    <init>();
+# keep setters in VectorDrawables so that animations can still work.
+-keepclassmembers class androidx.vectordrawable.graphics.drawable.VectorDrawableCompat$* {
+   void set*(***);
+   *** get*();
 }
 
-# End of content from /root/.gradle/caches/8.11.1/transforms/2d883c2f9b398e3ed01a138584927eec/transformed/savedstate-1.2.1/proguard.txt
+# End of content from /root/.gradle/caches/8.11.1/transforms/e3333dea171f507cf27a6711021ecc98/transformed/vectordrawable-animated-1.1.0/proguard.txt
+# The proguard configuration file for the following section is /root/.gradle/caches/8.11.1/transforms/be9373992e7383486f75afab7a551742/transformed/core-1.13.1/proguard.txt
+# Never inline methods, but allow shrinking and obfuscation.
+-keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.view.ViewCompat$Api* {
+  <methods>;
+}
+-keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.view.WindowInsetsCompat$*Impl* {
+  <methods>;
+}
+-keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.app.NotificationCompat$*$Api*Impl {
+  <methods>;
+}
+-keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.os.UserHandleCompat$Api*Impl {
+  <methods>;
+}
+-keepclassmembernames,allowobfuscation,allowshrinking class androidx.core.widget.EdgeEffectCompat$Api*Impl {
+  <methods>;
+}
+
+# End of content from /root/.gradle/caches/8.11.1/transforms/be9373992e7383486f75afab7a551742/transformed/core-1.13.1/proguard.txt
 # The proguard configuration file for the following section is /root/.gradle/caches/8.11.1/transforms/6adcf68e2ce0cd3fec7be9587d70dc49/transformed/rules/lib/META-INF/com.android.tools/r8-from-1.6.0/coroutines.pro
 # Allow R8 to optimize away the FastServiceLoader.
 # Together with ServiceLoader optimization in R8

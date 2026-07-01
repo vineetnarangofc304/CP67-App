@@ -3954,7 +3954,6 @@ androidx.core.content.ContextCompat:
     public static final int RECEIVER_VISIBLE_TO_INSTANT_APPS
     private static final java.lang.String TAG
     protected void <init>()
-    public static int checkSelfPermission(android.content.Context,java.lang.String)
     public static android.content.Context createAttributionContext(android.content.Context,java.lang.String)
     public static android.content.Context createDeviceProtectedStorageContext(android.content.Context)
     private static java.io.File createFilesDir(java.io.File)
@@ -10286,6 +10285,11 @@ com.homelandadvantage.cp67.R$raw
 com.homelandadvantage.cp67.R$string
 com.homelandadvantage.cp67.R$xml
 com.homelandadvantage.cp67.R
+com.homelandadvantage.cp67.WebViewActivity:
+    private static final int REQ_CAMERA_PERM
+    private static final int REQ_FILE_CHOOSER
+    private static final java.lang.String START_URL
+    private static final java.lang.String TAG
 kotlin.ArrayIntrinsicsKt
 kotlin.BuilderInference
 kotlin.CharCodeJVMKt

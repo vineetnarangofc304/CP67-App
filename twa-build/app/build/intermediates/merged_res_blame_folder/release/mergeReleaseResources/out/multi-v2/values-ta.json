@@ -4,23 +4,6 @@
             "outputFile": "com.homelandadvantage.cp67.app-mergeReleaseResources-2:/values-ta/values-ta.xml",
             "map": [
                 {
-                    "source": "/root/.gradle/caches/8.11.1/transforms/a5429f7b20c607b890f08b5283ad4ec0/transformed/core-1.13.0/res/values-ta/values-ta.xml",
-                    "from": {
-                        "startLines": "2,3,4,5,6,7,8,9",
-                        "startColumns": "4,4,4,4,4,4,4,4",
-                        "startOffsets": "55,151,254,353,451,558,673,801",
-                        "endColumns": "95,102,98,97,106,114,127,100",
-                        "endOffsets": "146,249,348,446,553,668,796,897"
-                    },
-                    "to": {
-                        "startLines": "29,30,31,32,33,34,35,41",
-                        "startColumns": "4,4,4,4,4,4,4,4",
-                        "startOffsets": "2871,2967,3070,3169,3267,3374,3489,4129",
-                        "endColumns": "95,102,98,97,106,114,127,100",
-                        "endOffsets": "2962,3065,3164,3262,3369,3484,3612,4225"
-                    }
-                },
-                {
                     "source": "/root/.gradle/caches/8.11.1/transforms/be57bd43967b699c12a0f6b8bd2f21c6/transformed/browser-1.9.0-alpha04/res/values-ta/values-ta.xml",
                     "from": {
                         "startLines": "2,3,4,5",
@@ -35,6 +18,23 @@
                         "startOffsets": "3617,3734,3836,3943",
                         "endColumns": "116,101,106,103",
                         "endOffsets": "3729,3831,3938,4042"
+                    }
+                },
+                {
+                    "source": "/root/.gradle/caches/8.11.1/transforms/be9373992e7383486f75afab7a551742/transformed/core-1.13.1/res/values-ta/values-ta.xml",
+                    "from": {
+                        "startLines": "2,3,4,5,6,7,8,9",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,151,254,353,451,558,673,801",
+                        "endColumns": "95,102,98,97,106,114,127,100",
+                        "endOffsets": "146,249,348,446,553,668,796,897"
+                    },
+                    "to": {
+                        "startLines": "29,30,31,32,33,34,35,41",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "2871,2967,3070,3169,3267,3374,3489,4129",
+                        "endColumns": "95,102,98,97,106,114,127,100",
+                        "endOffsets": "2962,3065,3164,3262,3369,3484,3612,4225"
                     }
                 },
                 {

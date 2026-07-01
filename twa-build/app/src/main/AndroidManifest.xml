@@ -26,6 +26,8 @@
         <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
         <uses-permission android:name="android.permission.CAMERA"/>
         <uses-permission android:name="android.permission.INTERNET"/>
+        <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+        <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
         <uses-feature android:name="android.hardware.camera" android:required="false"/>
         <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
     
@@ -79,6 +81,24 @@
                 </intent-filter>
             </activity>
         
+
+        <!-- WebView-based launcher activity — REPLACES TWA/Chrome Custom Tabs
+             so the app opens without Chrome-in-background and camera works
+             reliably via WebView's native PermissionRequest API. -->
+        <activity
+            android:name=".WebViewActivity"
+            android:label="@string/launcherName"
+            android:theme="@android:style/Theme.NoTitleBar"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:hardwareAccelerated="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+            android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
 
         <activity android:name="LauncherActivity"
             android:alwaysRetainTaskState="true"
@@ -145,7 +165,6 @@
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
             <intent-filter android:autoVerify="true">

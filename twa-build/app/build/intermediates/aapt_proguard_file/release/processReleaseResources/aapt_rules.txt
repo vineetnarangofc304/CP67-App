@@ -9,6 +9,7 @@
 -keep class com.homelandadvantage.cp67.Application { <init>(); }
 -keep class com.homelandadvantage.cp67.DelegationService { <init>(); }
 -keep class com.homelandadvantage.cp67.LauncherActivity { <init>(); }
+-keep class com.homelandadvantage.cp67.WebViewActivity { <init>(); }
 -keep class android.widget.Space { <init>(android.content.Context, android.util.AttributeSet); }
 
 -keep class androidx.appcompat.app.AlertController$RecycleListView { <init>(android.content.Context, android.util.AttributeSet); }
