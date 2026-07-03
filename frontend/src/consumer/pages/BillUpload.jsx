@@ -13,6 +13,7 @@ export default function BillUpload() {
   const [cameraError, setCameraError] = useState(null);
   const [facingMode, setFacingMode] = useState('environment');
   const fileRef = useRef();
+  const cameraRef = useRef();
   const videoRef = useRef();
   const canvasRef = useRef();
   const streamRef = useRef(null);
@@ -254,7 +255,7 @@ export default function BillUpload() {
               )}
 
               <div className="capture-buttons">
-                <button className="capture-btn primary" onClick={startCamera} data-testid="start-camera-btn">
+                <button className="capture-btn primary" onClick={() => cameraRef.current?.click()} data-testid="start-camera-btn">
                   <Camera size={20} /> Open Camera
                 </button>
                 <button className="capture-btn secondary" onClick={() => fileRef.current?.click()} data-testid="gallery-btn">
@@ -262,6 +263,17 @@ export default function BillUpload() {
                 </button>
               </div>
 
+              {/* Native Android camera capture — bypasses the flaky WebView
+                  <video> srcObject rendering and uses the built-in system
+                  camera app, which is reliable across all devices. */}
+              <input
+                ref={cameraRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleFile}
+                hidden
+              />
               <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} hidden />
             </div>
           </motion.div>

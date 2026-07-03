@@ -1,14 +1,6 @@
 -keep class androidx.core.app.CoreComponentFactory { <init>(); }
 -keep class androidx.core.content.FileProvider { <init>(); }
--keep class androidx.profileinstaller.ProfileInstallReceiver { <init>(); }
 -keep class androidx.startup.InitializationProvider { <init>(); }
--keep class com.google.androidbrowserhelper.trusted.FocusActivity { <init>(); }
--keep class com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity { <init>(); }
--keep class com.google.androidbrowserhelper.trusted.NotificationPermissionRequestActivity { <init>(); }
--keep class com.google.androidbrowserhelper.trusted.WebViewFallbackActivity { <init>(); }
--keep class com.homelandadvantage.cp67.Application { <init>(); }
--keep class com.homelandadvantage.cp67.DelegationService { <init>(); }
--keep class com.homelandadvantage.cp67.LauncherActivity { <init>(); }
 -keep class com.homelandadvantage.cp67.WebViewActivity { <init>(); }
 -keep class android.widget.Space { <init>(android.content.Context, android.util.AttributeSet); }
 
@@ -47,8 +39,6 @@
 -keep class androidx.appcompat.widget.Toolbar { <init>(android.content.Context, android.util.AttributeSet); }
 
 -keep class androidx.appcompat.widget.ViewStubCompat { <init>(android.content.Context, android.util.AttributeSet); }
-
--keep class androidx.browser.browseractions.BrowserActionsFallbackMenuView { <init>(android.content.Context, android.util.AttributeSet); }
 
 -keep class androidx.core.widget.NestedScrollView { <init>(android.content.Context, android.util.AttributeSet); }
 

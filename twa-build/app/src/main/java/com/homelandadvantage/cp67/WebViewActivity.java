@@ -6,10 +6,8 @@
  *   - Camera works reliably (we grant WebView.PermissionRequest natively)
  *   - Gallery picker works via onShowFileChooser
  *
- * The Bubblewrap-generated LauncherActivity/DelegationService remain in the APK
- * so Digital Asset Links / notification delegation continue to work if
- * a browser deep-links back into the app; but the default launcher intent
- * routes here first.
+ * All TWA/Bubblewrap classes (LauncherActivity, DelegationService, Application)
+ * have been removed in v1.5+ so Chrome never launches in the background.
  */
 package com.homelandadvantage.cp67;
 
