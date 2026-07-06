@@ -2996,10 +2996,6 @@ androidx.core.content.ContextCompat:
 androidx.core.content.ContextKt
 androidx.core.content.FileProvider$Api21Impl:
     private void <init>()
-androidx.core.content.FileProvider$PathStrategy:
-    public abstract android.net.Uri getUriForFile(java.io.File)
-androidx.core.content.FileProvider$SimplePathStrategy:
-    public android.net.Uri getUriForFile(java.io.File)
 androidx.core.content.FileProvider:
     private static final java.lang.String ATTR_NAME
     private static final java.lang.String ATTR_PATH
@@ -3013,7 +3009,6 @@ androidx.core.content.FileProvider:
     private static final java.lang.String TAG_FILES_PATH
     private static final java.lang.String TAG_ROOT_PATH
     protected void <init>(int)
-    public static android.net.Uri getUriForFile(android.content.Context,java.lang.String,java.io.File)
     public static android.net.Uri getUriForFile(android.content.Context,java.lang.String,java.io.File,java.lang.String)
 androidx.core.content.IntentCompat$Api15Impl
 androidx.core.content.IntentCompat$Api33Impl

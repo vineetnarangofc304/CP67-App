@@ -3,8 +3,8 @@
 # min_api: 21
 # common_typos_disable
 # {"id":"com.android.tools.r8.mapping","version":"2.2"}
-# pg_map_id: 71317b4
-# pg_map_hash: SHA-256 71317b4422477159ea0365d337de4a33df64cca6cd6cc6706249f63cf7a800e2
+# pg_map_id: ce5c533
+# pg_map_hash: SHA-256 ce5c533a74380d7ed6e7c6ca16a082a567a4b537239c9dbb87b6d2138529ff6f
 android.support.v4.app.RemoteActionCompatParcelizer -> android.support.v4.app.RemoteActionCompatParcelizer:
 # {"id":"sourceFile","fileName":"RemoteActionCompatParcelizer.java"}
     1:4:void <init>():11:11 -> <init>
@@ -11215,48 +11215,50 @@ androidx.core.content.FileProvider -> androidx.core.content.FileProvider:
     23:31:androidx.core.content.FileProvider$PathStrategy getPathStrategy(android.content.Context,java.lang.String,int):650:650 -> e
     32:39:androidx.core.content.FileProvider$PathStrategy getPathStrategy(android.content.Context,java.lang.String,int):647:647 -> e
     40:43:androidx.core.content.FileProvider$PathStrategy getPathStrategy(android.content.Context,java.lang.String,int):655:655 -> e
-    1:11:int modeToMode(java.lang.String):876:876 -> f
-    12:28:int modeToMode(java.lang.String):878:878 -> f
-    29:39:int modeToMode(java.lang.String):882:882 -> f
-    40:50:int modeToMode(java.lang.String):886:886 -> f
-    51:61:int modeToMode(java.lang.String):889:889 -> f
-    62:87:int modeToMode(java.lang.String):894:894 -> f
-    1:5:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):691:691 -> g
-      # {"id":"com.android.tools.r8.residualsignature","signature":"(Landroid/content/Context;Ljava/lang/String;I)Landroidx/core/content/FileProvider$b;"}
-    6:11:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):693:693 -> g
-    12:15:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):694:694 -> g
-    16:19:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):695:695 -> g
-    20:29:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):699:699 -> g
-    30:33:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):701:701 -> g
-    34:40:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):703:703 -> g
-    41:46:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):704:704 -> g
-    47:54:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):707:707 -> g
-    55:57:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):708:708 -> g
-    58:65:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):709:709 -> g
-    66:70:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):710:710 -> g
-    71:78:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):711:711 -> g
-    79:83:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):712:712 -> g
-    84:91:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):713:713 -> g
-    92:96:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):714:714 -> g
-    97:105:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):715:715 -> g
-    106:109:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):716:716 -> g
-    110:112:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):717:717 -> g
-    113:115:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):718:718 -> g
-    116:123:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):720:720 -> g
-    124:127:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):721:721 -> g
-    128:130:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):722:722 -> g
-    131:133:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):723:723 -> g
-    134:135:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):725:725 -> g
-    136:141:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):726:726 -> g
-    142:145:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):727:727 -> g
-    146:148:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):728:728 -> g
-    149:152:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):729:729 -> g
-    153:166:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):734:734 -> g
+    2:5:android.net.Uri getUriForFile(android.content.Context,java.lang.String,java.io.File):449:449 -> f
+    6:10:android.net.Uri getUriForFile(android.content.Context,java.lang.String,java.io.File):450:450 -> f
+    1:11:int modeToMode(java.lang.String):876:876 -> g
+    12:28:int modeToMode(java.lang.String):878:878 -> g
+    29:39:int modeToMode(java.lang.String):882:882 -> g
+    40:50:int modeToMode(java.lang.String):886:886 -> g
+    51:61:int modeToMode(java.lang.String):889:889 -> g
+    62:87:int modeToMode(java.lang.String):894:894 -> g
     1:6:java.lang.String getType(android.net.Uri):558:558 -> getType
     7:18:java.lang.String getType(android.net.Uri):560:560 -> getType
     19:28:java.lang.String getType(android.net.Uri):562:562 -> getType
     29:39:java.lang.String getType(android.net.Uri):563:563 -> getType
     40:42:java.lang.String getType(android.net.Uri):569:569 -> getType
+    1:5:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):691:691 -> h
+      # {"id":"com.android.tools.r8.residualsignature","signature":"(Landroid/content/Context;Ljava/lang/String;I)Landroidx/core/content/FileProvider$b;"}
+    6:11:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):693:693 -> h
+    12:15:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):694:694 -> h
+    16:19:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):695:695 -> h
+    20:29:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):699:699 -> h
+    30:33:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):701:701 -> h
+    34:40:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):703:703 -> h
+    41:46:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):704:704 -> h
+    47:54:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):707:707 -> h
+    55:57:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):708:708 -> h
+    58:65:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):709:709 -> h
+    66:70:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):710:710 -> h
+    71:78:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):711:711 -> h
+    79:83:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):712:712 -> h
+    84:91:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):713:713 -> h
+    92:96:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):714:714 -> h
+    97:105:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):715:715 -> h
+    106:109:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):716:716 -> h
+    110:112:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):717:717 -> h
+    113:115:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):718:718 -> h
+    116:123:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):720:720 -> h
+    124:127:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):721:721 -> h
+    128:130:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):722:722 -> h
+    131:133:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):723:723 -> h
+    134:135:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):725:725 -> h
+    136:141:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):726:726 -> h
+    142:145:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):727:727 -> h
+    146:148:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):728:728 -> h
+    149:152:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):729:729 -> h
+    153:166:androidx.core.content.FileProvider$PathStrategy parsePathStrategy(android.content.Context,java.lang.String,int):734:734 -> h
     1:8:android.net.Uri insert(android.net.Uri,android.content.ContentValues):578:578 -> insert
     1:6:android.os.ParcelFileDescriptor openFile(android.net.Uri,java.lang.String):630:630 -> openFile
     7:10:android.os.ParcelFileDescriptor openFile(android.net.Uri,java.lang.String):631:631 -> openFile
@@ -11284,6 +11286,7 @@ androidx.core.content.FileProvider$Api21Impl -> androidx.core.content.FileProvid
 androidx.core.content.FileProvider$PathStrategy -> androidx.core.content.FileProvider$b:
 # {"id":"sourceFile","fileName":"FileProvider.java"}
     java.io.File getFileForUri(android.net.Uri) -> a
+    android.net.Uri getUriForFile(java.io.File) -> b
 androidx.core.content.FileProvider$SimplePathStrategy -> androidx.core.content.FileProvider$c:
 # {"id":"sourceFile","fileName":"FileProvider.java"}
     java.lang.String mAuthority -> a
@@ -11302,11 +11305,25 @@ androidx.core.content.FileProvider$SimplePathStrategy -> androidx.core.content.F
     63:70:java.io.File getFileForUri(android.net.Uri):864:864 -> a
     71:93:java.io.File getFileForUri(android.net.Uri):860:860 -> a
     94:116:java.io.File getFileForUri(android.net.Uri):853:853 -> a
-    1:6:void addRoot(java.lang.String,java.io.File):790:790 -> b
-    7:10:void addRoot(java.lang.String,java.io.File):796:796 -> b
-    11:17:void addRoot(java.lang.String,java.io.File):802:802 -> b
-    18:40:void addRoot(java.lang.String,java.io.File):798:798 -> b
-    41:48:void addRoot(java.lang.String,java.io.File):791:791 -> b
+    1:4:android.net.Uri getUriForFile(java.io.File):809:809 -> b
+    5:27:android.net.Uri getUriForFile(java.io.File):816:816 -> b
+    28:37:android.net.Uri getUriForFile(java.io.File):817:817 -> b
+    38:45:android.net.Uri getUriForFile(java.io.File):818:818 -> b
+    46:69:android.net.Uri getUriForFile(java.io.File):819:819 -> b
+    70:79:android.net.Uri getUriForFile(java.io.File):830:830 -> b
+    80:87:android.net.Uri getUriForFile(java.io.File):831:831 -> b
+    88:96:android.net.Uri getUriForFile(java.io.File):832:832 -> b
+    97:106:android.net.Uri getUriForFile(java.io.File):834:834 -> b
+    107:140:android.net.Uri getUriForFile(java.io.File):838:838 -> b
+    141:153:android.net.Uri getUriForFile(java.io.File):839:839 -> b
+    154:166:android.net.Uri getUriForFile(java.io.File):840:840 -> b
+    167:189:android.net.Uri getUriForFile(java.io.File):825:825 -> b
+    190:212:android.net.Uri getUriForFile(java.io.File):811:811 -> b
+    1:6:void addRoot(java.lang.String,java.io.File):790:790 -> c
+    7:10:void addRoot(java.lang.String,java.io.File):796:796 -> c
+    11:17:void addRoot(java.lang.String,java.io.File):802:802 -> c
+    18:40:void addRoot(java.lang.String,java.io.File):798:798 -> c
+    41:48:void addRoot(java.lang.String,java.io.File):791:791 -> c
 androidx.core.content.res.CamColor -> androidx.core.content.res.a:
 # {"id":"sourceFile","fileName":"CamColor.java"}
     float mHue -> a
@@ -20736,94 +20753,124 @@ com.homelandadvantage.cp67.WebViewActivity -> com.homelandadvantage.cp67.WebView
     android.webkit.WebView webView -> a
     android.webkit.ValueCallback fileUploadCallback -> b
     android.webkit.PermissionRequest pendingPermissionRequest -> c
-    1:4:void <init>():45:45 -> <init>
-    1:3:android.webkit.ValueCallback access$000(com.homelandadvantage.cp67.WebViewActivity):45:45 -> a
-    1:3:android.webkit.ValueCallback access$002(com.homelandadvantage.cp67.WebViewActivity,android.webkit.ValueCallback):45:45 -> b
-    1:3:android.webkit.PermissionRequest access$102(com.homelandadvantage.cp67.WebViewActivity,android.webkit.PermissionRequest):45:45 -> c
-    1:7:void onActivityResult(int,int,android.content.Intent):184:184 -> onActivityResult
-    8:18:void onActivityResult(int,int,android.content.Intent):186:186 -> onActivityResult
-    19:26:void onActivityResult(int,int,android.content.Intent):189:189 -> onActivityResult
-    27:39:void onActivityResult(int,int,android.content.Intent):190:190 -> onActivityResult
-    40:45:void onActivityResult(int,int,android.content.Intent):191:191 -> onActivityResult
-    46:53:void onActivityResult(int,int,android.content.Intent):192:192 -> onActivityResult
-    54:57:void onActivityResult(int,int,android.content.Intent):193:193 -> onActivityResult
-    58:77:void onActivityResult(int,int,android.content.Intent):195:195 -> onActivityResult
-    78:82:void onActivityResult(int,int,android.content.Intent):199:199 -> onActivityResult
-    83:85:void onActivityResult(int,int,android.content.Intent):200:200 -> onActivityResult
-    1:10:void onBackPressed():206:206 -> onBackPressed
-    11:16:void onBackPressed():207:207 -> onBackPressed
-    17:20:void onBackPressed():209:209 -> onBackPressed
-    1:3:void onCreate(android.os.Bundle):58:58 -> onCreate
-    4:16:void onCreate(android.os.Bundle):61:61 -> onCreate
-    17:29:void onCreate(android.os.Bundle):62:62 -> onCreate
-    30:32:void onCreate(android.os.Bundle):63:63 -> onCreate
-    33:37:void onCreate(android.os.Bundle):65:65 -> onCreate
-    38:46:void onCreate(android.os.Bundle):66:66 -> onCreate
-    47:53:void onCreate(android.os.Bundle):68:68 -> onCreate
-    54:59:void onCreate(android.os.Bundle):69:69 -> onCreate
-    60:64:void onCreate(android.os.Bundle):72:72 -> onCreate
-    65:69:void onCreate(android.os.Bundle):73:73 -> onCreate
-    70:72:void onCreate(android.os.Bundle):75:75 -> onCreate
-    73:79:void onCreate(android.os.Bundle):77:77 -> onCreate
-    80:82:void onCreate(android.os.Bundle):78:78 -> onCreate
-    83:85:void onCreate(android.os.Bundle):79:79 -> onCreate
-    86:88:void onCreate(android.os.Bundle):80:80 -> onCreate
-    89:91:void onCreate(android.os.Bundle):81:81 -> onCreate
-    92:95:void onCreate(android.os.Bundle):82:82 -> onCreate
-    96:98:void onCreate(android.os.Bundle):83:83 -> onCreate
-    99:101:void onCreate(android.os.Bundle):84:84 -> onCreate
-    102:104:void onCreate(android.os.Bundle):85:85 -> onCreate
-    105:107:void onCreate(android.os.Bundle):86:86 -> onCreate
-    108:110:void onCreate(android.os.Bundle):87:87 -> onCreate
-    111:114:void onCreate(android.os.Bundle):88:88 -> onCreate
-    115:117:void onCreate(android.os.Bundle):89:89 -> onCreate
-    118:141:void onCreate(android.os.Bundle):90:90 -> onCreate
-    142:148:void onCreate(android.os.Bundle):94:94 -> onCreate
-    149:159:void onCreate(android.os.Bundle):95:95 -> onCreate
-    160:166:void onCreate(android.os.Bundle):97:97 -> onCreate
-    167:176:void onCreate(android.os.Bundle):100:100 -> onCreate
-    177:186:void onCreate(android.os.Bundle):116:116 -> onCreate
-    187:194:void onCreate(android.os.Bundle):165:165 -> onCreate
-    1:4:void onDestroy():215:215 -> onDestroy
-    5:7:void onDestroy():216:216 -> onDestroy
-    8:13:void onDestroy():217:217 -> onDestroy
-    14:15:void onDestroy():218:218 -> onDestroy
-    16:19:void onDestroy():220:220 -> onDestroy
-    1:7:void onRequestPermissionsResult(int,java.lang.String[],int[]):171:171 -> onRequestPermissionsResult
-    8:11:void onRequestPermissionsResult(int,java.lang.String[],int[]):172:172 -> onRequestPermissionsResult
-    12:19:void onRequestPermissionsResult(int,java.lang.String[],int[]):173:173 -> onRequestPermissionsResult
-    20:29:void onRequestPermissionsResult(int,java.lang.String[],int[]):174:174 -> onRequestPermissionsResult
-    30:33:void onRequestPermissionsResult(int,java.lang.String[],int[]):176:176 -> onRequestPermissionsResult
-    34:36:void onRequestPermissionsResult(int,java.lang.String[],int[]):178:178 -> onRequestPermissionsResult
+    android.net.Uri cameraCaptureUri -> d
+    1:4:void <init>():49:49 -> <init>
+    1:3:android.webkit.ValueCallback access$000(com.homelandadvantage.cp67.WebViewActivity):49:49 -> a
+    1:3:android.webkit.ValueCallback access$002(com.homelandadvantage.cp67.WebViewActivity,android.webkit.ValueCallback):49:49 -> b
+    1:3:android.net.Uri access$100(com.homelandadvantage.cp67.WebViewActivity):49:49 -> c
+    1:3:android.net.Uri access$102(com.homelandadvantage.cp67.WebViewActivity,android.net.Uri):49:49 -> d
+    1:3:android.webkit.PermissionRequest access$202(com.homelandadvantage.cp67.WebViewActivity,android.webkit.PermissionRequest):49:49 -> e
+    1:7:void onActivityResult(int,int,android.content.Intent):252:252 -> onActivityResult
+    8:20:void onActivityResult(int,int,android.content.Intent):254:254 -> onActivityResult
+    21:30:void onActivityResult(int,int,android.content.Intent):259:259 -> onActivityResult
+    31:37:void onActivityResult(int,int,android.content.Intent):260:260 -> onActivityResult
+    38:43:void onActivityResult(int,int,android.content.Intent):263:263 -> onActivityResult
+    44:58:void onActivityResult(int,int,android.content.Intent):264:264 -> onActivityResult
+    59:64:void onActivityResult(int,int,android.content.Intent):267:267 -> onActivityResult
+    65:72:void onActivityResult(int,int,android.content.Intent):268:268 -> onActivityResult
+    73:76:void onActivityResult(int,int,android.content.Intent):269:269 -> onActivityResult
+    77:96:void onActivityResult(int,int,android.content.Intent):271:271 -> onActivityResult
+    97:101:void onActivityResult(int,int,android.content.Intent):275:275 -> onActivityResult
+    102:103:void onActivityResult(int,int,android.content.Intent):276:276 -> onActivityResult
+    104:106:void onActivityResult(int,int,android.content.Intent):277:277 -> onActivityResult
+    1:10:void onBackPressed():283:283 -> onBackPressed
+    11:16:void onBackPressed():284:284 -> onBackPressed
+    17:20:void onBackPressed():286:286 -> onBackPressed
+    1:3:void onCreate(android.os.Bundle):63:63 -> onCreate
+    4:16:void onCreate(android.os.Bundle):66:66 -> onCreate
+    17:29:void onCreate(android.os.Bundle):67:67 -> onCreate
+    30:32:void onCreate(android.os.Bundle):68:68 -> onCreate
+    33:37:void onCreate(android.os.Bundle):70:70 -> onCreate
+    38:46:void onCreate(android.os.Bundle):71:71 -> onCreate
+    47:53:void onCreate(android.os.Bundle):73:73 -> onCreate
+    54:59:void onCreate(android.os.Bundle):74:74 -> onCreate
+    60:64:void onCreate(android.os.Bundle):77:77 -> onCreate
+    65:69:void onCreate(android.os.Bundle):78:78 -> onCreate
+    70:72:void onCreate(android.os.Bundle):80:80 -> onCreate
+    73:79:void onCreate(android.os.Bundle):82:82 -> onCreate
+    80:82:void onCreate(android.os.Bundle):83:83 -> onCreate
+    83:85:void onCreate(android.os.Bundle):84:84 -> onCreate
+    86:88:void onCreate(android.os.Bundle):85:85 -> onCreate
+    89:91:void onCreate(android.os.Bundle):86:86 -> onCreate
+    92:95:void onCreate(android.os.Bundle):87:87 -> onCreate
+    96:98:void onCreate(android.os.Bundle):88:88 -> onCreate
+    99:101:void onCreate(android.os.Bundle):89:89 -> onCreate
+    102:104:void onCreate(android.os.Bundle):90:90 -> onCreate
+    105:107:void onCreate(android.os.Bundle):91:91 -> onCreate
+    108:110:void onCreate(android.os.Bundle):92:92 -> onCreate
+    111:114:void onCreate(android.os.Bundle):93:93 -> onCreate
+    115:117:void onCreate(android.os.Bundle):94:94 -> onCreate
+    118:141:void onCreate(android.os.Bundle):95:95 -> onCreate
+    142:148:void onCreate(android.os.Bundle):99:99 -> onCreate
+    149:159:void onCreate(android.os.Bundle):100:100 -> onCreate
+    160:166:void onCreate(android.os.Bundle):102:102 -> onCreate
+    167:176:void onCreate(android.os.Bundle):105:105 -> onCreate
+    177:186:void onCreate(android.os.Bundle):121:121 -> onCreate
+    187:194:void onCreate(android.os.Bundle):233:233 -> onCreate
+    1:4:void onDestroy():292:292 -> onDestroy
+    5:7:void onDestroy():293:293 -> onDestroy
+    8:13:void onDestroy():294:294 -> onDestroy
+    14:15:void onDestroy():295:295 -> onDestroy
+    16:19:void onDestroy():297:297 -> onDestroy
+    1:7:void onRequestPermissionsResult(int,java.lang.String[],int[]):239:239 -> onRequestPermissionsResult
+    8:11:void onRequestPermissionsResult(int,java.lang.String[],int[]):240:240 -> onRequestPermissionsResult
+    12:19:void onRequestPermissionsResult(int,java.lang.String[],int[]):241:241 -> onRequestPermissionsResult
+    20:29:void onRequestPermissionsResult(int,java.lang.String[],int[]):242:242 -> onRequestPermissionsResult
+    30:33:void onRequestPermissionsResult(int,java.lang.String[],int[]):244:244 -> onRequestPermissionsResult
+    34:36:void onRequestPermissionsResult(int,java.lang.String[],int[]):246:246 -> onRequestPermissionsResult
 com.homelandadvantage.cp67.WebViewActivity$1 -> com.homelandadvantage.cp67.WebViewActivity$a:
 # {"id":"sourceFile","fileName":"WebViewActivity.java"}
     com.homelandadvantage.cp67.WebViewActivity this$0 -> a
-    1:6:void <init>(com.homelandadvantage.cp67.WebViewActivity):100:100 -> <init>
-    1:4:boolean shouldOverrideUrlLoading(android.webkit.WebView,android.webkit.WebResourceRequest):103:103 -> shouldOverrideUrlLoading
-    5:10:boolean shouldOverrideUrlLoading(android.webkit.WebView,android.webkit.WebResourceRequest):104:104 -> shouldOverrideUrlLoading
-    11:20:boolean shouldOverrideUrlLoading(android.webkit.WebView,android.webkit.WebResourceRequest):106:106 -> shouldOverrideUrlLoading
-    21:34:boolean shouldOverrideUrlLoading(android.webkit.WebView,android.webkit.WebResourceRequest):110:110 -> shouldOverrideUrlLoading
+    1:6:void <init>(com.homelandadvantage.cp67.WebViewActivity):105:105 -> <init>
+    1:4:boolean shouldOverrideUrlLoading(android.webkit.WebView,android.webkit.WebResourceRequest):108:108 -> shouldOverrideUrlLoading
+    5:10:boolean shouldOverrideUrlLoading(android.webkit.WebView,android.webkit.WebResourceRequest):109:109 -> shouldOverrideUrlLoading
+    11:20:boolean shouldOverrideUrlLoading(android.webkit.WebView,android.webkit.WebResourceRequest):111:111 -> shouldOverrideUrlLoading
+    21:34:boolean shouldOverrideUrlLoading(android.webkit.WebView,android.webkit.WebResourceRequest):115:115 -> shouldOverrideUrlLoading
 com.homelandadvantage.cp67.WebViewActivity$2 -> com.homelandadvantage.cp67.WebViewActivity$b:
 # {"id":"sourceFile","fileName":"WebViewActivity.java"}
     com.homelandadvantage.cp67.WebViewActivity this$0 -> a
-    1:6:void <init>(com.homelandadvantage.cp67.WebViewActivity):116:116 -> <init>
-    4:7:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):123:123 -> a
+    1:6:void <init>(com.homelandadvantage.cp67.WebViewActivity):121:121 -> <init>
+    4:7:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):128:128 -> a
       # {"id":"com.android.tools.r8.residualsignature","signature":"(Lcom/homelandadvantage/cp67/WebViewActivity$b;Landroid/webkit/PermissionRequest;)V"}
-    8:16:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):125:125 -> a
-    17:28:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):126:126 -> a
-    29:32:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):129:129 -> a
-    33:42:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):133:133 -> a
-    43:50:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):135:135 -> a
-    51:55:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):137:137 -> a
-    56:67:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):138:138 -> a
-    1:11:void onPermissionRequest(android.webkit.PermissionRequest):119:119 -> onPermissionRequest
-    1:9:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):148:148 -> onShowFileChooser
-    10:18:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):149:149 -> onShowFileChooser
-    19:23:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):151:151 -> onShowFileChooser
-    24:27:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):153:153 -> onShowFileChooser
-    28:32:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):155:155 -> onShowFileChooser
-    33:41:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):156:156 -> onShowFileChooser
-    42:48:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):159:159 -> onShowFileChooser
+    8:16:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):130:130 -> a
+    17:28:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):131:131 -> a
+    29:32:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):134:134 -> a
+    33:42:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):138:138 -> a
+    43:50:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):140:140 -> a
+    51:55:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):142:142 -> a
+    56:67:void lambda$onPermissionRequest$0(android.webkit.PermissionRequest):143:143 -> a
+    1:11:void onPermissionRequest(android.webkit.PermissionRequest):124:124 -> onPermissionRequest
+    1:11:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):153:153 -> onShowFileChooser
+    12:20:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):154:154 -> onShowFileChooser
+    21:26:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):156:156 -> onShowFileChooser
+    27:33:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):162:162 -> onShowFileChooser
+    34:40:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):164:164 -> onShowFileChooser
+    41:49:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):167:167 -> onShowFileChooser
+    50:66:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):168:168 -> onShowFileChooser
+    67:72:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):177:177 -> onShowFileChooser
+    73:78:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):180:180 -> onShowFileChooser
+    79:93:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):181:181 -> onShowFileChooser
+    94:103:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):188:188 -> onShowFileChooser
+    104:114:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):190:190 -> onShowFileChooser
+    115:119:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):194:194 -> onShowFileChooser
+    120:132:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):197:197 -> onShowFileChooser
+    133:144:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):198:198 -> onShowFileChooser
+    145:162:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):199:199 -> onShowFileChooser
+    163:189:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):200:200 -> onShowFileChooser
+    190:198:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):201:201 -> onShowFileChooser
+    199:214:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):203:203 -> onShowFileChooser
+    215:221:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):201:201 -> onShowFileChooser
+    222:233:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):205:205 -> onShowFileChooser
+    234:236:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):206:206 -> onShowFileChooser
+    237:240:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):207:207 -> onShowFileChooser
+    241:245:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):209:209 -> onShowFileChooser
+    246:250:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):210:210 -> onShowFileChooser
+    251:257:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):213:213 -> onShowFileChooser
+    258:262:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):216:216 -> onShowFileChooser
+    263:266:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):222:222 -> onShowFileChooser
+    267:271:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):223:223 -> onShowFileChooser
+    272:277:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):224:224 -> onShowFileChooser
+    278:283:boolean onShowFileChooser(android.webkit.WebView,android.webkit.ValueCallback,android.webkit.WebChromeClient$FileChooserParams):227:227 -> onShowFileChooser
 com.homelandadvantage.cp67.WebViewActivity$2$$ExternalSyntheticLambda0 -> com.homelandadvantage.cp67.a:
 # {"id":"sourceFile","fileName":"R8$$SyntheticClass"}
 # {"id":"com.android.tools.r8.synthesized"}

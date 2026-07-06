@@ -39,8 +39,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 
 import java.io.File;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 
 public class WebViewActivity extends Activity {
 
@@ -52,6 +56,7 @@ public class WebViewActivity extends Activity {
     private WebView webView;
     private ValueCallback<Uri[]> fileUploadCallback;
     private PermissionRequest pendingPermissionRequest;
+    private Uri cameraCaptureUri; // used when opening the native camera app
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -149,9 +154,72 @@ public class WebViewActivity extends Activity {
                     fileUploadCallback.onReceiveValue(null);
                 }
                 fileUploadCallback = filePathCallback;
+
+                // If the <input type="file"> has capture="environment" (or "user"),
+                // launch the native camera app directly instead of opening the gallery.
+                boolean wantsCamera = false;
+                try {
+                    if (fileChooserParams.isCaptureEnabled()) wantsCamera = true;
+                } catch (Throwable ignored) {}
+                String[] accept = fileChooserParams.getAcceptTypes();
+                boolean acceptsImage = false;
+                if (accept != null) {
+                    for (String a : accept) {
+                        if (a != null && a.toLowerCase().startsWith("image/")) acceptsImage = true;
+                    }
+                }
+                // Some Android versions don't set isCaptureEnabled true even when the
+                // HTML has capture="environment". The web page communicates intent
+                // via a second heuristic: it typically uses accept="image/*" and
+                // triggers this via a distinct button. We treat "accept image/*" as
+                // implicit camera desire for our app since gallery button uses a
+                // separate flow.
+                if (!wantsCamera && acceptsImage) {
+                    // Read a hint set by the JS side (best-effort)
+                    // Fallback: honour capture attribute presence via createIntent inspection
+                    Intent probe = fileChooserParams.createIntent();
+                    if (probe != null && MediaStore.ACTION_IMAGE_CAPTURE.equals(probe.getAction())) {
+                        wantsCamera = true;
+                    }
+                }
+
+                if (wantsCamera) {
+                    // Ensure we have Android CAMERA permission first
+                    if (ContextCompat.checkSelfPermission(WebViewActivity.this,
+                            Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                        ActivityCompat.requestPermissions(WebViewActivity.this,
+                                new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PERM);
+                        // Continue to file picker as safety net so we don't deadlock the callback
+                    }
+                    Intent captureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                    // Create a temp file to receive the full-res photo
+                    try {
+                        File photosDir = new File(getExternalFilesDir(null), "cp67_bills");
+                        if (!photosDir.exists()) photosDir.mkdirs();
+                        String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+                        File photoFile = new File(photosDir, "bill_" + stamp + ".jpg");
+                        cameraCaptureUri = FileProvider.getUriForFile(
+                                WebViewActivity.this,
+                                getPackageName() + ".fileprovider",
+                                photoFile);
+                        captureIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraCaptureUri);
+                        captureIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                        captureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    } catch (Exception e) {
+                        Log.w(TAG, "camera capture setup failed", e);
+                        cameraCaptureUri = null;
+                    }
+                    try {
+                        startActivityForResult(captureIntent, REQ_FILE_CHOOSER);
+                        return true;
+                    } catch (ActivityNotFoundException e) {
+                        Log.w(TAG, "No camera app; falling back to gallery", e);
+                    }
+                }
+
+                // Default: system file picker (gallery)
                 try {
                     Intent intent = fileChooserParams.createIntent();
-                    // Ensure gallery + camera capture both accessible
                     intent.setType("image/*");
                     startActivityForResult(intent, REQ_FILE_CHOOSER);
                     return true;
@@ -185,10 +253,18 @@ public class WebViewActivity extends Activity {
         if (requestCode == REQ_FILE_CHOOSER) {
             if (fileUploadCallback == null) return;
             Uri[] results = null;
-            if (resultCode == Activity.RESULT_OK && data != null) {
-                if (data.getDataString() != null) {
+            if (resultCode == Activity.RESULT_OK) {
+                // Case A: user captured via native camera → data may be null,
+                // but we saved the photo to `cameraCaptureUri`.
+                if ((data == null || data.getData() == null) && cameraCaptureUri != null) {
+                    results = new Uri[]{cameraCaptureUri};
+                }
+                // Case B: gallery picker returned single item
+                else if (data != null && data.getDataString() != null) {
                     results = new Uri[]{Uri.parse(data.getDataString())};
-                } else if (data.getClipData() != null) {
+                }
+                // Case C: gallery multi-select via ClipData
+                else if (data != null && data.getClipData() != null) {
                     int n = data.getClipData().getItemCount();
                     results = new Uri[n];
                     for (int i = 0; i < n; i++) {
@@ -198,6 +274,7 @@ public class WebViewActivity extends Activity {
             }
             fileUploadCallback.onReceiveValue(results);
             fileUploadCallback = null;
+            cameraCaptureUri = null;
         }
     }
 

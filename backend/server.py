@@ -3342,6 +3342,63 @@ async def force_credit_bill(bill_id: str, background_tasks: BackgroundTasks,
     }
 
 
+class EditBrandRequest(BaseModel):
+    """Payload for admin brand-name correction on a pending bill."""
+    new_store_name: str
+    reprocess: bool = True  # immediately re-send to Fundle after edit
+
+
+@api_router.post("/admin/bills/{bill_id}/edit-brand")
+async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
+                           background_tasks: BackgroundTasks,
+                           payload: dict = Depends(verify_jwt_token)):
+    """Correct the brand name on a bill whose OCR mis-matched Fundle's master,
+    then optionally re-send to Fundle immediately.
+
+    Solves the workflow where admin currently has to open Fundle's dashboard
+    to add/rename a brand before reprocessing — now doable inline from the
+    admin bills page.
+    """
+    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    new_name = (payload_body.new_store_name or "").strip()
+    if not new_name:
+        raise HTTPException(status_code=400, detail="new_store_name is required")
+
+    old_name = bill.get("store_name")
+    audit_note = f"Brand name updated: '{old_name}' → '{new_name}' by admin"
+
+    await db.bills.update_one(
+        {"id": bill_id},
+        {"$set": {
+            "store_name": new_name,
+            "brand_edited_at": datetime.now(timezone.utc).isoformat(),
+            "brand_edited_by": payload.get("username") or "admin",
+            "admin_notes": audit_note,
+        }}
+    )
+
+    if not payload_body.reprocess:
+        return {"success": True, "reprocessed": False, "store_name": new_name}
+
+    # Reload the bill and run through the normal reprocess pipeline (image included)
+    updated_bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+    res = await _reprocess_single_bill(
+        updated_bill, re_ocr=False, send_whatsapp_flag=True,
+        background_tasks=background_tasks
+    )
+    return {
+        "success": True,
+        "reprocessed": True,
+        "store_name": new_name,
+        "action": res.get("action"),
+        "status": res.get("status"),
+        "points": res.get("points", 0),
+        "error": res.get("error"),
+    }
+
+
 # Karix API Key
 KARIX_API_KEY = os.environ.get('WHATSAPP_API_KEY', '')
 

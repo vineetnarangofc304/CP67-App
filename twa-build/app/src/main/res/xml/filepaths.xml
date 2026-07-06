@@ -15,4 +15,6 @@
 -->
 <paths>
     <files-path path="twa_splash/" name="twa_splash" />
+    <!-- CP67: expose camera-captured bills to the WebView -->
+    <external-files-path path="cp67_bills/" name="cp67_bills" />
 </paths>

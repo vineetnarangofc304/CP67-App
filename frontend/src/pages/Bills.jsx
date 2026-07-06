@@ -32,6 +32,7 @@ import {
   MessageCircle,
   Image as ImageIcon,
   AlertCircleIcon,
+  Edit,
   Send
 } from 'lucide-react';
 
@@ -219,6 +220,47 @@ const Bills = () => {
       fetchPendingBills();
     };
     try { xhr.send(); } catch { toast.error('Could not send reprocess request.'); }
+  };
+
+  // -------- Edit Brand (rename mis-matched brand + auto-reprocess) --------
+  const editBrandBill = async (bill) => {
+    const currentName = bill.store_name || '';
+    const newName = window.prompt(
+      `Current brand: "${currentName}"\n\n` +
+      `Enter the CORRECT brand name (as it appears in Fundle master):\n` +
+      `(This will update the bill and immediately re-send it to Fundle.)`,
+      currentName
+    );
+    if (newName === null) return; // cancelled
+    const trimmed = (newName || '').trim();
+    if (!trimmed || trimmed === currentName) return;
+
+    try {
+      const res = await fetch(`${API_URL}/admin/bills/${bill.id}/edit-brand`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ new_store_name: trimmed, reprocess: true })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.detail || 'Brand edit failed');
+        return;
+      }
+      if (data.action === 'approved') {
+        toast.success(`Brand fixed → "${trimmed}". Approved with ${data.points || 0} pts`);
+      } else if (data.error) {
+        toast.warning(`Brand updated to "${trimmed}" but Fundle: ${data.error}`);
+      } else {
+        toast.success(`Brand updated to "${trimmed}". Status: ${data.status}`);
+      }
+      fetchBills();
+      fetchPendingBills();
+    } catch {
+      toast.error('Network error while editing brand');
+    }
   };
 
   // -------- Force Credit (manual approval, bypassing Fundle) --------
@@ -552,15 +594,27 @@ const Bills = () => {
                 Review & Process
               </Button>
               {(bill.status === 'pending_review' || bill.status === 'manual_review') && (
-                <Button 
-                  variant="default"
-                  className="bg-blue-600 hover:bg-blue-700"
-                  onClick={() => reprocessBill(bill.id)}
-                  data-testid={`reprocess-${bill.id}`}
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Reprocess
-                </Button>
+                <>
+                  <Button 
+                    variant="default"
+                    className="bg-blue-600 hover:bg-blue-700"
+                    onClick={() => reprocessBill(bill.id)}
+                    data-testid={`reprocess-${bill.id}`}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Reprocess
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                    onClick={() => editBrandBill(bill)}
+                    data-testid={`edit-brand-${bill.id}`}
+                    title="Fix brand name mismatch and resend to Fundle"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Fix Brand
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -748,6 +802,17 @@ const Bills = () => {
                               >
                                 <RefreshCw className="h-3 w-3 mr-1" />
                                 Reprocess
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                                onClick={() => editBrandBill(bill)}
+                                data-testid={`edit-brand-all-${bill.id}`}
+                                title="Fix brand name mismatch"
+                              >
+                                <Edit className="h-3 w-3 mr-1" />
+                                Fix Brand
                               </Button>
                             </>
                           )}

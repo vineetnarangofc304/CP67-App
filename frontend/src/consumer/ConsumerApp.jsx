@@ -123,7 +123,9 @@ function ConsumerShell({ drawerOpen, setDrawerOpen, showBottomNav, location }) {
   return (
     <div className="consumer-app">
       <SideDrawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
-      {token && <NotificationPrompt token={token} />}
+      {/* NotificationPrompt disabled per CP67 team request — no pop-up on login.
+          Users can enable notifications via Profile → Notification Settings. */}
+      {/* {token && <NotificationPrompt token={token} />} */}
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="welcome" element={<Welcome />} />
