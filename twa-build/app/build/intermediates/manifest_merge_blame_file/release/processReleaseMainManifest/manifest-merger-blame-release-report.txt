@@ -7,8 +7,8 @@
 7-->
 8<manifest xmlns:android="http://schemas.android.com/apk/res/android"
 9    package="com.homelandadvantage.cp67"
-10    android:versionCode="7"
-11    android:versionName="1.6" >
+10    android:versionCode="8"
+11    android:versionName="1.7" >
 12
 13    <uses-sdk
 14        android:minSdkVersion="21"
@@ -26,164 +26,160 @@
 20    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 20-->/app/twa-build/app/src/main/AndroidManifest.xml:13:5-76
 20-->/app/twa-build/app/src/main/AndroidManifest.xml:13:22-74
-21    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
-21-->/app/twa-build/app/src/main/AndroidManifest.xml:14:5-75
-21-->/app/twa-build/app/src/main/AndroidManifest.xml:14:22-73
-22    <uses-permission
-22-->/app/twa-build/app/src/main/AndroidManifest.xml:15:5-106
-23        android:name="android.permission.READ_EXTERNAL_STORAGE"
-23-->/app/twa-build/app/src/main/AndroidManifest.xml:15:22-77
-24        android:maxSdkVersion="32" />
-24-->/app/twa-build/app/src/main/AndroidManifest.xml:15:78-104
-25    <uses-permission
-25-->/app/twa-build/app/src/main/AndroidManifest.xml:16:5-107
-26        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-26-->/app/twa-build/app/src/main/AndroidManifest.xml:16:22-78
-27        android:maxSdkVersion="28" />
-27-->/app/twa-build/app/src/main/AndroidManifest.xml:16:79-105
-28
-29    <uses-feature
-29-->/app/twa-build/app/src/main/AndroidManifest.xml:18:5-84
-30        android:name="android.hardware.camera"
-30-->/app/twa-build/app/src/main/AndroidManifest.xml:18:19-57
-31        android:required="false" />
-31-->/app/twa-build/app/src/main/AndroidManifest.xml:18:58-82
-32    <uses-feature
-32-->/app/twa-build/app/src/main/AndroidManifest.xml:19:5-94
-33        android:name="android.hardware.camera.autofocus"
-33-->/app/twa-build/app/src/main/AndroidManifest.xml:19:19-67
-34        android:required="false" />
-34-->/app/twa-build/app/src/main/AndroidManifest.xml:19:68-92
-35
-36    <permission
-36-->[androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:22:5-24:47
-37        android:name="com.homelandadvantage.cp67.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-37-->[androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:23:9-81
-38        android:protectionLevel="signature" />
-38-->[androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:24:9-44
+21    <!--
+22        READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE / WRITE_EXTERNAL_STORAGE
+23        deliberately NOT declared.
+24
+25        Rationale (Google Play policy):
+26        The app only needs ONE-TIME image selection when the user chooses a
+27        bill photo. Google's policy requires apps with one-time or infrequent
+28        media use to migrate to the system Photo Picker, which does NOT need
+29        these permissions. WebView's <input type="file"> automatically uses
+30        the Photo Picker on Android 13+ when READ_MEDIA_IMAGES is absent.
+31    -->
+32
+33    <uses-feature
+33-->/app/twa-build/app/src/main/AndroidManifest.xml:26:5-84
+34        android:name="android.hardware.camera"
+34-->/app/twa-build/app/src/main/AndroidManifest.xml:26:19-57
+35        android:required="false" />
+35-->/app/twa-build/app/src/main/AndroidManifest.xml:26:58-82
+36    <uses-feature
+36-->/app/twa-build/app/src/main/AndroidManifest.xml:27:5-94
+37        android:name="android.hardware.camera.autofocus"
+37-->/app/twa-build/app/src/main/AndroidManifest.xml:27:19-67
+38        android:required="false" />
+38-->/app/twa-build/app/src/main/AndroidManifest.xml:27:68-92
 39
-40    <uses-permission android:name="com.homelandadvantage.cp67.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
-40-->[androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:26:5-97
-40-->[androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:26:22-94
-41
-42    <application
-42-->/app/twa-build/app/src/main/AndroidManifest.xml:21:5-69:19
-43        android:allowBackup="true"
-43-->/app/twa-build/app/src/main/AndroidManifest.xml:22:9-35
-44        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-44-->[androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:28:18-86
-45        android:extractNativeLibs="true"
-46        android:hardwareAccelerated="true"
-46-->/app/twa-build/app/src/main/AndroidManifest.xml:27:9-43
-47        android:icon="@mipmap/ic_launcher"
-47-->/app/twa-build/app/src/main/AndroidManifest.xml:23:9-43
-48        android:label="@string/appName"
-48-->/app/twa-build/app/src/main/AndroidManifest.xml:24:9-40
-49        android:supportsRtl="true"
-49-->/app/twa-build/app/src/main/AndroidManifest.xml:25:9-35
-50        android:theme="@android:style/Theme.NoTitleBar"
-50-->/app/twa-build/app/src/main/AndroidManifest.xml:28:9-56
-51        android:usesCleartextTraffic="false" >
-51-->/app/twa-build/app/src/main/AndroidManifest.xml:26:9-45
-52
-53        <!-- ONLY activity: native WebView shell -->
-54        <activity
-54-->/app/twa-build/app/src/main/AndroidManifest.xml:31:9-56:20
-55            android:name="com.homelandadvantage.cp67.WebViewActivity"
-55-->/app/twa-build/app/src/main/AndroidManifest.xml:32:13-44
-56            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
-56-->/app/twa-build/app/src/main/AndroidManifest.xml:38:13-106
-57            android:exported="true"
-57-->/app/twa-build/app/src/main/AndroidManifest.xml:35:13-36
-58            android:hardwareAccelerated="true"
-58-->/app/twa-build/app/src/main/AndroidManifest.xml:37:13-47
-59            android:label="@string/launcherName"
-59-->/app/twa-build/app/src/main/AndroidManifest.xml:33:13-49
-60            android:launchMode="singleTop"
-60-->/app/twa-build/app/src/main/AndroidManifest.xml:36:13-43
-61            android:screenOrientation="portrait"
-61-->/app/twa-build/app/src/main/AndroidManifest.xml:39:13-49
-62            android:theme="@android:style/Theme.NoTitleBar" >
-62-->/app/twa-build/app/src/main/AndroidManifest.xml:34:13-60
-63            <intent-filter>
-63-->/app/twa-build/app/src/main/AndroidManifest.xml:40:13-43:29
-64                <action android:name="android.intent.action.MAIN" />
-64-->/app/twa-build/app/src/main/AndroidManifest.xml:41:17-69
-64-->/app/twa-build/app/src/main/AndroidManifest.xml:41:25-66
-65
-66                <category android:name="android.intent.category.LAUNCHER" />
-66-->/app/twa-build/app/src/main/AndroidManifest.xml:42:17-77
-66-->/app/twa-build/app/src/main/AndroidManifest.xml:42:27-74
-67            </intent-filter>
-68
-69            <!--
-70                 Deep links: cp67bot.fundlexperiences.com/app/* opens inside our WebView.
-71                 NOTE: no autoVerify — that used to trigger Chrome for assetlinks.json
-72                 verification, causing Chrome to boot on cold start.
-73            -->
-74            <intent-filter>
-74-->/app/twa-build/app/src/main/AndroidManifest.xml:48:13-55:29
-75                <action android:name="android.intent.action.VIEW" />
-75-->/app/twa-build/app/src/main/AndroidManifest.xml:49:17-68
-75-->/app/twa-build/app/src/main/AndroidManifest.xml:49:25-66
-76
-77                <category android:name="android.intent.category.DEFAULT" />
-77-->/app/twa-build/app/src/main/AndroidManifest.xml:50:17-76
-77-->/app/twa-build/app/src/main/AndroidManifest.xml:50:27-73
-78                <category android:name="android.intent.category.BROWSABLE" />
-78-->/app/twa-build/app/src/main/AndroidManifest.xml:51:17-77
-78-->/app/twa-build/app/src/main/AndroidManifest.xml:51:27-75
-79
-80                <data
-80-->/app/twa-build/app/src/main/AndroidManifest.xml:52:17-54:50
-81                    android:host="@string/hostName"
-81-->/app/twa-build/app/src/main/AndroidManifest.xml:53:21-52
-82                    android:pathPrefix="/app/"
-82-->/app/twa-build/app/src/main/AndroidManifest.xml:54:21-47
-83                    android:scheme="https" />
-83-->/app/twa-build/app/src/main/AndroidManifest.xml:52:23-45
-84            </intent-filter>
-85        </activity>
-86
-87        <!-- FileProvider retained for camera capture Uri sharing -->
-88        <provider
-88-->/app/twa-build/app/src/main/AndroidManifest.xml:59:9-67:20
-89            android:name="androidx.core.content.FileProvider"
-89-->/app/twa-build/app/src/main/AndroidManifest.xml:60:13-62
-90            android:authorities="@string/providerAuthority"
-90-->/app/twa-build/app/src/main/AndroidManifest.xml:61:13-60
-91            android:exported="false"
-91-->/app/twa-build/app/src/main/AndroidManifest.xml:63:13-37
-92            android:grantUriPermissions="true" >
-92-->/app/twa-build/app/src/main/AndroidManifest.xml:62:13-47
-93            <meta-data
-93-->/app/twa-build/app/src/main/AndroidManifest.xml:64:13-66:53
-94                android:name="android.support.FILE_PROVIDER_PATHS"
-94-->/app/twa-build/app/src/main/AndroidManifest.xml:65:17-67
-95                android:resource="@xml/filepaths" />
-95-->/app/twa-build/app/src/main/AndroidManifest.xml:66:17-50
-96        </provider>
-97        <provider
-97-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:24:9-32:20
-98            android:name="androidx.startup.InitializationProvider"
-98-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:25:13-67
-99            android:authorities="com.homelandadvantage.cp67.androidx-startup"
-99-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:26:13-68
-100            android:exported="false" >
-100-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:27:13-37
-101            <meta-data
-101-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:29:13-31:52
-102                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-102-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:30:17-75
-103                android:value="androidx.startup" />
-103-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:31:17-49
-104            <meta-data
-104-->[androidx.lifecycle:lifecycle-process:2.4.1] /root/.gradle/caches/8.11.1/transforms/6bb5e4f4c6aa049b1832baa86ef86f9a/transformed/lifecycle-process-2.4.1/AndroidManifest.xml:31:13-33:52
-105                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-105-->[androidx.lifecycle:lifecycle-process:2.4.1] /root/.gradle/caches/8.11.1/transforms/6bb5e4f4c6aa049b1832baa86ef86f9a/transformed/lifecycle-process-2.4.1/AndroidManifest.xml:32:17-78
-106                android:value="androidx.startup" />
-106-->[androidx.lifecycle:lifecycle-process:2.4.1] /root/.gradle/caches/8.11.1/transforms/6bb5e4f4c6aa049b1832baa86ef86f9a/transformed/lifecycle-process-2.4.1/AndroidManifest.xml:33:17-49
-107        </provider>
-108    </application>
-109
-110</manifest>
+40    <permission
+40-->[androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:22:5-24:47
+41        android:name="com.homelandadvantage.cp67.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+41-->[androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:23:9-81
+42        android:protectionLevel="signature" />
+42-->[androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:24:9-44
+43
+44    <uses-permission android:name="com.homelandadvantage.cp67.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+44-->[androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:26:5-97
+44-->[androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:26:22-94
+45
+46    <application
+46-->/app/twa-build/app/src/main/AndroidManifest.xml:29:5-77:19
+47        android:allowBackup="true"
+47-->/app/twa-build/app/src/main/AndroidManifest.xml:30:9-35
+48        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+48-->[androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:28:18-86
+49        android:extractNativeLibs="true"
+50        android:hardwareAccelerated="true"
+50-->/app/twa-build/app/src/main/AndroidManifest.xml:35:9-43
+51        android:icon="@mipmap/ic_launcher"
+51-->/app/twa-build/app/src/main/AndroidManifest.xml:31:9-43
+52        android:label="@string/appName"
+52-->/app/twa-build/app/src/main/AndroidManifest.xml:32:9-40
+53        android:supportsRtl="true"
+53-->/app/twa-build/app/src/main/AndroidManifest.xml:33:9-35
+54        android:theme="@android:style/Theme.NoTitleBar"
+54-->/app/twa-build/app/src/main/AndroidManifest.xml:36:9-56
+55        android:usesCleartextTraffic="false" >
+55-->/app/twa-build/app/src/main/AndroidManifest.xml:34:9-45
+56
+57        <!-- ONLY activity: native WebView shell -->
+58        <activity
+58-->/app/twa-build/app/src/main/AndroidManifest.xml:39:9-64:20
+59            android:name="com.homelandadvantage.cp67.WebViewActivity"
+59-->/app/twa-build/app/src/main/AndroidManifest.xml:40:13-44
+60            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize"
+60-->/app/twa-build/app/src/main/AndroidManifest.xml:46:13-106
+61            android:exported="true"
+61-->/app/twa-build/app/src/main/AndroidManifest.xml:43:13-36
+62            android:hardwareAccelerated="true"
+62-->/app/twa-build/app/src/main/AndroidManifest.xml:45:13-47
+63            android:label="@string/launcherName"
+63-->/app/twa-build/app/src/main/AndroidManifest.xml:41:13-49
+64            android:launchMode="singleTop"
+64-->/app/twa-build/app/src/main/AndroidManifest.xml:44:13-43
+65            android:screenOrientation="portrait"
+65-->/app/twa-build/app/src/main/AndroidManifest.xml:47:13-49
+66            android:theme="@android:style/Theme.NoTitleBar" >
+66-->/app/twa-build/app/src/main/AndroidManifest.xml:42:13-60
+67            <intent-filter>
+67-->/app/twa-build/app/src/main/AndroidManifest.xml:48:13-51:29
+68                <action android:name="android.intent.action.MAIN" />
+68-->/app/twa-build/app/src/main/AndroidManifest.xml:49:17-69
+68-->/app/twa-build/app/src/main/AndroidManifest.xml:49:25-66
+69
+70                <category android:name="android.intent.category.LAUNCHER" />
+70-->/app/twa-build/app/src/main/AndroidManifest.xml:50:17-77
+70-->/app/twa-build/app/src/main/AndroidManifest.xml:50:27-74
+71            </intent-filter>
+72
+73            <!--
+74                 Deep links: cp67bot.fundlexperiences.com/app/* opens inside our WebView.
+75                 NOTE: no autoVerify — that used to trigger Chrome for assetlinks.json
+76                 verification, causing Chrome to boot on cold start.
+77            -->
+78            <intent-filter>
+78-->/app/twa-build/app/src/main/AndroidManifest.xml:56:13-63:29
+79                <action android:name="android.intent.action.VIEW" />
+79-->/app/twa-build/app/src/main/AndroidManifest.xml:57:17-68
+79-->/app/twa-build/app/src/main/AndroidManifest.xml:57:25-66
+80
+81                <category android:name="android.intent.category.DEFAULT" />
+81-->/app/twa-build/app/src/main/AndroidManifest.xml:58:17-76
+81-->/app/twa-build/app/src/main/AndroidManifest.xml:58:27-73
+82                <category android:name="android.intent.category.BROWSABLE" />
+82-->/app/twa-build/app/src/main/AndroidManifest.xml:59:17-77
+82-->/app/twa-build/app/src/main/AndroidManifest.xml:59:27-75
+83
+84                <data
+84-->/app/twa-build/app/src/main/AndroidManifest.xml:60:17-62:50
+85                    android:host="@string/hostName"
+85-->/app/twa-build/app/src/main/AndroidManifest.xml:61:21-52
+86                    android:pathPrefix="/app/"
+86-->/app/twa-build/app/src/main/AndroidManifest.xml:62:21-47
+87                    android:scheme="https" />
+87-->/app/twa-build/app/src/main/AndroidManifest.xml:60:23-45
+88            </intent-filter>
+89        </activity>
+90
+91        <!-- FileProvider retained for camera capture Uri sharing -->
+92        <provider
+92-->/app/twa-build/app/src/main/AndroidManifest.xml:67:9-75:20
+93            android:name="androidx.core.content.FileProvider"
+93-->/app/twa-build/app/src/main/AndroidManifest.xml:68:13-62
+94            android:authorities="@string/providerAuthority"
+94-->/app/twa-build/app/src/main/AndroidManifest.xml:69:13-60
+95            android:exported="false"
+95-->/app/twa-build/app/src/main/AndroidManifest.xml:71:13-37
+96            android:grantUriPermissions="true" >
+96-->/app/twa-build/app/src/main/AndroidManifest.xml:70:13-47
+97            <meta-data
+97-->/app/twa-build/app/src/main/AndroidManifest.xml:72:13-74:53
+98                android:name="android.support.FILE_PROVIDER_PATHS"
+98-->/app/twa-build/app/src/main/AndroidManifest.xml:73:17-67
+99                android:resource="@xml/filepaths" />
+99-->/app/twa-build/app/src/main/AndroidManifest.xml:74:17-50
+100        </provider>
+101        <provider
+101-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:24:9-32:20
+102            android:name="androidx.startup.InitializationProvider"
+102-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:25:13-67
+103            android:authorities="com.homelandadvantage.cp67.androidx-startup"
+103-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:26:13-68
+104            android:exported="false" >
+104-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:27:13-37
+105            <meta-data
+105-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:29:13-31:52
+106                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+106-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:30:17-75
+107                android:value="androidx.startup" />
+107-->[androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:31:17-49
+108            <meta-data
+108-->[androidx.lifecycle:lifecycle-process:2.4.1] /root/.gradle/caches/8.11.1/transforms/6bb5e4f4c6aa049b1832baa86ef86f9a/transformed/lifecycle-process-2.4.1/AndroidManifest.xml:31:13-33:52
+109                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+109-->[androidx.lifecycle:lifecycle-process:2.4.1] /root/.gradle/caches/8.11.1/transforms/6bb5e4f4c6aa049b1832baa86ef86f9a/transformed/lifecycle-process-2.4.1/AndroidManifest.xml:32:17-78
+110                android:value="androidx.startup" />
+110-->[androidx.lifecycle:lifecycle-process:2.4.1] /root/.gradle/caches/8.11.1/transforms/6bb5e4f4c6aa049b1832baa86ef86f9a/transformed/lifecycle-process-2.4.1/AndroidManifest.xml:33:17-49
+111        </provider>
+112    </application>
+113
+114</manifest>

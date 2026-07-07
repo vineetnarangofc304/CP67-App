@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:7:1-70:12
-INJECTED from /app/twa-build/app/src/main/AndroidManifest.xml:7:1-70:12
-INJECTED from /app/twa-build/app/src/main/AndroidManifest.xml:7:1-70:12
-INJECTED from /app/twa-build/app/src/main/AndroidManifest.xml:7:1-70:12
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:7:1-78:12
+INJECTED from /app/twa-build/app/src/main/AndroidManifest.xml:7:1-78:12
+INJECTED from /app/twa-build/app/src/main/AndroidManifest.xml:7:1-78:12
+INJECTED from /app/twa-build/app/src/main/AndroidManifest.xml:7:1-78:12
 MERGED from [androidx.appcompat:appcompat-resources:1.6.1] /root/.gradle/caches/8.11.1/transforms/9d47db89b38049786974dc59bd37c535/transformed/appcompat-resources-1.6.1/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.appcompat:appcompat:1.6.1] /root/.gradle/caches/8.11.1/transforms/f57fccfb55a4f33ab7dd2d5f34e7e850/transformed/appcompat-1.6.1/AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.fragment:fragment:1.3.6] /root/.gradle/caches/8.11.1/transforms/c9e84ff49009cf0efed618d46d78c977/transformed/fragment-1.3.6/AndroidManifest.xml:17:1-24:12
@@ -57,37 +57,21 @@ uses-permission#android.permission.POST_NOTIFICATIONS
 ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:13:5-76
 	android:name
 		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:13:22-74
-uses-permission#android.permission.READ_MEDIA_IMAGES
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:14:5-75
-	android:name
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:14:22-73
-uses-permission#android.permission.READ_EXTERNAL_STORAGE
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:15:5-106
-	android:maxSdkVersion
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:15:78-104
-	android:name
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:15:22-77
-uses-permission#android.permission.WRITE_EXTERNAL_STORAGE
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:16:5-107
-	android:maxSdkVersion
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:16:79-105
-	android:name
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:16:22-78
 uses-feature#android.hardware.camera
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:18:5-84
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:26:5-84
 	android:required
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:18:58-82
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:26:58-82
 	android:name
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:18:19-57
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:26:19-57
 uses-feature#android.hardware.camera.autofocus
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:19:5-94
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:27:5-94
 	android:required
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:19:68-92
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:27:68-92
 	android:name
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:19:19-67
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:27:19-67
 application
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:21:5-69:19
-INJECTED from /app/twa-build/app/src/main/AndroidManifest.xml:21:5-69:19
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:29:5-77:19
+INJECTED from /app/twa-build/app/src/main/AndroidManifest.xml:29:5-77:19
 MERGED from [androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.emoji2:emoji2:1.2.0] /root/.gradle/caches/8.11.1/transforms/e1179467583d51e3d0300d03f282eb7e/transformed/emoji2-1.2.0/AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:28:5-89
@@ -103,85 +87,85 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] /root/.gradle/caches/8.11.1
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.10.1] /root/.gradle/caches/8.11.1/transforms/6c1d80d58ffd34c24e4833e037e53c49/transformed/core-1.10.1/AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:25:9-35
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:33:9-35
 	android:label
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:24:9-40
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:32:9-40
 	android:hardwareAccelerated
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:27:9-43
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:35:9-43
 	android:icon
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:23:9-43
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:31:9-43
 	android:allowBackup
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:22:9-35
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:30:9-35
 	android:theme
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:28:9-56
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:36:9-56
 	android:usesCleartextTraffic
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:26:9-45
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:34:9-45
 activity#com.homelandadvantage.cp67.WebViewActivity
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:31:9-56:20
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:39:9-64:20
 	android:screenOrientation
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:39:13-49
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:47:13-49
 	android:label
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:33:13-49
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:41:13-49
 	android:launchMode
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:36:13-43
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:44:13-43
 	android:hardwareAccelerated
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:37:13-47
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:45:13-47
 	android:exported
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:35:13-36
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:43:13-36
 	android:configChanges
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:38:13-106
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:46:13-106
 	android:theme
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:34:13-60
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:42:13-60
 	android:name
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:32:13-44
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:40:13-44
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:40:13-43:29
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:48:13-51:29
 action#android.intent.action.MAIN
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:41:17-69
-	android:name
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:41:25-66
-category#android.intent.category.LAUNCHER
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:42:17-77
-	android:name
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:42:27-74
-intent-filter#action:name:android.intent.action.VIEW+category:name:android.intent.category.BROWSABLE+category:name:android.intent.category.DEFAULT+data:host:@string/hostName+data:pathPrefix:/app/+data:scheme:https
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:48:13-55:29
-action#android.intent.action.VIEW
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:49:17-68
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:49:17-69
 	android:name
 		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:49:25-66
+category#android.intent.category.LAUNCHER
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:50:17-77
+	android:name
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:50:27-74
+intent-filter#action:name:android.intent.action.VIEW+category:name:android.intent.category.BROWSABLE+category:name:android.intent.category.DEFAULT+data:host:@string/hostName+data:pathPrefix:/app/+data:scheme:https
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:56:13-63:29
+action#android.intent.action.VIEW
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:57:17-68
+	android:name
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:57:25-66
 category#android.intent.category.DEFAULT
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:50:17-76
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:58:17-76
 	android:name
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:50:27-73
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:58:27-73
 category#android.intent.category.BROWSABLE
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:51:17-77
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:59:17-77
 	android:name
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:51:27-75
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:59:27-75
 data
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:52:17-54:50
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:60:17-62:50
 	android:host
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:53:21-52
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:61:21-52
 	android:scheme
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:52:23-45
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:60:23-45
 	android:pathPrefix
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:54:21-47
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:62:21-47
 provider#androidx.core.content.FileProvider
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:59:9-67:20
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:67:9-75:20
 	android:grantUriPermissions
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:62:13-47
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:70:13-47
 	android:authorities
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:61:13-60
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:69:13-60
 	android:exported
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:63:13-37
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:71:13-37
 	android:name
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:60:13-62
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:68:13-62
 meta-data#android.support.FILE_PROVIDER_PATHS
-ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:64:13-66:53
+ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:72:13-74:53
 	android:resource
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:66:17-50
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:74:17-50
 	android:name
-		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:65:17-67
+		ADDED from /app/twa-build/app/src/main/AndroidManifest.xml:73:17-67
 uses-sdk
 INJECTED from /app/twa-build/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from /app/twa-build/app/src/main/AndroidManifest.xml

@@ -11,9 +11,17 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
+    <!--
+        READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE / WRITE_EXTERNAL_STORAGE
+        deliberately NOT declared.
+
+        Rationale (Google Play policy):
+        The app only needs ONE-TIME image selection when the user chooses a
+        bill photo. Google's policy requires apps with one-time or infrequent
+        media use to migrate to the system Photo Picker, which does NOT need
+        these permissions. WebView's <input type="file"> automatically uses
+        the Photo Picker on Android 13+ when READ_MEDIA_IMAGES is absent.
+    -->
 
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
