@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Gift, Receipt, FileText, HelpCircle, Shield, ChevronRight, LogOut, Map, Building2, Share2, Award, Crown } from 'lucide-react';
+import { X, User, Gift, Receipt, FileText, HelpCircle, Shield, ChevronRight, LogOut, Map, Building2, Share2, Award, Crown, Download } from 'lucide-react';
 import { useConsumerAuth } from '../ConsumerApp';
+import { PWAInstallGuideModal } from './PWAInstallGuide';
 
 const menuItems = [
   { path: '/app/profile', icon: User, label: 'My Profile' },
@@ -20,6 +21,7 @@ const menuItems = [
 export default function SideDrawer({ isOpen, onClose }) {
   const navigate = useNavigate();
   const { user, logout } = useConsumerAuth();
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
 
   const handleNav = (path) => {
     onClose();
@@ -31,6 +33,14 @@ export default function SideDrawer({ isOpen, onClose }) {
     logout();
     navigate('/app/welcome');
   };
+
+  const handleInstall = () => {
+    setShowInstallGuide(true);
+  };
+
+  const isStandalone = () =>
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true;
 
   return (
     <AnimatePresence>
@@ -70,6 +80,21 @@ export default function SideDrawer({ isOpen, onClose }) {
                   <ChevronRight size={16} className="drawer-chevron" />
                 </motion.button>
               ))}
+              {!isStandalone() && (
+                <motion.button
+                  className="drawer-nav-item"
+                  onClick={handleInstall}
+                  data-testid="drawer-install-app"
+                  initial={{ x: -30, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: 0.1 + menuItems.length * 0.04, type: 'spring', damping: 20 }}
+                  whileTap={{ scale: 0.97, x: 4 }}
+                >
+                  <Download size={20} />
+                  <span>Install App</span>
+                  <ChevronRight size={16} className="drawer-chevron" />
+                </motion.button>
+              )}
             </nav>
 
             {/* Logout */}
@@ -82,6 +107,7 @@ export default function SideDrawer({ isOpen, onClose }) {
           </motion.div>
         </>
       )}
+      <PWAInstallGuideModal open={showInstallGuide} onClose={() => setShowInstallGuide(false)} />
     </AnimatePresence>
   );
 }

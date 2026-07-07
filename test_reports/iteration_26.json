@@ -1,0 +1,61 @@
+{
+  "summary": "Iteration 26 - Campaign-aware bill processing + PWA install banner/guide verified. All 15 backend tests pass. Frontend PWA banner + modal + drawer install-app menu fully functional end-to-end. Admin Campaigns UI renders and existing campaigns list intact.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration26_campaigns_pwa.py",
+    "/app/test_reports/pytest/iteration26_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Duplicate campaign helper: /app/backend/server.py::apply_campaign_bonus and /app/backend/routes/consumer.py::_apply_campaign_bonus_local are two copies of nearly the same logic. If one is edited without the other, campaign application will diverge between the two bill-processing paths (server.py::process_bill and routes/consumer.py). Consider extracting into /app/backend/utils/campaigns.py and importing in both.",
+    "/api/admin/campaigns/active in server.py uses raw string comparison on start_date/end_date without the length-10 padding that /api/consumer/campaigns/active applies. If a campaign is stored with a date-only string (e.g. '2026-01-01') and the current time is '2026-01-01T14:00:00Z', server-side query {end_date: {$gte: '2026-01-01T14:00:00...'}} will incorrectly exclude a campaign ending today. Consumer route pads with 'T23:59:59'; admin route should too.",
+    "Persistent React warning on consumer pages: 'Encountered two children with the same key' (source not from this iteration but visible in console) — worth fixing for stability.",
+    "Persistent React warning: 'An empty string (\"\") was passed to the src attribute' — likely a home banner rendering empty src; causes browser to re-request the page URL. Should render null or omit img when src is empty.",
+    "server.py is 7176 lines — the campaign CRUD block (~100 lines) is a clean candidate to split into /app/backend/routes/admin_campaigns.py."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration26_campaigns_pwa.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% (all critical PWA install flows verified)"
+  },
+  "test_credentials": {
+    "consumer": "Phone: 9876543210, OTP: 1234",
+    "admin": "Username: admin, Password: CP67Admin@2025"
+  },
+  "seed_data_creation": "Created 4 test campaigns (TEST_2X_Weekend_iter26, TEST_Future_iter26, TEST_Inactive_iter26, TEST_Bonus_iter26). All 4 deleted at end of test run via /api/admin/campaigns/{id} DELETE. Zero test data remains in DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "features_tested": {
+    "public_campaigns_active_no_auth": "PASS - returns {campaigns:[]} without token",
+    "admin_campaigns_create_multiplier": "PASS - 2X campaign created & returned in active list",
+    "admin_campaigns_create_bonus": "PASS - bonus_points=100 campaign visible in active list with correct type",
+    "future_scheduled_campaign_excluded": "PASS - start_date=2099-01-01 correctly filtered out of /consumer/campaigns/active",
+    "inactive_campaign_excluded": "PASS - is_active=false correctly filtered out",
+    "admin_campaigns_toggle": "PASS - toggles is_active flag",
+    "admin_campaigns_update": "PASS - PUT persists new multiplier + description",
+    "admin_campaigns_list": "PASS - GET returns list including new campaign",
+    "admin_campaigns_delete": "PASS - all 4 test campaigns deleted 200",
+    "apply_campaign_bonus_helper": "PASS - server.apply_campaign_bonus returns final_points/bonus_points/applied_campaigns[] shape",
+    "consumer_bill_upload_regression": "PASS - POST /api/consumer/bills/upload returns 200 with bill_id",
+    "admin_bills_list_regression": "PASS - GET /api/bills?limit=5 200",
+    "admin_bills_pending_review_regression": "PASS - GET /api/bills/pending-review 200",
+    "consumer_pwa_install_banner_appears": "PASS - banner shows ~3.5s after login when not in standalone",
+    "consumer_pwa_banner_cta_opens_modal": "PASS - install-banner-cta opens install-guide-modal",
+    "consumer_pwa_modal_close_X": "PASS - install-guide-close closes modal",
+    "consumer_pwa_modal_dismiss_btn": "PASS - install-guide-dismiss closes modal",
+    "consumer_pwa_banner_close_persists": "PASS - install-banner-close sets localStorage cp67_install_banner_v1=1, banner does NOT reappear on reload",
+    "consumer_pwa_drawer_menu_install_app": "PASS - drawer-install-app visible in SideDrawer, click opens install-guide-modal",
+    "admin_campaigns_ui_loads": "PASS - /campaigns page renders campaign list with New Campaign button"
+  },
+  "context_for_next_testing_agent": "PWA install banner has 3.5s delay after mount; wait >4s before asserting visibility. Banner only shows when localStorage['cp67_install_banner_v1'] is unset AND not in standalone display mode. localStorage.clear() during test will also wipe consumer JWT — use page.evaluate(\"localStorage.removeItem('cp67_install_banner_v1')\") instead if you want to reset only the dismiss flag. Home page hamburger has data-testid='menu-btn'. Existing pre-iteration console warnings ('duplicate keys', 'empty src') are noise from other pages, not from PWA components."
+}

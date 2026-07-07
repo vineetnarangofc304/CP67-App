@@ -798,6 +798,11 @@ const Bills = () => {
                         {/* Points & Date */}
                         <div className="text-right">
                           <p className="font-semibold text-[#D4AF37]">+{bill.points_issued || 0} pts</p>
+                          {bill.campaign_bonus > 0 && (
+                            <p className="text-xs text-emerald-600 font-medium" title={(bill.applied_campaigns || []).map(c => c.name).join(', ')}>
+                              incl. +{bill.campaign_bonus} campaign
+                            </p>
+                          )}
                           <p className="text-xs text-slate-500">{formatDate(bill.created_at)}</p>
                           {bill.processed_by && (
                             <div className="text-xs mt-1">

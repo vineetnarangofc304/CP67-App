@@ -4651,3 +4651,81 @@
   border: 1px solid rgba(44, 24, 16, 0.15);
 }
 .cp-btn-ghost:hover { background: rgba(44, 24, 16, 0.04); }
+
+/* ==================== PWA Install Guide ==================== */
+.cp-install-block {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(212, 175, 55, 0.06);
+  border: 1px solid rgba(212, 175, 55, 0.22);
+}
+.cp-install-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--cp-text);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.cp-install-block .cp-install-steps { margin: 8px 0 4px; }
+
+/* Floating bottom-right install banner (non-intrusive) */
+.cp-install-banner {
+  position: fixed;
+  bottom: 88px; /* above bottom nav */
+  right: 16px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 10px;
+  background: linear-gradient(135deg, #2C1810 0%, #4A2A1A 100%);
+  color: #FFF6E6;
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(44, 24, 16, 0.35), 0 0 0 1px rgba(212,175,55,0.35) inset;
+  max-width: calc(100vw - 32px);
+}
+.cp-install-banner-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: rgba(212, 175, 55, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFD87A;
+  flex-shrink: 0;
+}
+.cp-install-banner-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  font-size: 12px;
+}
+.cp-install-banner-text strong { font-size: 13px; letter-spacing: 0.2px; }
+.cp-install-banner-text span { opacity: 0.75; }
+.cp-install-banner-cta {
+  background: #D4AF37;
+  color: #2C1810;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cp-install-banner-close {
+  background: transparent;
+  border: none;
+  color: #FFF6E6;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 4px;
+}
+.cp-install-banner-close:hover { opacity: 1; }
+
+@media (max-width: 480px) {
+  .cp-install-banner { bottom: 80px; right: 10px; left: 10px; }
+}

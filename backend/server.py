@@ -500,6 +500,100 @@ class TagnPayClient:
 
 tagnpay_client = TagnPayClient()
 
+# ======================== CAMPAIGN ENGINE ========================
+
+async def apply_campaign_bonus(
+    bill_amount: float,
+    base_points: int,
+    store_name: Optional[str] = None,
+    is_first_bill: bool = False,
+) -> Dict:
+    """
+    Apply active campaign multipliers/bonuses to base_points earned from Fundle.
+
+    Matching rules per campaign:
+      - is_active=True, and now is within [start_date, end_date]
+      - min_spend <= bill_amount (0 = no min)
+      - applicable_categories: matches brand.category (case-insensitive) OR null=all
+      - applicable_brand_ids: matches brand.id OR null=all
+      - applicable_floors: currently ignored (no floor mapping) unless null (which = all)
+      - campaign_type=first_visit only applies if is_first_bill=True
+
+    Returns:
+      { "final_points": int, "bonus_points": int, "applied_campaigns": [{name, type, effect}] }
+    """
+    if base_points <= 0 and not is_first_bill:
+        return {"final_points": base_points, "bonus_points": 0, "applied_campaigns": []}
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    brand = None
+    brand_category = None
+    brand_id = None
+    if store_name:
+        brand = await db.brands.find_one(
+            {"brand_name": {"$regex": f"^{re.escape(store_name)}$", "$options": "i"}, "is_active": True},
+            {"_id": 0, "id": 1, "category": 1},
+        )
+        if brand:
+            brand_category = (brand.get("category") or "").strip().lower()
+            brand_id = brand.get("id")
+
+    applied = []
+    total_bonus = 0
+    multiplier_extra = 0
+
+    async for c in db.campaigns.find({"is_active": True}, {"_id": 0}):
+        # Date-range check (start/end may be ISO date or full ISO)
+        start = c.get("start_date") or ""
+        end = c.get("end_date") or ""
+        # Normalise end_date to end-of-day (23:59:59) if only a date
+        end_check = end + "T23:59:59" if len(end) == 10 else end
+        start_check = start + "T00:00:00" if len(start) == 10 else start
+        if start_check and start_check > now_iso:
+            continue
+        if end_check and end_check < now_iso:
+            continue
+
+        # Min spend
+        if bill_amount < (c.get("min_spend") or 0):
+            continue
+
+        # Category filter
+        cats = c.get("applicable_categories")
+        if cats:
+            if not brand_category or brand_category not in [x.strip().lower() for x in cats]:
+                continue
+
+        # Brand-id filter
+        brands = c.get("applicable_brand_ids")
+        if brands:
+            if not brand_id or brand_id not in brands:
+                continue
+
+        ctype = c.get("campaign_type")
+        if ctype == "first_visit" and not is_first_bill:
+            continue
+
+        # Apply campaign
+        if ctype == "multiplier":
+            mult = float(c.get("multiplier") or 1.0)
+            extra = int(round(base_points * (mult - 1.0)))
+            if extra > 0:
+                multiplier_extra += extra
+                applied.append({"name": c.get("name"), "type": "multiplier", "effect": f"{mult}X (+{extra})"})
+        elif ctype in ("bonus", "first_visit", "spend_threshold"):
+            bonus = int(c.get("bonus_points") or 0)
+            if bonus > 0:
+                total_bonus += bonus
+                applied.append({"name": c.get("name"), "type": ctype, "effect": f"+{bonus} pts"})
+
+    final_points = base_points + multiplier_extra + total_bonus
+    return {
+        "final_points": int(final_points),
+        "bonus_points": int(multiplier_extra + total_bonus),
+        "applied_campaigns": applied,
+    }
+
 # ======================== BILL OCR SERVICE ========================
 
 async def analyze_bill_image(image_base64: str) -> Dict:
@@ -2611,6 +2705,25 @@ async def process_bill(bill_id: str, request: BillProcessRequest, background_tas
         if points_result.get("success") and points_result.get("data"):
             total_balance = int(points_result["data"].get("balance_points", 0))
         
+        # ------- Campaign Engine: apply active multipliers/bonuses -------
+        campaign_bonus_points = 0
+        applied_campaigns = []
+        if points_earned > 0:
+            is_first = await db.bills.count_documents({"user_id": bill["user_id"], "status": {"$in": ["auto_approved", "approved"]}}) == 0
+            camp = await apply_campaign_bonus(
+                bill_amount=bill_amount,
+                base_points=points_earned,
+                store_name=store_name,
+                is_first_bill=is_first,
+            )
+            campaign_bonus_points = camp["bonus_points"]
+            applied_campaigns = camp["applied_campaigns"]
+            points_earned = camp["final_points"]
+            if campaign_bonus_points > 0:
+                update_data["campaign_bonus"] = campaign_bonus_points
+                update_data["applied_campaigns"] = applied_campaigns
+                logger.info(f"Campaign bonus applied on admin approve for bill {bill_id}: +{campaign_bonus_points}")
+
         update_data["status"] = "approved"
         update_data["points_issued"] = points_earned
         
@@ -2630,9 +2743,13 @@ async def process_bill(bill_id: str, request: BillProcessRequest, background_tas
         
         store_display = store_name if store_name and store_name != "None" else "CP67 Mall"
         # Success WhatsApp Message (per revised flow document)
+        campaign_line = ""
+        if campaign_bonus_points > 0 and applied_campaigns:
+            names = ", ".join([c["name"] for c in applied_campaigns])
+            campaign_line = f"\nBonus: +{campaign_bonus_points} pts ({names})"
         whatsapp_message = f"""Thank you for uploading your bill of {store_display} with Homeland Advantage.
 
-Points Credited: {points_earned}
+Points Credited: {points_earned}{campaign_line}
 Total Balance: {total_balance}
 
 Earn more rewards every time you shop at CP67.
@@ -2815,17 +2932,30 @@ async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks, payloa
         message = data.get("message", "")
         
         if points_earned > 0:
-            # Success! Update bill status
-            await db.bills.update_one(
-                {"id": bill_id},
-                {"$set": {
-                    "status": "approved",
-                    "points_issued": points_earned,
-                    "rejection_reason": None,
-                    "processed_at": datetime.now(timezone.utc).isoformat(),
-                    "processed_by": "admin_reprocess"
-                }}
+            # ------- Campaign Engine: apply active multipliers/bonuses -------
+            is_first = await db.bills.count_documents({"user_id": user["id"], "status": {"$in": ["auto_approved", "approved"]}}) == 0
+            camp = await apply_campaign_bonus(
+                bill_amount=amount,
+                base_points=points_earned,
+                store_name=store_name,
+                is_first_bill=is_first,
             )
+            campaign_bonus_points = camp["bonus_points"]
+            applied_campaigns = camp["applied_campaigns"]
+            points_earned = camp["final_points"]
+
+            # Success! Update bill status
+            bill_update = {
+                "status": "approved",
+                "points_issued": points_earned,
+                "rejection_reason": None,
+                "processed_at": datetime.now(timezone.utc).isoformat(),
+                "processed_by": "admin_reprocess"
+            }
+            if campaign_bonus_points > 0:
+                bill_update["campaign_bonus"] = campaign_bonus_points
+                bill_update["applied_campaigns"] = applied_campaigns
+            await db.bills.update_one({"id": bill_id}, {"$set": bill_update})
 
             # Update user points locally
             await db.users.update_one(
@@ -2838,6 +2968,10 @@ async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks, payloa
             user_doc_after = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
             total_balance = int((user_doc_after or {}).get("balance_points", 0))
 
+            campaign_line = ""
+            if campaign_bonus_points > 0 and applied_campaigns:
+                names = ", ".join([c["name"] for c in applied_campaigns])
+                campaign_line = f"\n Bonus: +{campaign_bonus_points} pts ({names})"
             success_msg = f""" *Points Credited!*
 
 Your bill has been processed:
@@ -2845,7 +2979,7 @@ Your bill has been processed:
  Bill No: {bill_no}
  Amount: ₹{amount:.0f}
 
- Points Earned: {points_earned}
+ Points Earned: {points_earned}{campaign_line}
  Total Balance: {total_balance}
 
 Thank you for your patience! """
@@ -3114,6 +3248,18 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
         points_earned = int(earn_result["data"].get("earned_points", 0) or 0)
 
     if points_earned > 0:
+        # ------- Campaign Engine: apply active multipliers/bonuses -------
+        is_first = await db.bills.count_documents({"user_id": user["id"], "status": {"$in": ["auto_approved", "approved"]}}) == 0
+        camp = await apply_campaign_bonus(
+            bill_amount=amount,
+            base_points=points_earned,
+            store_name=store_name,
+            is_first_bill=is_first,
+        )
+        campaign_bonus_points = camp["bonus_points"]
+        applied_campaigns = camp["applied_campaigns"]
+        points_earned = camp["final_points"]
+
         update_payload.update({
             "status": "approved",
             "points_issued": points_earned,
@@ -3121,6 +3267,9 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
             "processed_at": datetime.now(timezone.utc).isoformat(),
             "processed_by": "admin_bulk_reprocess"
         })
+        if campaign_bonus_points > 0:
+            update_payload["campaign_bonus"] = campaign_bonus_points
+            update_payload["applied_campaigns"] = applied_campaigns
         await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
 
         await db.users.update_one(
@@ -3132,9 +3281,13 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
             try:
                 total_balance_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
                 total_balance = int((total_balance_doc or {}).get("balance_points", 0))
+                campaign_line = ""
+                if campaign_bonus_points > 0 and applied_campaigns:
+                    names = ", ".join([c["name"] for c in applied_campaigns])
+                    campaign_line = f"\nBonus: +{campaign_bonus_points} pts ({names})"
                 msg = (f"Good news! Your bill has been processed.\n\n"
                        f"Store: {store_name}\nBill No: {bill_no}\nAmount: \u20b9{amount:.0f}\n"
-                       f"Points Earned: {points_earned}\nTotal Balance: {total_balance}\n\n"
+                       f"Points Earned: {points_earned}{campaign_line}\nTotal Balance: {total_balance}\n\n"
                        f"Thank you for your patience.")
                 background_tasks.add_task(send_whatsapp_text, phone, msg)
             except Exception as e:
@@ -4725,6 +4878,23 @@ Please review in the admin dashboard."""
         if points_result.get("success") and points_result.get("data"):
             total_balance = int(points_result["data"].get("balance_points", 0))
         
+        # ------- Campaign Engine: apply active multipliers/bonuses -------
+        campaign_bonus_points = 0
+        applied_campaigns = []
+        if points_earned > 0:
+            is_first = await db.bills.count_documents({"user_id": user["id"], "status": {"$in": ["auto_approved", "approved"]}}) == 0
+            camp = await apply_campaign_bonus(
+                bill_amount=amount,
+                base_points=points_earned,
+                store_name=store_name,
+                is_first_bill=is_first,
+            )
+            campaign_bonus_points = camp["bonus_points"]
+            applied_campaigns = camp["applied_campaigns"]
+            points_earned = camp["final_points"]
+            if campaign_bonus_points > 0:
+                logger.info(f"Campaign bonus applied for {phone}: +{campaign_bonus_points} pts | {applied_campaigns}")
+
         # Save bill to DB with appropriate status and error reason
         bill_data = BillData(
             user_id=user["id"],
@@ -4742,7 +4912,11 @@ Please review in the admin dashboard."""
             processed_at=datetime.now(timezone.utc).isoformat(),
             rejection_reason=tagnpay_error  # Store TagnPay error for dashboard reference
         )
-        await db.bills.insert_one(bill_data.model_dump())
+        bill_dict = bill_data.model_dump()
+        if applied_campaigns:
+            bill_dict["campaign_bonus"] = campaign_bonus_points
+            bill_dict["applied_campaigns"] = applied_campaigns
+        await db.bills.insert_one(bill_dict)
         
         # If brand not found, send admin alert and show processing message to user
         if bill_status == "pending_review" and "Brand" in (tagnpay_error or ""):
@@ -4814,9 +4988,13 @@ Thank you for shopping at CP67 Mall!"""
         
         # Success Message (per revised flow document)
         store_display2 = store_name if store_name and store_name != "None" else "CP67 Mall"
+        campaign_line = ""
+        if campaign_bonus_points > 0 and applied_campaigns:
+            names = ", ".join([c["name"] for c in applied_campaigns])
+            campaign_line = f"\nBonus: +{campaign_bonus_points} pts ({names})"
         success_msg = f"""Thank you for uploading your bill from {store_display2} with Homeland Advantage.
 
-Points Credited: {points_earned}
+Points Credited: {points_earned}{campaign_line}
 Total Balance: {total_balance}
 
 Earn more rewards every time you shop at CP67 Mall.

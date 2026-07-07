@@ -765,6 +765,24 @@ async def list_offers(category: str = None, store_id: str = None):
     return {"offers": offers}
 
 
+@consumer_router.get("/campaigns/active")
+async def list_active_campaigns():
+    """Public: currently active campaigns for consumer display (Live Now banner)."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    campaigns = []
+    async for c in _db.campaigns.find({"is_active": True}, {"_id": 0}).sort("end_date", 1):
+        start = c.get("start_date") or ""
+        end = c.get("end_date") or ""
+        end_check = end + "T23:59:59" if len(end) == 10 else end
+        start_check = start + "T00:00:00" if len(start) == 10 else start
+        if start_check and start_check > now_iso:
+            continue
+        if end_check and end_check < now_iso:
+            continue
+        campaigns.append(c)
+    return {"campaigns": campaigns}
+
+
 # ==================== EVENTS ROUTES ====================
 
 @consumer_router.get("/events")
@@ -1057,7 +1075,28 @@ async def process_bill_ocr(bill_id: str, image_base64: str, user_id: str, phone:
             status = "pending_review"
             logger.error(f"TagnPay earn failed for bill {bill_id}: {earn_result}")
 
-        await _db.bills.update_one({"id": bill_id}, {"$set": {
+        # ------- Campaign Engine: apply active multipliers/bonuses -------
+        campaign_bonus_points = 0
+        applied_campaigns = []
+        if points_earned > 0:
+            is_first = await _db.bills.count_documents({"user_id": user_id, "status": {"$in": ["auto_approved", "approved"]}}) == 0
+            camp = await _apply_campaign_bonus_local(
+                bill_amount=amount,
+                base_points=points_earned,
+                store_name=store_name,
+                is_first_bill=is_first,
+            )
+            campaign_bonus_points = camp["bonus_points"]
+            applied_campaigns = camp["applied_campaigns"]
+            points_earned = camp["final_points"]
+            # Sync bonus to user's local balance (Fundle balance already has base)
+            if campaign_bonus_points > 0:
+                await _db.users.update_one(
+                    {"id": user_id},
+                    {"$inc": {"balance_points": campaign_bonus_points, "total_earned_points": campaign_bonus_points}}
+                )
+
+        update_set = {
             "status": status,
             "store_name": store_name,
             "bill_no": bill_no,
@@ -1067,11 +1106,16 @@ async def process_bill_ocr(bill_id: str, image_base64: str, user_id: str, phone:
             "ocr_confidence": confidence,
             "ocr_raw_data": ocr_data,
             "processed_at": datetime.now(timezone.utc).isoformat()
-        }})
+        }
+        if campaign_bonus_points > 0:
+            update_set["campaign_bonus"] = campaign_bonus_points
+            update_set["applied_campaigns"] = applied_campaigns
+        await _db.bills.update_one({"id": bill_id}, {"$set": update_set})
 
         if status == "approved":
+            bonus_txt = f" (incl. +{campaign_bonus_points} campaign bonus)" if campaign_bonus_points > 0 else ""
             await send_app_notification(user_id, "Points Earned!",
-                f"You earned {points_earned} points from your purchase at {store_name}!", "points")
+                f"You earned {points_earned} points{bonus_txt} from your purchase at {store_name}!", "points")
 
     except Exception as e:
         logger.error(f"OCR processing error for bill {bill_id}: {e}")
@@ -1091,6 +1135,65 @@ async def send_app_notification(user_id: str, title: str, body: str, notif_type:
         "is_read": False,
         "created_at": datetime.now(timezone.utc).isoformat()
     })
+
+
+async def _apply_campaign_bonus_local(bill_amount: float, base_points: int,
+                                       store_name: Optional[str] = None,
+                                       is_first_bill: bool = False) -> Dict:
+    """Apply active campaign multipliers/bonuses to Fundle-earned points (consumer route local copy).
+    Kept in-file to avoid circular imports with server.py."""
+    if base_points <= 0 and not is_first_bill:
+        return {"final_points": base_points, "bonus_points": 0, "applied_campaigns": []}
+    now_iso = datetime.now(timezone.utc).isoformat()
+    brand_category = None
+    brand_id = None
+    if store_name:
+        brand = await _db.brands.find_one(
+            {"brand_name": {"$regex": f"^{re.escape(store_name)}$", "$options": "i"}, "is_active": True},
+            {"_id": 0, "id": 1, "category": 1},
+        )
+        if brand:
+            brand_category = (brand.get("category") or "").strip().lower()
+            brand_id = brand.get("id")
+    applied = []
+    multiplier_extra = 0
+    total_bonus = 0
+    async for c in _db.campaigns.find({"is_active": True}, {"_id": 0}):
+        start = c.get("start_date") or ""
+        end = c.get("end_date") or ""
+        end_check = end + "T23:59:59" if len(end) == 10 else end
+        start_check = start + "T00:00:00" if len(start) == 10 else start
+        if start_check and start_check > now_iso:
+            continue
+        if end_check and end_check < now_iso:
+            continue
+        if bill_amount < (c.get("min_spend") or 0):
+            continue
+        cats = c.get("applicable_categories")
+        if cats:
+            if not brand_category or brand_category not in [x.strip().lower() for x in cats]:
+                continue
+        brands = c.get("applicable_brand_ids")
+        if brands:
+            if not brand_id or brand_id not in brands:
+                continue
+        ctype = c.get("campaign_type")
+        if ctype == "first_visit" and not is_first_bill:
+            continue
+        if ctype == "multiplier":
+            mult = float(c.get("multiplier") or 1.0)
+            extra = int(round(base_points * (mult - 1.0)))
+            if extra > 0:
+                multiplier_extra += extra
+                applied.append({"name": c.get("name"), "type": "multiplier", "effect": f"{mult}X (+{extra})"})
+        elif ctype in ("bonus", "first_visit", "spend_threshold"):
+            bonus = int(c.get("bonus_points") or 0)
+            if bonus > 0:
+                total_bonus += bonus
+                applied.append({"name": c.get("name"), "type": ctype, "effect": f"+{bonus} pts"})
+    return {"final_points": int(base_points + multiplier_extra + total_bonus),
+            "bonus_points": int(multiplier_extra + total_bonus),
+            "applied_campaigns": applied}
 
 
 @consumer_router.get("/bills")
