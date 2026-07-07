@@ -5865,12 +5865,18 @@ async def toggle_campaign(campaign_id: str, payload: dict = Depends(verify_jwt_t
 @api_router.get("/admin/campaigns/active")
 async def get_active_campaigns():
     """Get currently active campaigns (for consumer display / bill processing)"""
-    now = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(timezone.utc).isoformat()
     campaigns = []
-    async for c in db.campaigns.find(
-        {"is_active": True, "start_date": {"$lte": now}, "end_date": {"$gte": now}},
-        {"_id": 0}
-    ):
+    async for c in db.campaigns.find({"is_active": True}, {"_id": 0}).sort("end_date", 1):
+        start = c.get("start_date") or ""
+        end = c.get("end_date") or ""
+        # Normalise date-only strings to full-day windows for correct comparison
+        start_check = start + "T00:00:00" if len(start) == 10 else start
+        end_check = end + "T23:59:59" if len(end) == 10 else end
+        if start_check and start_check > now_iso:
+            continue
+        if end_check and end_check < now_iso:
+            continue
         campaigns.append(c)
     return {"campaigns": campaigns}
 

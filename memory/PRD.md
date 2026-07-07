@@ -185,6 +185,33 @@ Three production issues + a critical perf fix:
 - AndroidManifest now requests `android.permission.CAMERA`, `android.permission.POST_NOTIFICATIONS`, `android.permission.INTERNET` and declares optional camera features so the in-app bill capture works on Android.
 - Bumped `appVersionCode=2`, `appVersionName="1.1"` — requires rebuild via `./gradlew bundleRelease`.
 
+## Phase 17 (Feb 7, 2026 — this session) — Campaign Engine + PWA Install Guide
+
+### Backend — Campaign-Aware Bill Processing
+- `apply_campaign_bonus(bill_amount, base_points, store_name, is_first_bill)` helper in `/app/backend/server.py` (~line 503). Reads `db.campaigns` (active, in-date-range, min_spend ok, category/brand filters, campaign_type). Returns `{final_points, bonus_points, applied_campaigns[]}`.
+- Wired into every bill-approval path: WhatsApp auto-approve (`process_bill_image`), admin approve (`process_bill`), single reprocess (`reprocess_bill`), and bulk reprocess (`_reprocess_single_bill`). Fundle's base points are the ground truth; multipliers/bonuses are added on top and stored in `bills.campaign_bonus` + `bills.applied_campaigns`. WhatsApp success messages now show `Bonus: +X pts (Campaign Name)` line when applicable.
+- Consumer in-app bill upload (`/api/consumer/bills/upload` -> `process_bill_ocr` in `routes/consumer.py`) also applies campaign bonus and increments user balance for the delta.
+- New public endpoint `GET /api/consumer/campaigns/active` — filtered date-window active campaigns for consumer UI display (no auth).
+- Fixed `/api/admin/campaigns/active`: date-only strings (`YYYY-MM-DD`) are now padded to full-day window for correct comparison (previously excluded a campaign ending today).
+
+### Frontend — PWA Install Guide
+- New `/app/frontend/src/consumer/components/PWAInstallGuide.jsx` exporting `PWAInstallGuideModal` + `PWAInstallBanner`.
+- **PWAInstallBanner** (mounted from `ConsumerApp.jsx` when `token` is set): a subtle, non-intrusive pill anchored above the bottom nav. Only appears when NOT in standalone mode and localStorage flag not set. 3.5s delay so it doesn't compete with page-load animations. "How" opens the modal; X permanently dismisses.
+- **PWAInstallGuideModal**: iOS Safari steps, Android Chrome steps (with native `beforeinstallprompt` "Install Now" button when available), and Desktop steps.
+- SideDrawer has a new "Install App" menu item (only visible when not in standalone) that opens the same modal — users can always find the guide from the drawer even after dismissing the banner.
+- Admin Bills page now shows "incl. +X campaign" line under points when a bill was boosted by a campaign.
+
+### Testing
+- 15/15 backend + 100% frontend PWA install flows passed (iteration_26).
+- Test file: `/app/backend/tests/test_iteration26_campaigns_pwa.py`
+
+## Pending / Next
+- (P0) BLOCKED: Android WebView camera bug (Point 5) — awaiting user detail on exact symptom.
+- (P2) Refactor `server.py` (~7176 lines) into `/routes/admin_bills.py`, `/routes/admin_campaigns.py`, `/services/ocr.py`, `/services/tagnpay.py`, `/utils/campaigns.py` (extract duplicate campaign helper from consumer.py + server.py).
+- (P2) Brand/Store separate dashboard.
+- (P2) Automate footfall data via email parser.
+- (P2) Advanced Analytics: RFM, CLV, AI Concierge.
+
 ## Upcoming Tasks (P1)
 - Campaign-aware bill processing: Auto-apply multipliers during active campaigns
 - Web Push delivery: configure VAPID keypair + Firebase project; add backend send endpoint
