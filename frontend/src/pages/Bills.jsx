@@ -57,6 +57,13 @@ const Bills = () => {
   // ----- Bulk Reprocess (date-range) state -----
   const todayISO = new Date().toISOString().slice(0, 10);
   const yesterdayISO = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10); })();
+  // ----- Fix Brand modal state -----
+  const [fixBrandOpen, setFixBrandOpen] = useState(false);
+  const [fixBrandBill, setFixBrandBill] = useState(null);
+  const [brandsList, setBrandsList] = useState([]);
+  const [brandSearch, setBrandSearch] = useState('');
+  const [fixBrandBusy, setFixBrandBusy] = useState(false);
+
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkFrom, setBulkFrom] = useState(yesterdayISO);
   const [bulkTo, setBulkTo] = useState(todayISO);
@@ -222,21 +229,32 @@ const Bills = () => {
     try { xhr.send(); } catch { toast.error('Could not send reprocess request.'); }
   };
 
-  // -------- Edit Brand (rename mis-matched brand + auto-reprocess) --------
+  // -------- Edit Brand (open searchable dropdown of Fundle-matched brands) --------
   const editBrandBill = async (bill) => {
-    const currentName = bill.store_name || '';
-    const newName = window.prompt(
-      `Current brand: "${currentName}"\n\n` +
-      `Enter the CORRECT brand name (as it appears in Fundle master):\n` +
-      `(This will update the bill and immediately re-send it to Fundle.)`,
-      currentName
-    );
-    if (newName === null) return; // cancelled
-    const trimmed = (newName || '').trim();
-    if (!trimmed || trimmed === currentName) return;
+    setFixBrandBill(bill);
+    setBrandSearch(bill.store_name || '');
+    setFixBrandOpen(true);
+    // Lazy-load master brand list on first open
+    if (brandsList.length === 0) {
+      try {
+        const r = await fetch(`${API_URL}/admin/brands`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (r.ok) {
+          const d = await r.json();
+          setBrandsList(d.brands || []);
+        }
+      } catch { /* toast handled in UI */ }
+    }
+  };
 
+  const submitFixBrand = async (chosenName) => {
+    if (!fixBrandBill || !chosenName) return;
+    const trimmed = String(chosenName).trim();
+    if (!trimmed) return;
+    setFixBrandBusy(true);
     try {
-      const res = await fetch(`${API_URL}/admin/bills/${bill.id}/edit-brand`, {
+      const res = await fetch(`${API_URL}/admin/bills/${fixBrandBill.id}/edit-brand`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -252,14 +270,18 @@ const Bills = () => {
       if (data.action === 'approved') {
         toast.success(`Brand fixed → "${trimmed}". Approved with ${data.points || 0} pts`);
       } else if (data.error) {
-        toast.warning(`Brand updated to "${trimmed}" but Fundle: ${data.error}`);
+        toast.warning(`Brand updated but Fundle: ${data.error}. Try a different variant.`);
       } else {
         toast.success(`Brand updated to "${trimmed}". Status: ${data.status}`);
       }
+      setFixBrandOpen(false);
+      setFixBrandBill(null);
       fetchBills();
       fetchPendingBills();
     } catch {
       toast.error('Network error while editing brand');
+    } finally {
+      setFixBrandBusy(false);
     }
   };
 
@@ -1010,6 +1032,93 @@ const Bills = () => {
                 <CheckCircle className="h-4 w-4" />
               )}
               Approve & Credit Points
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fix Brand Dialog — searchable dropdown of Fundle-matched master brands */}
+      <Dialog open={fixBrandOpen} onOpenChange={(o) => { setFixBrandOpen(o); if (!o) setFixBrandBill(null); }}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-['Manrope']">Fix Brand Name</DialogTitle>
+            <p className="text-sm text-slate-500 mt-1">
+              Pick the exact brand name from Fundle&apos;s master list. Free-typed names
+              often fail because Fundle needs an <strong>exact</strong> match.
+            </p>
+          </DialogHeader>
+
+          {fixBrandBill && (
+            <div className="space-y-3">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div><span className="text-slate-500">Bill:</span> <strong>{fixBrandBill.bill_no || 'N/A'}</strong></div>
+                  <div><span className="text-slate-500">Amount:</span> <strong>₹{fixBrandBill.amount || 0}</strong></div>
+                  <div className="col-span-2">
+                    <span className="text-slate-500">OCR detected:</span> <strong className="text-amber-800">{fixBrandBill.store_name || 'Unknown'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Search master brands ({brandsList.length}):</Label>
+                <Input
+                  autoFocus
+                  placeholder="Type to filter…"
+                  value={brandSearch}
+                  onChange={(e) => setBrandSearch(e.target.value)}
+                  data-testid="fix-brand-search"
+                />
+              </div>
+
+              <div className="border border-slate-200 rounded-lg max-h-64 overflow-y-auto divide-y divide-slate-100" data-testid="fix-brand-list">
+                {(() => {
+                  const q = brandSearch.trim().toLowerCase();
+                  const filtered = q
+                    ? brandsList.filter((b) => (b.brand_name || '').toLowerCase().includes(q))
+                    : brandsList;
+                  if (filtered.length === 0) {
+                    return <div className="p-3 text-sm text-slate-500">No matching brand in master. Type differently or use the &quot;Use exact text&quot; option below.</div>;
+                  }
+                  return filtered.slice(0, 100).map((b) => (
+                    <button
+                      key={b.brand_name}
+                      type="button"
+                      className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center justify-between"
+                      onClick={() => submitFixBrand(b.brand_name)}
+                      disabled={fixBrandBusy}
+                      data-testid={`fix-brand-pick-${b.brand_name}`}
+                    >
+                      <span className="text-sm font-medium">{b.brand_name}</span>
+                      {b.category && <span className="text-xs text-slate-400">{b.category}</span>}
+                    </button>
+                  ));
+                })()}
+              </div>
+
+              {brandSearch.trim() && (
+                <div className="pt-2 border-t border-slate-200">
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => submitFixBrand(brandSearch)}
+                    disabled={fixBrandBusy}
+                    data-testid="fix-brand-use-typed"
+                  >
+                    Use exact text: <strong className="ml-1">&quot;{brandSearch.trim()}&quot;</strong>
+                  </Button>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Note: If this brand isn&apos;t in Fundle master, the reprocess will fail again.
+                    Ask Fundle to add it first, or pick a similar brand above.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFixBrandOpen(false)} disabled={fixBrandBusy}>
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>
