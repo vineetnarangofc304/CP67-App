@@ -57,8 +57,8 @@ android {
         applicationId "com.homelandadvantage.cp67"
         minSdkVersion 21
         targetSdkVersion 35
-        versionCode 8
-        versionName "1.7"
+        versionCode 9
+        versionName "1.8"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name
@@ -162,7 +162,15 @@ android {
     }
     buildTypes {
         release {
-            minifyEnabled true
+            // v1.8: minifyEnabled DISABLED. R8/ProGuard was stripping
+            // WebView anonymous-inner-class callback signatures (onShowFileChooser
+            // + ValueCallback<Uri[]>), causing a hard NoClassDefFoundError crash
+            // the moment the user tapped the camera/gallery input in the release APK.
+            // This app is < 2 MB — shrinking gains nothing but risks a lot.
+            minifyEnabled false
+            shrinkResources false
+            // Kept for safety in case minify is re-enabled later
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
         }
     }

@@ -1,4 +1,4 @@
-#Tue Jul 07 11:38:07 UTC 2026
-base.0=/app/twa-build/app/build/intermediates/dex/release/minifyReleaseWithR8/classes.dex
+#Wed Jul 08 08:59:01 UTC 2026
+base.0=/app/twa-build/app/build/intermediates/dex/release/mergeDexRelease/classes.dex
 renamed.0=classes.dex
 path.0=classes.dex

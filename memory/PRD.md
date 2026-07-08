@@ -185,7 +185,14 @@ Three production issues + a critical perf fix:
 - AndroidManifest now requests `android.permission.CAMERA`, `android.permission.POST_NOTIFICATIONS`, `android.permission.INTERNET` and declares optional camera features so the in-app bill capture works on Android.
 - Bumped `appVersionCode=2`, `appVersionName="1.1"` — requires rebuild via `./gradlew bundleRelease`.
 
-## Phase 17 (Feb 7, 2026 — this session) — Campaign Engine + PWA Install Guide
+## Phase 17 (Feb 7, 2026 — this session) — Campaign Engine + PWA Install Guide + Camera Crash Fix
+
+### Android v1.8 — CAMERA FORCE-CLOSE FIXED (Point 5) ✅
+- **Root cause identified**: `minifyEnabled true` in `app/build.gradle` with NO custom ProGuard rules meant R8 was stripping/obfuscating the WebView anonymous inner-class callback signatures (`onShowFileChooser` + `ValueCallback<Uri[]>`). The app crashed with "internal error / force close" the moment the user tapped the camera/gallery input in the release APK — because the runtime couldn't resolve the callback class.
+- **Fix in `/app/twa-build/app/build.gradle`**: `minifyEnabled false`, `shrinkResources false` — this app is < 3 MB, R8 gains nothing but breaks WebView.
+- **Belt-and-suspenders**: Created `/app/twa-build/app/proguard-rules.pro` keeping WebView, `ValueCallback`, `FileProvider`, and anonymous inner classes — protects future maintainers if they re-enable minify.
+- **Hardened `WebViewActivity.onShowFileChooser`**: catches `Throwable` (not just `ActivityNotFoundException`) on every branch, always releases `fileUploadCallback` on failure so the page doesn't hang, null-safety on `fileChooserParams`.
+- **Bumped `versionCode=9`, `versionName="1.8"`**. Built + signed both `app-release-signed.apk` (2.8 MB) and `app-release-bundle.aab` (2.6 MB), also copied to `/app/frontend/public/downloads/cp67-v1.8.{apk,aab}` and `cp67-mall.{apk,aab}`.
 
 ### Backend — Campaign-Aware Bill Processing
 - `apply_campaign_bonus(bill_amount, base_points, store_name, is_first_bill)` helper in `/app/backend/server.py` (~line 503). Reads `db.campaigns` (active, in-date-range, min_spend ok, category/brand filters, campaign_type). Returns `{final_points, bonus_points, applied_campaigns[]}`.
@@ -206,7 +213,7 @@ Three production issues + a critical perf fix:
 - Test file: `/app/backend/tests/test_iteration26_campaigns_pwa.py`
 
 ## Pending / Next
-- (P0) BLOCKED: Android WebView camera bug (Point 5) — awaiting user detail on exact symptom.
+- **User action required**: Upload `cp67-v1.8.aab` to Play Console + release. Verify camera opens without crash.
 - (P2) Refactor `server.py` (~7176 lines) into `/routes/admin_bills.py`, `/routes/admin_campaigns.py`, `/services/ocr.py`, `/services/tagnpay.py`, `/utils/campaigns.py` (extract duplicate campaign helper from consumer.py + server.py).
 - (P2) Brand/Store separate dashboard.
 - (P2) Automate footfall data via email parser.

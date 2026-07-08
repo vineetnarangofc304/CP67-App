@@ -151,7 +151,7 @@ public class WebViewActivity extends Activity {
                                              ValueCallback<Uri[]> filePathCallback,
                                              FileChooserParams fileChooserParams) {
                 if (fileUploadCallback != null) {
-                    fileUploadCallback.onReceiveValue(null);
+                    try { fileUploadCallback.onReceiveValue(null); } catch (Throwable ignored) {}
                 }
                 fileUploadCallback = filePathCallback;
 
@@ -159,9 +159,12 @@ public class WebViewActivity extends Activity {
                 // launch the native camera app directly instead of opening the gallery.
                 boolean wantsCamera = false;
                 try {
-                    if (fileChooserParams.isCaptureEnabled()) wantsCamera = true;
+                    if (fileChooserParams != null && fileChooserParams.isCaptureEnabled()) wantsCamera = true;
                 } catch (Throwable ignored) {}
-                String[] accept = fileChooserParams.getAcceptTypes();
+                String[] accept = null;
+                try {
+                    accept = fileChooserParams != null ? fileChooserParams.getAcceptTypes() : null;
+                } catch (Throwable ignored) {}
                 boolean acceptsImage = false;
                 if (accept != null) {
                     for (String a : accept) {
@@ -169,27 +172,29 @@ public class WebViewActivity extends Activity {
                     }
                 }
                 // Some Android versions don't set isCaptureEnabled true even when the
-                // HTML has capture="environment". The web page communicates intent
-                // via a second heuristic: it typically uses accept="image/*" and
-                // triggers this via a distinct button. We treat "accept image/*" as
-                // implicit camera desire for our app since gallery button uses a
-                // separate flow.
-                if (!wantsCamera && acceptsImage) {
-                    // Read a hint set by the JS side (best-effort)
-                    // Fallback: honour capture attribute presence via createIntent inspection
-                    Intent probe = fileChooserParams.createIntent();
-                    if (probe != null && MediaStore.ACTION_IMAGE_CAPTURE.equals(probe.getAction())) {
-                        wantsCamera = true;
-                    }
+                // HTML has capture="environment". Fallback: honour capture attribute
+                // presence via createIntent inspection.
+                if (!wantsCamera && acceptsImage && fileChooserParams != null) {
+                    try {
+                        Intent probe = fileChooserParams.createIntent();
+                        if (probe != null && MediaStore.ACTION_IMAGE_CAPTURE.equals(probe.getAction())) {
+                            wantsCamera = true;
+                        }
+                    } catch (Throwable ignored) {}
                 }
 
                 if (wantsCamera) {
                     // Ensure we have Android CAMERA permission first
                     if (ContextCompat.checkSelfPermission(WebViewActivity.this,
                             Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                        ActivityCompat.requestPermissions(WebViewActivity.this,
-                                new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PERM);
-                        // Continue to file picker as safety net so we don't deadlock the callback
+                        try {
+                            ActivityCompat.requestPermissions(WebViewActivity.this,
+                                    new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PERM);
+                        } catch (Throwable t) {
+                            Log.w(TAG, "requestPermissions threw", t);
+                        }
+                        // Continue to camera intent as safety net — the OS will show
+                        // its own denial UI if permission wasn't granted.
                     }
                     Intent captureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
                     // Create a temp file to receive the full-res photo
@@ -205,26 +210,41 @@ public class WebViewActivity extends Activity {
                         captureIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraCaptureUri);
                         captureIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                         captureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    } catch (Exception e) {
-                        Log.w(TAG, "camera capture setup failed", e);
+                    } catch (Throwable e) {
+                        Log.w(TAG, "camera capture file setup failed", e);
                         cameraCaptureUri = null;
                     }
                     try {
                         startActivityForResult(captureIntent, REQ_FILE_CHOOSER);
                         return true;
-                    } catch (ActivityNotFoundException e) {
-                        Log.w(TAG, "No camera app; falling back to gallery", e);
+                    } catch (Throwable e) {
+                        Log.w(TAG, "camera intent launch failed; falling back to gallery", e);
                     }
                 }
 
-                // Default: system file picker (gallery)
+                // Default: system file picker (gallery / photo picker)
                 try {
-                    Intent intent = fileChooserParams.createIntent();
-                    intent.setType("image/*");
+                    Intent intent;
+                    if (fileChooserParams != null) {
+                        intent = fileChooserParams.createIntent();
+                    } else {
+                        intent = new Intent(Intent.ACTION_GET_CONTENT);
+                        intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    }
+                    if (intent == null) {
+                        intent = new Intent(Intent.ACTION_GET_CONTENT);
+                        intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    }
+                    if (intent.getType() == null) intent.setType("image/*");
                     startActivityForResult(intent, REQ_FILE_CHOOSER);
                     return true;
-                } catch (ActivityNotFoundException e) {
-                    fileUploadCallback = null;
+                } catch (Throwable e) {
+                    Log.w(TAG, "file chooser failed", e);
+                    // Always release the callback so the web page doesn't hang.
+                    if (fileUploadCallback != null) {
+                        try { fileUploadCallback.onReceiveValue(null); } catch (Throwable ignored) {}
+                        fileUploadCallback = null;
+                    }
                     return false;
                 }
             }
