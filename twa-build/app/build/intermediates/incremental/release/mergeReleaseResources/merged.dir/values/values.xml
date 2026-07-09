@@ -307,7 +307,7 @@
     <string name="abc_shareactionprovider_share_with_application">Share with <ns1:g example="Mail" id="application_name">%s</ns1:g></string>
     <string name="abc_toolbar_collapse_description">Collapse</string>
     <string name="androidx_startup" translatable="false">androidx.startup</string>
-    <string name="appName" translatable="false">CP67 Mall</string>
+    <string name="appName" translatable="false">Homeland Advantage</string>
     <string name="assetStatements">
     [{
         \"relation\": [\"delegate_permission/common.handle_all_urls\"],
@@ -330,7 +330,7 @@
     <string name="generatorApp" translatable="false">unknown</string>
     <string name="hostName" translatable="false">cp67bot.fundlexperiences.com</string>
     <string name="launchUrl" translatable="false">https://cp67bot.fundlexperiences.com/app/welcome</string>
-    <string name="launcherName" translatable="false">CP67 Mall</string>
+    <string name="launcherName" translatable="false">Homeland Advantage</string>
     <string name="orientation" translatable="false">portrait</string>
     <string name="providerAuthority" translatable="false">com.homelandadvantage.cp67.fileprovider</string>
     <string name="search_menu_title">Search</string>

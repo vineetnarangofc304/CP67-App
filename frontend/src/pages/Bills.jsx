@@ -268,7 +268,11 @@ const Bills = () => {
         return;
       }
       if (data.action === 'approved') {
-        toast.success(`Brand fixed → "${trimmed}". Approved with ${data.points || 0} pts`);
+        if (data.fallback === 'force_credit') {
+          toast.success(`Brand fixed → "${trimmed}". Fundle rejected but auto force-credited ${data.points || 0} pts locally.`);
+        } else {
+          toast.success(`Brand fixed → "${trimmed}". Approved with ${data.points || 0} pts`);
+        }
       } else if (data.error) {
         toast.warning(`Brand updated but Fundle: ${data.error}. Try a different variant.`);
       } else {

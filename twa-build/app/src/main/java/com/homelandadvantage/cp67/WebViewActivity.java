@@ -25,6 +25,7 @@ import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -57,6 +58,7 @@ public class WebViewActivity extends Activity {
     private ValueCallback<Uri[]> fileUploadCallback;
     private PermissionRequest pendingPermissionRequest;
     private Uri cameraCaptureUri; // used when opening the native camera app
+    private boolean bridgeCameraPending = false; // true when JS bridge triggered the camera
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -251,6 +253,72 @@ public class WebViewActivity extends Activity {
         });
 
         webView.loadUrl(START_URL);
+
+        // Expose a JS bridge so the web page can DIRECTLY launch the camera
+        // instead of relying on <input type="file" capture="environment">, which
+        // Android WebView often ignores on newer devices (opens Photo Picker).
+        webView.addJavascriptInterface(new AndroidBridge(), "AndroidBridge");
+    }
+
+    /**
+     * JS bridge — window.AndroidBridge.openCamera() launches the native camera
+     * app directly. The captured image is returned to the web page via a
+     * generated hidden <input> file listener (see JS side).
+     */
+    public class AndroidBridge {
+        @JavascriptInterface
+        public boolean isAndroidApp() { return true; }
+
+        @JavascriptInterface
+        public void openCamera() {
+            runOnUiThread(() -> launchNativeCamera());
+        }
+    }
+
+    /**
+     * Launch native camera app directly. Result comes back through
+     * onActivityResult and is delivered to the web page via a JS callback
+     * (window.__cp67OnCameraResult(dataUrl)).
+     */
+    private void launchNativeCamera() {
+        // Request CAMERA permission if missing
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            try {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PERM);
+            } catch (Throwable t) {
+                Log.w(TAG, "requestPermissions threw", t);
+            }
+            // Fall-through to launch anyway; the camera app will handle its own denial UI
+        }
+        Intent captureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        try {
+            File photosDir = new File(getExternalFilesDir(null), "cp67_bills");
+            if (!photosDir.exists()) photosDir.mkdirs();
+            String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+            File photoFile = new File(photosDir, "bill_" + stamp + ".jpg");
+            cameraCaptureUri = FileProvider.getUriForFile(
+                    this, getPackageName() + ".fileprovider", photoFile);
+            captureIntent.putExtra(MediaStore.EXTRA_OUTPUT, cameraCaptureUri);
+            captureIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            captureIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } catch (Throwable e) {
+            Log.w(TAG, "camera capture file setup failed", e);
+            cameraCaptureUri = null;
+        }
+        try {
+            bridgeCameraPending = true;
+            startActivityForResult(captureIntent, REQ_FILE_CHOOSER);
+        } catch (Throwable e) {
+            Log.w(TAG, "native camera launch failed", e);
+            bridgeCameraPending = false;
+            // Notify JS side that it failed
+            if (webView != null) {
+                webView.post(() -> webView.evaluateJavascript(
+                        "window.__cp67OnCameraError && window.__cp67OnCameraError('launch_failed');", null));
+            }
+        }
     }
 
     @Override
@@ -271,6 +339,18 @@ public class WebViewActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQ_FILE_CHOOSER) {
+            // Case: JS bridge triggered the camera → deliver dataUrl back to JS
+            if (bridgeCameraPending) {
+                bridgeCameraPending = false;
+                if (resultCode == Activity.RESULT_OK && cameraCaptureUri != null) {
+                    deliverCameraCaptureToJs(cameraCaptureUri);
+                } else if (webView != null) {
+                    webView.post(() -> webView.evaluateJavascript(
+                            "window.__cp67OnCameraError && window.__cp67OnCameraError('cancelled');", null));
+                }
+                cameraCaptureUri = null;
+                return;
+            }
             if (fileUploadCallback == null) return;
             Uri[] results = null;
             if (resultCode == Activity.RESULT_OK) {
@@ -296,6 +376,40 @@ public class WebViewActivity extends Activity {
             fileUploadCallback = null;
             cameraCaptureUri = null;
         }
+    }
+
+    /** Read the captured JPEG, base64-encode, and hand it to the web page. */
+    private void deliverCameraCaptureToJs(Uri uri) {
+        new Thread(() -> {
+            String dataUrl = null;
+            try {
+                java.io.InputStream in = getContentResolver().openInputStream(uri);
+                if (in != null) {
+                    java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[4096];
+                    int n;
+                    while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                    in.close();
+                    String b64 = android.util.Base64.encodeToString(bos.toByteArray(), android.util.Base64.NO_WRAP);
+                    dataUrl = "data:image/jpeg;base64," + b64;
+                }
+            } catch (Throwable e) {
+                Log.w(TAG, "deliverCameraCaptureToJs read failed", e);
+            }
+            final String finalUrl = dataUrl;
+            if (webView == null) return;
+            webView.post(() -> {
+                if (finalUrl != null) {
+                    // Use JSON-escaped string to safely inject the huge base64 payload
+                    String js = "window.__cp67OnCameraResult && window.__cp67OnCameraResult("
+                            + org.json.JSONObject.quote(finalUrl) + ");";
+                    webView.evaluateJavascript(js, null);
+                } else {
+                    webView.evaluateJavascript(
+                            "window.__cp67OnCameraError && window.__cp67OnCameraError('read_failed');", null);
+                }
+            });
+        }, "cp67-camera-deliver").start();
     }
 
     @Override

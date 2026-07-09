@@ -37,8 +37,51 @@ export default function BillUpload() {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
+      // Detach native camera callbacks
+      try {
+        delete window.__cp67OnCameraResult;
+        delete window.__cp67OnCameraError;
+      } catch { /* noop */ }
     };
   }, []);
+
+  // Detect Android WebView native bridge (v1.8+)
+  const hasNativeCamera = typeof window !== 'undefined'
+    && window.AndroidBridge
+    && typeof window.AndroidBridge.openCamera === 'function';
+
+  // Direct native camera invocation (bypasses <input type="file" capture>
+  // which Android WebView often ignores on newer devices).
+  const openNativeCamera = () => {
+    setCameraError(null);
+    // Register one-shot callbacks that the native side will invoke
+    window.__cp67OnCameraResult = (dataUrl) => {
+      try {
+        // dataUrl = "data:image/jpeg;base64,..."
+        const arr = dataUrl.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8 = new Uint8Array(n);
+        while (n--) u8[n] = bstr.charCodeAt(n);
+        const capturedFile = new File([u8], `bill_${Date.now()}.jpg`, { type: mime });
+        setFile(capturedFile);
+        setPreview(dataUrl);
+        setResult(null);
+      } catch (e) {
+        setCameraError('Failed to load captured photo. Please try again.');
+      }
+    };
+    window.__cp67OnCameraError = (reason) => {
+      if (reason === 'cancelled') return; // user cancelled — no error UI
+      setCameraError('Camera unavailable. Please try the Gallery option.');
+    };
+    try {
+      window.AndroidBridge.openCamera();
+    } catch (e) {
+      setCameraError('Camera unavailable in this build. Please try Gallery.');
+    }
+  };
 
   const startCamera = async () => {
     setCameraError(null);
@@ -255,7 +298,17 @@ export default function BillUpload() {
               )}
 
               <div className="capture-buttons">
-                <button className="capture-btn primary" onClick={() => cameraRef.current?.click()} data-testid="start-camera-btn">
+                <button
+                  className="capture-btn primary"
+                  onClick={() => {
+                    if (hasNativeCamera) {
+                      openNativeCamera();
+                    } else {
+                      cameraRef.current?.click();
+                    }
+                  }}
+                  data-testid="start-camera-btn"
+                >
                   <Camera size={20} /> Open Camera
                 </button>
                 <button className="capture-btn secondary" onClick={() => fileRef.current?.click()} data-testid="gallery-btn">

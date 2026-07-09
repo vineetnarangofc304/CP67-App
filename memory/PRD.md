@@ -185,7 +185,33 @@ Three production issues + a critical perf fix:
 - AndroidManifest now requests `android.permission.CAMERA`, `android.permission.POST_NOTIFICATIONS`, `android.permission.INTERNET` and declares optional camera features so the in-app bill capture works on Android.
 - Bumped `appVersionCode=2`, `appVersionName="1.1"` — requires rebuild via `./gradlew bundleRelease`.
 
-## Phase 17 (Feb 7, 2026 — this session) — Campaign Engine + PWA Install Guide + Camera Crash Fix
+## Phase 18 (Feb 8, 2026 — this session part 2) — CP67 Feedback Doc v3 (v1.9)
+
+Addressed 4 pending items from the user's Google Doc:
+
+### Point 3: "Fix Brand" → auto-force-credit fallback
+- **Problem**: Admin picks correct brand from Fundle-master dropdown → reprocess still shows "Brand does not match" because our local `db.brands` list has drifted from Fundle's actual master.
+- **Fix**: `/api/admin/bills/{bill_id}/edit-brand` now auto-falls-back to LOCAL force-credit (tier × amount earn-rate) when Fundle still rejects with brand-mismatch after the correction. Admin has already visually verified the bill, so no fraud risk. Frontend toast now says: `Brand fixed → "X". Fundle rejected but auto force-credited N pts locally.`
+- **Payload flag** `auto_force_credit_on_fundle_reject` (default `true`) for opt-out.
+
+### Point 6: App renamed to "Homeland Advantage"
+- `build.gradle` → `name` and `launcherName` changed from "CP67 Mall" to "Homeland Advantage".
+- `application-label` verified: `Homeland Advantage` in the built APK.
+
+### Point 7: Removed "Install CP67" bottom banner
+- `PWAInstallBanner` un-mounted from `ConsumerApp.jsx`. Users can still install via SideDrawer → "Install App" menu item.
+
+### Point 8: Camera opens gallery instead of camera → Native JS Bridge
+- **Root cause**: On newer Android WebView builds, `<input type="file" accept="image/*" capture="environment">` is ignored — the system Photo Picker is used instead of the camera.
+- **Fix**: Added `AndroidBridge` JS interface via `webView.addJavascriptInterface(...)`. When the web page detects `window.AndroidBridge.openCamera` is available, it calls it directly. Java side launches `MediaStore.ACTION_IMAGE_CAPTURE` with a FileProvider-backed URI, reads the captured JPEG, base64-encodes it, and delivers it back via `window.__cp67OnCameraResult(dataUrl)`. Plain browser users still use the file-input fallback (`hasNativeCamera` check).
+
+### v1.9 Artefacts
+- `versionCode=10`, `versionName="1.9"`, `application-label="Homeland Advantage"`
+- `/app/twa-build/app-release-bundle.aab` (2.65 MB) — Play Console upload
+- `/app/twa-build/app-release-signed.apk` (2.81 MB) — sideload test
+- Public: `/downloads/cp67-v1.9.aab`, `/downloads/cp67-v1.9.apk`, `/downloads/cp67-mall.{aab,apk}`
+
+## Phase 17 (Feb 7, 2026 — this session part 1) — Campaign Engine + PWA Install Guide + Camera Crash Fix
 
 ### Android v1.8 — CAMERA FORCE-CLOSE FIXED (Point 5) ✅
 - **Root cause identified**: `minifyEnabled true` in `app/build.gradle` with NO custom ProGuard rules meant R8 was stripping/obfuscating the WebView anonymous inner-class callback signatures (`onShowFileChooser` + `ValueCallback<Uri[]>`). The app crashed with "internal error / force close" the moment the user tapped the camera/gallery input in the release APK — because the runtime couldn't resolve the callback class.

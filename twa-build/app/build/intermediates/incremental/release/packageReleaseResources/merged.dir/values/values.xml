@@ -11,7 +11,7 @@
     <color name="navigationDividerColorDark">#000000</color>
     <color name="shortcut_background">#F5F5F5</color>
     <integer name="splashScreenFadeOutDuration">300</integer>
-    <string name="appName" translatable="false">CP67 Mall</string>
+    <string name="appName" translatable="false">Homeland Advantage</string>
     <string name="assetStatements">
     [{
         \"relation\": [\"delegate_permission/common.handle_all_urls\"],
@@ -27,7 +27,7 @@
     <string name="generatorApp" translatable="false">unknown</string>
     <string name="hostName" translatable="false">cp67bot.fundlexperiences.com</string>
     <string name="launchUrl" translatable="false">https://cp67bot.fundlexperiences.com/app/welcome</string>
-    <string name="launcherName" translatable="false">CP67 Mall</string>
+    <string name="launcherName" translatable="false">Homeland Advantage</string>
     <string name="orientation" translatable="false">portrait</string>
     <string name="providerAuthority" translatable="false">com.homelandadvantage.cp67.fileprovider</string>
     <string name="webManifestUrl" translatable="false">https://cp67bot.fundlexperiences.com/manifest.json</string>

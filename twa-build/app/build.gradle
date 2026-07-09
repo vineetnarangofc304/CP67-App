@@ -24,8 +24,8 @@ def twaManifest = [
     applicationId: 'com.homelandadvantage.cp67',
     hostName: 'cp67bot.fundlexperiences.com', // The domain being opened in the TWA.
     launchUrl: '/app/welcome', // The start path for the TWA. Must be relative to the domain.
-    name: 'CP67 Mall', // The application name.
-    launcherName: 'CP67 Mall', // The name shown on the Android Launcher.
+    name: 'Homeland Advantage', // The application name.
+    launcherName: 'Homeland Advantage', // The name shown on the Android Launcher.
     themeColor: '#2C1810', // The color used for the status bar.
     themeColorDark: '#000000', // The color used for the dark status bar.
     navigationColor: '#000000', // The color used for the navigation bar.
@@ -57,8 +57,8 @@ android {
         applicationId "com.homelandadvantage.cp67"
         minSdkVersion 21
         targetSdkVersion 35
-        versionCode 9
-        versionName "1.8"
+        versionCode 10
+        versionName "1.9"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name

@@ -3499,6 +3499,7 @@ class EditBrandRequest(BaseModel):
     """Payload for admin brand-name correction on a pending bill."""
     new_store_name: str
     reprocess: bool = True  # immediately re-send to Fundle after edit
+    auto_force_credit_on_fundle_reject: bool = True  # fall back to local force-credit if Fundle still rejects
 
 
 @api_router.post("/admin/bills/{bill_id}/edit-brand")
@@ -3508,9 +3509,10 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
     """Correct the brand name on a bill whose OCR mis-matched Fundle's master,
     then optionally re-send to Fundle immediately.
 
-    Solves the workflow where admin currently has to open Fundle's dashboard
-    to add/rename a brand before reprocessing — now doable inline from the
-    admin bills page.
+    If Fundle STILL rejects with a brand-mismatch after the correction (this can
+    happen when our local `db.brands` list drifts from Fundle's actual master),
+    we fall back to a local force-credit using the tier × amount earn-rate table.
+    Admin has already visually verified the bill, so no fraud risk.
     """
     bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
     if not bill:
@@ -3541,8 +3543,40 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
         updated_bill, re_ocr=False, send_whatsapp_flag=True,
         background_tasks=background_tasks
     )
+
+    # ---- Auto-fallback: if Fundle still rejects, force-credit locally ----
+    fundle_rejected_brand = (
+        res.get("action") != "approved"
+        and payload_body.auto_force_credit_on_fundle_reject
+    )
+    if fundle_rejected_brand:
+        err_txt = str(res.get("error") or "").lower()
+        # Only fallback on brand-mismatch errors; leave other errors as-is
+        if ("brand" in err_txt) or ("match" in err_txt) or ("0 points" in err_txt) or ("not found" in err_txt):
+            logger.info(f"edit-brand: Fundle rejected '{new_name}'. Auto-force-credit fallback for bill {bill_id}")
+            # Reload bill (status may have been updated by the reprocess)
+            updated_bill2 = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+            # Only force-credit if the bill is still in a pending-ish state
+            if updated_bill2 and updated_bill2.get("status") in ("manual_review", "pending_review", "rejected"):
+                fc = await _reprocess_single_bill(
+                    updated_bill2, re_ocr=False, send_whatsapp_flag=True,
+                    background_tasks=background_tasks,
+                    force_credit=True, force_credit_percent=0.0
+                )
+                return {
+                    "success": fc.get("action") == "approved",
+                    "reprocessed": True,
+                    "store_name": new_name,
+                    "action": fc.get("action"),
+                    "status": fc.get("status"),
+                    "points": fc.get("points", 0),
+                    "fallback": "force_credit",
+                    "fundle_error": res.get("error"),
+                    "error": fc.get("error"),
+                }
+
     return {
-        "success": True,
+        "success": res.get("action") == "approved",
         "reprocessed": True,
         "store_name": new_name,
         "action": res.get("action"),

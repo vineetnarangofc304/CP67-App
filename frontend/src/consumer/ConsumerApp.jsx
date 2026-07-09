@@ -4,7 +4,6 @@ import { AnimatePresence } from 'framer-motion';
 import BottomNav from './components/BottomNav';
 import SideDrawer from './components/SideDrawer';
 import NotificationPrompt from './components/NotificationPrompt';
-import { PWAInstallBanner } from './components/PWAInstallGuide';
 import Welcome from './pages/Welcome';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
@@ -127,8 +126,9 @@ function ConsumerShell({ drawerOpen, setDrawerOpen, showBottomNav, location }) {
       {/* NotificationPrompt disabled per CP67 team request — no pop-up on login.
           Users can enable notifications via Profile → Notification Settings. */}
       {/* {token && <NotificationPrompt token={token} />} */}
-      {/* Non-intrusive PWA install banner (only visible when app is not in standalone mode) */}
-      {token && <PWAInstallBanner />}
+      {/* PWA Install Banner removed per CP67 team request (Point 7, Feb 8 2026).
+          The Install App option is still available via the SideDrawer menu. */}
+      {/* {token && <PWAInstallBanner />} */}
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="welcome" element={<Welcome />} />
