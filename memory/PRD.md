@@ -185,6 +185,22 @@ Three production issues + a critical perf fix:
 - AndroidManifest now requests `android.permission.CAMERA`, `android.permission.POST_NOTIFICATIONS`, `android.permission.INTERNET` and declares optional camera features so the in-app bill capture works on Android.
 - Bumped `appVersionCode=2`, `appVersionName="1.1"` — requires rebuild via `./gradlew bundleRelease`.
 
+## Phase 19 (Feb 8, 2026 — this session part 3) — Camera "first tap fails" fix → v1.10
+
+### Point 8b: First-tap camera race fixed
+- **Problem**: On v1.9 APK, first "Open Camera" tap → "Camera unavailable" error. Second tap works.
+- **Root cause**: `launchNativeCamera()` was calling `requestPermissions(CAMERA)` AND `startActivityForResult(ACTION_IMAGE_CAPTURE)` back-to-back. On MIUI/Xiaomi/OnePlus devices the permission dialog steals focus → camera intent dismissed → `RESULT_CANCELED` → error toast. Second tap works because permission is already granted.
+- **Fix**: Split into `launchNativeCamera()` (checks permission — if missing, sets `pendingBridgeCameraLaunch=true` and requests) and `launchNativeCameraNow()` (actually fires the camera intent). `onRequestPermissionsResult()` now checks the flag and invokes `launchNativeCameraNow()` after the user grants permission. Denials call `__cp67OnCameraError('permission_denied')` with a helpful "enable in Settings" message.
+
+### v1.10 Artefacts
+- `versionCode=11`, `versionName="1.10"`, `application-label="Homeland Advantage"`
+- `/app/twa-build/app-release-bundle.aab` (2.65 MB) → Play Console
+- `/app/twa-build/app-release-signed.apk` (2.81 MB) → sideload
+- Public: `/downloads/cp67-v1.10.aab`, `/downloads/cp67-v1.10.apk`, `/downloads/cp67-mall.{aab,apk}`
+
+### Testing
+- Iteration 27: 6/6 frontend scenarios + 3/3 backend regressions PASS. JS bridge contract verified end-to-end from browser.
+
 ## Phase 18 (Feb 8, 2026 — this session part 2) — CP67 Feedback Doc v3 (v1.9)
 
 Addressed 4 pending items from the user's Google Doc:
