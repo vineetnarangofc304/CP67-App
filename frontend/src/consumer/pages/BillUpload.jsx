@@ -74,6 +74,10 @@ export default function BillUpload() {
     };
     window.__cp67OnCameraError = (reason) => {
       if (reason === 'cancelled') return; // user cancelled — no error UI
+      if (reason === 'permission_denied') {
+        setCameraError('Camera permission denied. Please enable it in Settings → Apps → Homeland Advantage → Permissions → Camera.');
+        return;
+      }
       setCameraError('Camera unavailable. Please try the Gallery option.');
     };
     try {

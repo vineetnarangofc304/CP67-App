@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 27 - Camera bridge fix verification (BillUpload.jsx JS↔AndroidBridge integration). All 6 frontend scenarios and 3 backend regression tests pass.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration27_camera_bridge.py",
+    "/app/test_reports/pytest/iteration27_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "BillUpload.jsx line 49-51: `hasNativeCamera` is computed on each render but React does NOT re-render when `window.AndroidBridge` is set later. This is fine in production (Android WebView injects the bridge before React mounts) but be aware that any Android update that delays addJavascriptInterface would silently fall back to file-input flow. Consider adding a small useEffect that polls window.AndroidBridge for 500ms on mount and forces a re-render if it appears late.",
+    "openNativeCamera() writes to window.__cp67OnCameraResult / __cp67OnCameraError as globals on every open; cleanup only happens on unmount. If the user cancels via Android back and then opens Gallery, the stale __cp67OnCameraResult handler still lingers and could fire if native side sends a late result. Consider clearing them at the end of each result/error handler.",
+    "The try/catch around window.AndroidBridge.openCamera() only catches synchronous errors — the current fix relies on native side calling __cp67OnCameraError('launch_failed') for async failures. Ensure the WebViewActivity.java always invokes the JS callback on any RESULT_CANCELED path (documented as done in the fix).",
+    "Global window callbacks (__cp67OnCameraResult/Error) are not encapsulated — if two BillUpload instances mount concurrently (unlikely but possible with route transitions), they overwrite each other's handlers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration27_camera_bridge.py"
+  ],
+  "success_rate": {
+    "backend": "100% (3/3 tests passed)",
+    "frontend": "100% (6/6 scenarios verified)"
+  },
+  "test_credentials": {
+    "consumer": "Phone: 9876543210, OTP: 1234",
+    "admin": "Username: admin, Password: CP67Admin@2025"
+  },
+  "seed_data_creation": "None - only uploaded 1 randomized dummy bill via /api/consumer/bills/upload during regression (accepted OK).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "features_tested": {
+    "1_browser_fallback_no_bridge": "PASS - Delete window.AndroidBridge, click Open Camera -> hidden <input capture='environment'> click event fires, no bridge invoked",
+    "2_androidbridge_openCamera_invoked": "PASS - With AndroidBridge injected via add_init_script BEFORE React mount, clicking Open Camera calls window.AndroidBridge.openCamera() exactly once, and registers window.__cp67OnCameraResult/Error callbacks",
+    "3_camera_result_callback_shows_preview": "PASS - window.__cp67OnCameraResult(dataUrl) triggers preview image (data-testid=bill-preview-image) AND Upload Bill button (data-testid=submit-bill-btn) becomes visible",
+    "4_permission_denied_error_ui": "PASS - __cp67OnCameraError('permission_denied') shows error UI with text 'Camera permission denied. Please enable it in Settings → Apps → Homeland Advantage → Permissions → Camera.'",
+    "5_cancelled_no_error_ui": "PASS - __cp67OnCameraError('cancelled') does NOT show camera-error element",
+    "6_launch_failed_error_ui": "PASS - __cp67OnCameraError('launch_failed') shows 'Camera unavailable. Please try the Gallery option.'",
+    "backend_bill_upload_regression": "PASS - POST /api/consumer/bills/upload with dummy file returns 200",
+    "backend_active_campaigns_regression": "PASS - GET /api/consumer/campaigns/active returns {campaigns: [...]}",
+    "backend_edit_brand_404_shape": "PASS - POST /api/admin/bills/{fake_id}/edit-brand returns 404 (not 500) with detail body"
+  },
+  "context_for_next_testing_agent": "IMPORTANT: hasNativeCamera in BillUpload.jsx is evaluated at render time. To test the AndroidBridge branch via Playwright you MUST inject the bridge via page.add_init_script BEFORE navigating to /app/upload — post-mount page.evaluate('window.AndroidBridge=...') will NOT flip the branch because React doesn't re-render. Consumer login route is /app/welcome then setLocalStorage cp67_consumer_token. Bill upload route is /app/upload (not /app/bill-upload). Edit-brand endpoint takes field 'new_store_name' (not 'new_brand'). Bills are deduped by content hash — send randomized bytes for repeat uploads.",
+  "rca of the issue": "N/A - APK-level race condition fix (permission dialog dismissing camera intent on MIUI) cannot be reproduced in browser. The JS bridge contract (openCamera + __cp67OnCameraResult/__cp67OnCameraError) was verified end-to-end from the frontend side."
+}

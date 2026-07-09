@@ -59,6 +59,7 @@ public class WebViewActivity extends Activity {
     private PermissionRequest pendingPermissionRequest;
     private Uri cameraCaptureUri; // used when opening the native camera app
     private boolean bridgeCameraPending = false; // true when JS bridge triggered the camera
+    private boolean pendingBridgeCameraLaunch = false; // true while we wait for CAMERA permission dialog result
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -279,19 +280,34 @@ public class WebViewActivity extends Activity {
      * Launch native camera app directly. Result comes back through
      * onActivityResult and is delivered to the web page via a JS callback
      * (window.__cp67OnCameraResult(dataUrl)).
+     *
+     * IMPORTANT: On many devices (MIUI/Xiaomi/OnePlus) the camera intent gets
+     * dismissed if we request CAMERA permission at the same instant. We must
+     * request permission FIRST, wait for the callback, then launch.
      */
     private void launchNativeCamera() {
-        // Request CAMERA permission if missing
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
+            // Defer the camera launch until the permission callback fires.
+            pendingBridgeCameraLaunch = true;
             try {
                 ActivityCompat.requestPermissions(this,
                         new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PERM);
             } catch (Throwable t) {
                 Log.w(TAG, "requestPermissions threw", t);
+                pendingBridgeCameraLaunch = false;
+                if (webView != null) {
+                    webView.post(() -> webView.evaluateJavascript(
+                            "window.__cp67OnCameraError && window.__cp67OnCameraError('permission_error');", null));
+                }
             }
-            // Fall-through to launch anyway; the camera app will handle its own denial UI
+            return;
         }
+        launchNativeCameraNow();
+    }
+
+    /** Actually fires the camera intent — assumes CAMERA permission is already granted. */
+    private void launchNativeCameraNow() {
         Intent captureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         try {
             File photosDir = new File(getExternalFilesDir(null), "cp67_bills");
@@ -313,7 +329,6 @@ public class WebViewActivity extends Activity {
         } catch (Throwable e) {
             Log.w(TAG, "native camera launch failed", e);
             bridgeCameraPending = false;
-            // Notify JS side that it failed
             if (webView != null) {
                 webView.post(() -> webView.evaluateJavascript(
                         "window.__cp67OnCameraError && window.__cp67OnCameraError('launch_failed');", null));
@@ -325,13 +340,28 @@ public class WebViewActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                             @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQ_CAMERA_PERM && pendingPermissionRequest != null) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                pendingPermissionRequest.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
-            } else {
-                pendingPermissionRequest.deny();
+        if (requestCode == REQ_CAMERA_PERM) {
+            boolean granted = grantResults.length > 0
+                    && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            // Case 1: WebView PermissionRequest.grant flow
+            if (pendingPermissionRequest != null) {
+                if (granted) {
+                    pendingPermissionRequest.grant(new String[]{PermissionRequest.RESOURCE_VIDEO_CAPTURE});
+                } else {
+                    pendingPermissionRequest.deny();
+                }
+                pendingPermissionRequest = null;
             }
-            pendingPermissionRequest = null;
+            // Case 2: JS bridge deferred camera launch
+            if (pendingBridgeCameraLaunch) {
+                pendingBridgeCameraLaunch = false;
+                if (granted) {
+                    launchNativeCameraNow();
+                } else if (webView != null) {
+                    webView.post(() -> webView.evaluateJavascript(
+                            "window.__cp67OnCameraError && window.__cp67OnCameraError('permission_denied');", null));
+                }
+            }
         }
     }
 
