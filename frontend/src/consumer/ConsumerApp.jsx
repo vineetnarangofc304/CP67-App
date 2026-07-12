@@ -106,10 +106,57 @@ const ProtectedConsumer = ({ children }) => {
 
 const hideNav = ['/app/welcome', '/app/login', '/app/onboarding', '/app/legal'];
 
+// Load Google Fonts on demand & inject dynamic font CSS variables.
+async function applyAppSettings() {
+  try {
+    const r = await fetch(`${API}/app-settings`);
+    if (!r.ok) return;
+    const d = await r.json();
+    const s = d.settings || {};
+    const heading = s.heading_font_family || 'Antique Olive';
+    const content = s.content_font_family || 'Antique Olive';
+    const hScale = Number(s.heading_font_size_scale) || 1.0;
+    const cScale = Number(s.content_font_size_scale) || 1.0;
+    const hWeight = Number(s.heading_font_weight) || 700;
+    const cWeight = Number(s.content_font_weight) || 400;
+
+    // Lazy-load Google Fonts for any non-default family
+    const nonDefault = new Set();
+    if (heading && heading !== 'Antique Olive') nonDefault.add(heading);
+    if (content && content !== 'Antique Olive' && content !== heading) nonDefault.add(content);
+    nonDefault.forEach((family) => {
+      const id = 'gf-' + family.replace(/\s+/g, '-').toLowerCase();
+      if (!document.getElementById(id)) {
+        const link = document.createElement('link');
+        link.id = id;
+        link.rel = 'stylesheet';
+        link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family)}:wght@300;400;500;600;700;800&display=swap`;
+        document.head.appendChild(link);
+      }
+    });
+
+    const root = document.documentElement;
+    root.style.setProperty('--font-heading', `'${heading}', 'Playfair Display', serif`);
+    root.style.setProperty('--font-body', `'${content}', 'Outfit', -apple-system, sans-serif`);
+    root.style.setProperty('--font-heading-scale', String(hScale));
+    root.style.setProperty('--font-body-scale', String(cScale));
+    root.style.setProperty('--font-heading-weight', String(hWeight));
+    root.style.setProperty('--font-body-weight', String(cWeight));
+  } catch { /* silent — defaults remain */ }
+}
+
 export default function ConsumerApp() {
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const showBottomNav = !hideNav.includes(location.pathname);
+
+  // Fetch admin-set font settings on first mount + refresh every 5 min so
+  // admin changes propagate to already-open consumer sessions eventually.
+  useEffect(() => {
+    applyAppSettings();
+    const iv = setInterval(applyAppSettings, 5 * 60 * 1000);
+    return () => clearInterval(iv);
+  }, []);
 
   return (
     <ConsumerAuthProvider>

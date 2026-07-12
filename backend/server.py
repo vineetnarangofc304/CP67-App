@@ -3231,6 +3231,46 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
                 "status": "manual_review", "points": 0,
                 "error": "Missing amount/bill_no after OCR"}
 
+    # ---- force_credit branch: SKIP Fundle, credit locally using tier × amount rate ----
+    if force_credit:
+        auto = await _compute_auto_points(amount, store_name)
+        fc_points = int(auto.get("points") or 0)
+        if fc_points <= 0:
+            update_payload["status"] = "manual_review"
+            update_payload["rejection_reason"] = "Force-credit yielded 0 points (invalid amount)"
+            await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
+            return {"bill_id": bill_id, "action": "kept_pending",
+                    "status": "manual_review", "points": 0,
+                    "error": "Force-credit computed 0 points"}
+        update_payload.update({
+            "status": "approved",
+            "points_issued": fc_points,
+            "rejection_reason": None,
+            "processed_at": datetime.now(timezone.utc).isoformat(),
+            "processed_by": "admin_force_credit",
+            "force_credited": True,
+            "force_credit_rate_pct": auto.get("rate_pct"),
+            "force_credit_category": auto.get("category"),
+        })
+        await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$inc": {"balance_points": fc_points, "total_earned_points": fc_points}}
+        )
+        if send_whatsapp_flag and phone:
+            try:
+                total_balance_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
+                total_balance = int((total_balance_doc or {}).get("balance_points", 0))
+                msg = (f"Good news! Your bill has been processed.\n\n"
+                       f"Store: {store_name}\nBill No: {bill_no}\nAmount: \u20b9{amount:.0f}\n"
+                       f"Points Earned: {fc_points}\nTotal Balance: {total_balance}\n\n"
+                       f"Thank you for your patience.")
+                background_tasks.add_task(send_whatsapp_text, phone, msg)
+            except Exception as e:
+                logger.warning(f"Force-credit WhatsApp send failed: {e}")
+        return {"bill_id": bill_id, "action": "approved",
+                "status": "approved", "points": fc_points, "error": None}
+
     try:
         earn_result = await tagnpay_client.earn_points(
             mobile_number=mobile_10,
@@ -5913,6 +5953,69 @@ async def get_active_campaigns():
             continue
         campaigns.append(c)
     return {"campaigns": campaigns}
+
+
+# ======================== APP SETTINGS (Font customisation) ========================
+
+_DEFAULT_APP_SETTINGS = {
+    "heading_font_family": "Antique Olive",
+    "heading_font_size_scale": 1.0,   # 1.0 = default; 1.2 = 20% larger
+    "heading_font_weight": 700,
+    "content_font_family": "Antique Olive",
+    "content_font_size_scale": 1.0,
+    "content_font_weight": 400,
+}
+
+class AppSettingsUpdate(BaseModel):
+    heading_font_family: Optional[str] = None
+    heading_font_size_scale: Optional[float] = None
+    heading_font_weight: Optional[int] = None
+    content_font_family: Optional[str] = None
+    content_font_size_scale: Optional[float] = None
+    content_font_weight: Optional[int] = None
+
+async def _get_app_settings() -> Dict:
+    doc = await db.app_settings.find_one({"id": "app"}, {"_id": 0})
+    if not doc:
+        doc = {"id": "app", **_DEFAULT_APP_SETTINGS}
+    else:
+        # Fill in any missing defaults so consumer never gets nulls
+        for k, v in _DEFAULT_APP_SETTINGS.items():
+            if doc.get(k) in (None, ""):
+                doc[k] = v
+    return doc
+
+@api_router.get("/admin/app-settings")
+async def get_admin_app_settings(payload: dict = Depends(verify_jwt_token)):
+    """Admin: read current app settings (font family & size)."""
+    return {"settings": await _get_app_settings()}
+
+@api_router.put("/admin/app-settings")
+async def update_admin_app_settings(update: AppSettingsUpdate,
+                                     payload: dict = Depends(verify_jwt_token)):
+    """Admin: update app settings (font family & size, heading + content separately)."""
+    patch = {k: v for k, v in update.model_dump().items() if v is not None}
+    # Clamp size scale to a sane range
+    for k in ("heading_font_size_scale", "content_font_size_scale"):
+        if k in patch:
+            try:
+                patch[k] = max(0.6, min(2.0, float(patch[k])))
+            except (TypeError, ValueError):
+                patch.pop(k)
+    if "heading_font_weight" in patch:
+        try:
+            patch["heading_font_weight"] = max(100, min(900, int(patch["heading_font_weight"])))
+        except (TypeError, ValueError):
+            patch.pop("heading_font_weight")
+    if "content_font_weight" in patch:
+        try:
+            patch["content_font_weight"] = max(100, min(900, int(patch["content_font_weight"])))
+        except (TypeError, ValueError):
+            patch.pop("content_font_weight")
+    patch["updated_at"] = datetime.now(timezone.utc).isoformat()
+    patch["updated_by"] = payload.get("username") or "admin"
+    await db.app_settings.update_one({"id": "app"}, {"$set": patch}, upsert=True)
+    return {"success": True, "settings": await _get_app_settings()}
 
 
 # ======================== EXPORT ROUTES ========================

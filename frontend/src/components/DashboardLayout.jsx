@@ -21,7 +21,8 @@ import {
   ImageIcon,
   Tag,
   CalendarDays,
-  ShieldOff
+  ShieldOff,
+  Type
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -48,6 +49,7 @@ const navItems = [
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
   { path: '/admin-users', label: 'Admin Users', icon: ShieldCheck },
   { path: '/blocked-users', label: 'Blocked Users', icon: ShieldOff },
+  { path: '/app-settings', label: 'App Settings', icon: Type },
 ];
 
 const DashboardLayout = ({ children, title }) => {

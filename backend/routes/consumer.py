@@ -783,6 +783,27 @@ async def list_active_campaigns():
     return {"campaigns": campaigns}
 
 
+@consumer_router.get("/app-settings")
+async def get_consumer_app_settings():
+    """Public: current app settings (font family + size scale) so the PWA can
+    theme itself according to admin-set values."""
+    defaults = {
+        "heading_font_family": "Antique Olive",
+        "heading_font_size_scale": 1.0,
+        "heading_font_weight": 700,
+        "content_font_family": "Antique Olive",
+        "content_font_size_scale": 1.0,
+        "content_font_weight": 400,
+    }
+    doc = await _db.app_settings.find_one({"id": "app"}, {"_id": 0})
+    if not doc:
+        return {"settings": defaults}
+    for k, v in defaults.items():
+        if doc.get(k) in (None, ""):
+            doc[k] = v
+    return {"settings": doc}
+
+
 # ==================== EVENTS ROUTES ====================
 
 @consumer_router.get("/events")

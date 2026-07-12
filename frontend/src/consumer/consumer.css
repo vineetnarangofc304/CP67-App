@@ -37,10 +37,27 @@
   --cp-gold-border: rgba(198, 137, 57, 0.2);
   --font-heading: 'Antique Olive', 'Playfair Display', serif;
   --font-body: 'Antique Olive', 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading-scale: 1;
+  --font-body-scale: 1;
+  --font-heading-weight: 700;
+  --font-body-weight: 400;
   --luxury-shadow: 0 8px 32px rgba(198, 137, 57, 0.06);
   --luxury-shadow-hover: 0 12px 48px rgba(198, 137, 57, 0.12);
   --gold-glow: 0 0 20px rgba(198, 137, 57, 0.35);
 }
+
+/* Apply admin-configured font weight + scale on the consumer app.
+   Uses `zoom` for body scale (avoids double-em cascade) and dedicated rule
+   for headings so they can be tuned independently. */
+.consumer-app { font-weight: var(--font-body-weight); zoom: var(--font-body-scale); }
+.consumer-app h1, .consumer-app h2, .consumer-app h3, .consumer-app h4 {
+  font-weight: var(--font-heading-weight);
+  transform-origin: left top;
+}
+.consumer-app h1 { font-size: calc(2rem * var(--font-heading-scale)); }
+.consumer-app h2 { font-size: calc(1.5rem * var(--font-heading-scale)); }
+.consumer-app h3 { font-size: calc(1.25rem * var(--font-heading-scale)); }
+.consumer-app h4 { font-size: calc(1.1rem * var(--font-heading-scale)); }
 
 /* === Luxury Animations === */
 @keyframes shimmerSweep {

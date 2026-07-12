@@ -1,0 +1,32 @@
+{
+  "summary": "Tested Point 3 (Fix Brand modal force-credit fallback) and Point 9 (App Settings font customisation) — both backend (14 pytest tests, 100% pass) and frontend (admin AppSettings page + consumer PWA integration). All flows working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/admin/bills/{id}/edit-brand", "issue": "Fundle rejects even valid brands like 'Adidas' with 'Brand doesnt match..!' — force_credit fallback works correctly but this indicates the local db.brands list is drifting significantly from Fundle master. Consider a sync job to keep them aligned."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global", "issues": ["Console warns 'Failed to decode downloaded font' from db.onlinewebfonts.com/t/cb7b75403be21916da62371db2387b14.woff2 (Antique Olive) — pre-existing issue, not related to this iteration"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_point3_and_appsettings.py", "/app/test_reports/pytest/pytest_iter28.xml"],
+  "action_items": [
+    "OPTIONAL: Consider syncing local db.brands with Fundle master to reduce reliance on force_credit fallback for well-known brands like Adidas."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 7319 lines — exceeds 700-line guideline; should be split into modules (e.g., admin_routes.py, bills_service.py, fundle_client.py). Non-blocking but growing tech debt.",
+    "The force_credit branch inside _reprocess_single_bill is now properly implemented (previously was defined but unused per problem statement). Verified via test that force_credited=true & points_issued>0 are persisted correctly."
+  ],
+  "updated_files": ["/app/backend/tests/test_point3_and_appsettings.py (new)"],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% (all data-testids found, save+toast+consumer CSS var update verified)"},
+  "test_credentials": "admin/CP67Admin@2025 used",
+  "seed_data_creation": "Created test bills with id prefix 'TEST-P3-<uuid>' — auto-cleaned by pytest fixture teardown. Also restored app_settings to original values via test_99_restore_defaults + UI reset click.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Point 3 (force_credit fallback) and Point 9 (App Settings fonts) are fully verified. If user reports Point 3 still failing, check: 1) frontend Bills.jsx correctly passes auto_force_credit_on_fundle_reject:true in the request body, and 2) frontend toast reads data.fallback === 'force_credit'. Backend behaviour is correct per tests.",
+  "rca of the issue": "Point 3 root cause was that the previous force_credit=True flag in _reprocess_single_bill was defined in signature but never used in the function body — it just called Fundle again. Fix at line 3234-3272 adds an explicit force_credit branch that skips Fundle and uses _compute_auto_points(amount, store_name) for tier × amount earn-rate. Verified: bill 'TEST-P3-*' with 'Some Nonexistent Brand XYZ' + auto_force_credit_on_fundle_reject=true returns action='approved', points>0, fallback='force_credit', and DB status='approved', force_credited=true."
+}
