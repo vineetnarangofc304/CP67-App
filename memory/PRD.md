@@ -185,7 +185,23 @@ Three production issues + a critical perf fix:
 - AndroidManifest now requests `android.permission.CAMERA`, `android.permission.POST_NOTIFICATIONS`, `android.permission.INTERNET` and declares optional camera features so the in-app bill capture works on Android.
 - Bumped `appVersionCode=2`, `appVersionName="1.1"` — requires rebuild via `./gradlew bundleRelease`.
 
-## Phase 19 (Feb 8, 2026 — this session part 3) — Camera "first tap fails" fix → v1.10
+## Phase 20 (Feb 8, 2026 — part 4) — Point 3 real fix + Point 9 App Settings
+
+### Point 3 — Force-Credit fallback now ACTUALLY works
+- **Previous bug**: My phase-18 fix passed `force_credit=True` to `_reprocess_single_bill`, but the flag was defined in the signature and never USED in the function body — it just re-called Fundle, producing the same rejection.
+- **Fix**: Added the actual `force_credit` branch at line ~3237 of `server.py`. When set, the function SKIPS Fundle `earn_points` and instead uses `_compute_auto_points(amount, store_name)` (tier × amount earn-rate). Persists `force_credited=true`, `force_credit_rate_pct`, `force_credit_category` on the bill.
+- Now when admin fixes a brand + Fundle still rejects with brand-mismatch, the endpoint auto-force-credits locally. Verified end-to-end (iteration_28, 14/14 backend tests).
+
+### Point 9 — Admin-configurable app fonts
+- **Backend**: `GET/PUT /api/admin/app-settings` (admin auth) + `GET /api/consumer/app-settings` (public). Fields: `heading_font_family`, `heading_font_size_scale`, `heading_font_weight`, `content_font_family`, `content_font_size_scale`, `content_font_weight`. Scale clamped 0.6–2.0, weight 100–900.
+- **Frontend Admin**: New `/app-settings` page with per-heading/per-content controls, live preview blocks, save + reset buttons.
+- **Consumer PWA**: `ConsumerApp.jsx` calls `applyAppSettings()` on mount + every 5 min. Lazy-loads non-default Google Fonts (Playfair Display, Manrope, Outfit, Inter, Poppins, Roboto, Merriweather, Georgia, Cormorant Garamond) via injected `<link>` tags. Sets CSS variables `--font-heading`, `--font-body`, `--font-heading-scale`, `--font-body-scale`, `--font-heading-weight`, `--font-body-weight`. `consumer.css` now scales H1/H2/H3/H4 via the heading scale and uses `zoom` for body scale (avoids em-cascade compounding).
+
+### Testing
+- iteration_28: 14/14 backend + 100% frontend. Both Point 3 and Point 9 verified.
+- File: `/app/backend/tests/test_point3_and_appsettings.py`
+
+## Phase 19 (Feb 8, 2026 — part 3) — Camera "first tap fails" fix → v1.10
 
 ### Point 8b: First-tap camera race fixed
 - **Problem**: On v1.9 APK, first "Open Camera" tap → "Camera unavailable" error. Second tap works.
