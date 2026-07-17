@@ -3601,8 +3601,40 @@ async def force_credit_bill(bill_id: str, background_tasks: BackgroundTasks,
 class EditBrandRequest(BaseModel):
     """Payload for admin brand-name correction on a pending bill."""
     new_store_name: str
-    reprocess: bool = True  # immediately re-send to Fundle after edit
+    reprocess: bool = True  # queue background reprocess (returns immediately)
     auto_force_credit_on_fundle_reject: bool = True  # fall back to local force-credit if Fundle still rejects
+    wait_for_result: bool = False  # opt-in: block until Fundle responds (legacy sync mode)
+
+
+async def _reprocess_after_brand_edit(bill_id: str, new_name: str, auto_fc: bool):
+    """Background worker for edit-brand — runs the reprocess pipeline off the
+    request thread so Cloudflare/browser fetch doesn't time out (Fundle
+    earn_points can take 30-60s with image upload)."""
+    from fastapi import BackgroundTasks as _BG
+    bg = _BG()
+    try:
+        updated_bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+        if not updated_bill:
+            return
+        res = await _reprocess_single_bill(
+            updated_bill, re_ocr=False, send_whatsapp_flag=True,
+            background_tasks=bg
+        )
+        # Auto-fallback: if Fundle still rejects, force-credit locally
+        fundle_rejected_brand = res.get("action") != "approved" and auto_fc
+        if fundle_rejected_brand:
+            err_txt = str(res.get("error") or "").lower()
+            if ("brand" in err_txt) or ("match" in err_txt) or ("0 points" in err_txt) or ("not found" in err_txt):
+                logger.info(f"edit-brand (bg): Fundle rejected '{new_name}'. Auto-force-credit fallback for bill {bill_id}")
+                updated_bill2 = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+                if updated_bill2 and updated_bill2.get("status") in ("manual_review", "pending_review", "rejected"):
+                    await _reprocess_single_bill(
+                        updated_bill2, re_ocr=False, send_whatsapp_flag=True,
+                        background_tasks=bg,
+                        force_credit=True, force_credit_percent=0.0
+                    )
+    except Exception as e:
+        logger.exception(f"edit-brand background reprocess failed for {bill_id}: {e}")
 
 
 @api_router.post("/admin/bills/{bill_id}/edit-brand")
@@ -3610,12 +3642,15 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
                            background_tasks: BackgroundTasks,
                            payload: dict = Depends(verify_jwt_token)):
     """Correct the brand name on a bill whose OCR mis-matched Fundle's master,
-    then optionally re-send to Fundle immediately.
+    then queue a background reprocess (default) or run inline (`wait_for_result=true`).
 
-    If Fundle STILL rejects with a brand-mismatch after the correction (this can
-    happen when our local `db.brands` list drifts from Fundle's actual master),
-    we fall back to a local force-credit using the tier × amount earn-rate table.
-    Admin has already visually verified the bill, so no fraud risk.
+    The reprocess pipeline includes:
+      1. Re-send to Fundle with the corrected brand name
+      2. If Fundle still rejects with brand-mismatch → auto force-credit locally
+         (using tier × amount earn-rate; admin has visually verified the bill).
+
+    Returns immediately in the default (background) mode — poll the bill row
+    for updated status via GET /api/bills.
     """
     bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
     if not bill:
@@ -3634,13 +3669,28 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
             "brand_edited_at": datetime.now(timezone.utc).isoformat(),
             "brand_edited_by": payload.get("username") or "admin",
             "admin_notes": audit_note,
+            # Mark as reprocessing so admin UI can show a spinner
+            "reprocessing_started_at": datetime.now(timezone.utc).isoformat() if payload_body.reprocess else None,
         }}
     )
 
     if not payload_body.reprocess:
         return {"success": True, "reprocessed": False, "store_name": new_name}
 
-    # Reload the bill and run through the normal reprocess pipeline (image included)
+    # Default: queue background reprocess and return immediately
+    if not payload_body.wait_for_result:
+        background_tasks.add_task(
+            _reprocess_after_brand_edit,
+            bill_id, new_name, payload_body.auto_force_credit_on_fundle_reject
+        )
+        return {
+            "success": True,
+            "reprocessed": "queued",
+            "store_name": new_name,
+            "message": "Brand updated. Reprocessing in background — refresh the list in ~10 seconds to see the result."
+        }
+
+    # Sync path (legacy) — waits for Fundle. Kept for admins who need immediate result.
     updated_bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
     res = await _reprocess_single_bill(
         updated_bill, re_ocr=False, send_whatsapp_flag=True,

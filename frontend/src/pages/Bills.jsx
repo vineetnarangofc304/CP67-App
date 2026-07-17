@@ -254,6 +254,11 @@ const Bills = () => {
     const trimmed = String(chosenName).trim();
     if (!trimmed) return;
     setFixBrandBusy(true);
+    // Guard against long-running requests — new backend queues in background
+    // so this response should return in <1s. If it hangs, abort at 20s so the
+    // user isn't stuck on a spinner.
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 20000);
     try {
       const res = await fetch(`${API_URL}/admin/bills/${fixBrandBill.id}/edit-brand`, {
         method: 'POST',
@@ -261,30 +266,54 @@ const Bills = () => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ new_store_name: trimmed, reprocess: true })
+        body: JSON.stringify({ new_store_name: trimmed, reprocess: true, auto_force_credit_on_fundle_reject: true }),
+        signal: ctrl.signal,
       });
+      clearTimeout(timeoutId);
       const data = await res.json();
       if (!res.ok) {
         toast.error(data.detail || 'Brand edit failed');
         return;
       }
-      if (data.action === 'approved') {
+      if (data.reprocessed === 'queued') {
+        toast.success(`Brand fixed → "${trimmed}". Reprocessing in background — refreshing list in 10s.`);
+        setFixBrandOpen(false);
+        setFixBrandBill(null);
+        // Refresh after ~10s to give the background reprocess time to finish
+        fetchBills();
+        fetchPendingBills();
+        setTimeout(() => { fetchBills(); fetchPendingBills(); }, 10000);
+        setTimeout(() => { fetchBills(); fetchPendingBills(); }, 25000);
+      } else if (data.action === 'approved') {
         if (data.fallback === 'force_credit') {
           toast.success(`Brand fixed → "${trimmed}". Fundle rejected but auto force-credited ${data.points || 0} pts locally.`);
         } else {
           toast.success(`Brand fixed → "${trimmed}". Approved with ${data.points || 0} pts`);
         }
+        setFixBrandOpen(false);
+        setFixBrandBill(null);
+        fetchBills();
+        fetchPendingBills();
       } else if (data.error) {
         toast.warning(`Brand updated but Fundle: ${data.error}. Try a different variant.`);
+        setFixBrandOpen(false);
+        setFixBrandBill(null);
+        fetchBills();
+        fetchPendingBills();
       } else {
-        toast.success(`Brand updated to "${trimmed}". Status: ${data.status}`);
+        toast.success(`Brand updated to "${trimmed}". Status: ${data.status || 'pending'}`);
+        setFixBrandOpen(false);
+        setFixBrandBill(null);
+        fetchBills();
+        fetchPendingBills();
       }
-      setFixBrandOpen(false);
-      setFixBrandBill(null);
-      fetchBills();
-      fetchPendingBills();
-    } catch {
-      toast.error('Network error while editing brand');
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err && err.name === 'AbortError') {
+        toast.error('Brand edit timed out. Refresh the list — reprocess may still be running in background.');
+      } else {
+        toast.error('Network error while editing brand');
+      }
     } finally {
       setFixBrandBusy(false);
     }
@@ -1185,7 +1214,7 @@ const Bills = () => {
               </div>
             </div>
             <p className="text-xs text-slate-500 pl-1">
-              Point 10: With "Auto force-credit" ON, any bill Fundle still rejects (e.g. brand-mismatch) is credited locally using the tier × amount earn-rate — so June's stuck bills clear in one pass.
+              Point 10: With &ldquo;Auto force-credit&rdquo; ON, any bill Fundle still rejects (e.g. brand-mismatch) is credited locally using the tier × amount earn-rate — so June&apos;s stuck bills clear in one pass.
             </p>
 
             {/* Dry-run preview */}

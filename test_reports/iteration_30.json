@@ -1,0 +1,23 @@
+{
+  "summary": "Verified urgent Fix Brand bug fix. Backend edit-brand endpoint now returns in ~0.12s in queued mode (was 65s). DB stamps brand_edited_at + reprocessing_started_at immediately. Frontend Fix Brand modal shows correct success toast in ~0.14s and closes; NO 'Network error' seen. Regression endpoints (consumer campaigns, app-settings, admin sync/jobs, qr-links) all pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_edit_brand.py",
+    "/app/test_reports/pytest/edit_brand_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is ~7687 lines — should be split into routers by domain (bills, admin, consumer, brands). Recommend follow-up refactor.",
+    "_reprocess_after_brand_edit creates a fresh BackgroundTasks() instance and passes to _reprocess_single_bill — this is fine only if the callee handles bg synchronously; if it schedules nested tasks they won't be awaited by FastAPI. Confirmed working today but is a subtle foot-gun.",
+    "Frontend Bills.jsx uses hardcoded 10s/25s refresh timers; if Fundle takes longer under load the UI may show stale data until user manually refreshes."
+  ],
+  "updated_files": ["/app/backend/tests/test_edit_brand.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100%"},
+  "test_credentials": "admin / CP67Admin@2025",
+  "seed_data_creation": "None — used existing pending_review bills (2 available).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bug fix verified end-to-end. Bill IDs used for edit-brand testing: 1fe182d9-83cc-40d3-bd0e-e22b2f45cd4e. Endpoint measured latency: 0.12s backend, 0.14s frontend-observed. Legacy sync path (wait_for_result=true) NOT explicitly tested (would take 30-60s and rely on Fundle staging availability); main agent's curl-based verification confirms it. Bulk-reprocess flow also NOT re-tested (existing tests in iterations 27-29 cover it).",
+  "rca of the issue": "Original bug: /api/admin/bills/{id}/edit-brand called Fundle earn_points synchronously inside the request handler (30-60s with image upload) + fallback force-credit path (another 5-10s) → total ~65s. Cloudflare/browser fetch timed out at ~30s → generic 'Network error' toast. Fix: refactor to FastAPI BackgroundTasks — request handler updates DB immediately (store_name, brand_edited_at, reprocessing_started_at) and returns {reprocessed:'queued'} in <200ms; _reprocess_after_brand_edit runs the full pipeline post-response. Frontend Bills.jsx handles queued response with success toast + timed refetches (10s and 25s). AbortController added as 20s safety net."
+}
