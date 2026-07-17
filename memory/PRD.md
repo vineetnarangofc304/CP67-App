@@ -185,6 +185,37 @@ Three production issues + a critical perf fix:
 - AndroidManifest now requests `android.permission.CAMERA`, `android.permission.POST_NOTIFICATIONS`, `android.permission.INTERNET` and declares optional camera features so the in-app bill capture works on Android.
 - Bumped `appVersionCode=2`, `appVersionName="1.1"` — requires rebuild via `./gradlew bundleRelease`.
 
+## Phase 21 (Feb 8, 2026 — part 5) — Batch: Points 10–15 (iteration_29, 17/17 backend + 100% frontend)
+
+### Point 10 — Bulk June bills auto force-credit ✅
+- Added `force_credit_on_fundle_reject` flag to `_reprocess_single_bill` + `BulkReprocessRequest`. When Fundle rejects a bill with brand-mismatch/0-points, the function auto-falls-back to `_compute_auto_points` (tier × amount) and marks `force_credited=true`.
+- **Admin UI**: Bulk Reprocess dialog now has "Auto force-credit if Fundle rejects" checkbox (data-testid=bulk-force-on-reject), default CHECKED.
+
+### Point 11 — In-app bill upload fixed ✅
+- Root cause: multipart FormData uploads are unreliable in older Android WebViews. Added parallel endpoint `POST /api/consumer/bills/upload-base64` that accepts JSON `{image_base64}` (data-URL OR raw base64).
+- **Consumer app**: `BillUpload.jsx` detects Android WebView via `hasNativeCamera` and routes uploads through the JSON endpoint. Browser continues to use multipart.
+
+### Point 12 — WhatsApp bill force-credit fallback ✅
+- Global admin toggle `auto_force_credit_on_fundle_reject` in app_settings. When enabled, WhatsApp/in-app auto-approved bills that Fundle rejects with brand-mismatch are automatically credited locally + user balance incremented + WhatsApp success message sent.
+- **Admin UI**: `/app-settings` page now has an "Automation: Fundle Rejection Fallback" section with the toggle.
+
+### Point 13 — Nightly Fundle registration sync ✅
+- APScheduler (added to `requirements.txt`) runs `run_registration_sync_job` daily at **1:00 AM IST** (`Asia/Kolkata`). Idempotent — skips users already on Fundle. Logs each run to `db.sync_jobs`.
+- **Admin UI**: `/fundle-sync` "Run Nightly Sync Now" button for manual testing.
+
+### Point 14 — Legacy 154 numbers one-time sync ✅
+- Hardcoded list of 154 phone numbers from doc. `POST /api/admin/sync/legacy-154?include_bills=true` queues background job that per-user: registers on Fundle if missing, then re-runs stuck bills through `_reprocess_single_bill`. Progress polled via `GET /api/admin/sync/status/{job_id}`.
+- **Admin UI**: `/fundle-sync` page with progress bar showing processed / registered / already / failed / bills_synced / bills_failed counters.
+
+### Point 15 — RWA + Office QR codes ✅
+- Added `QR0124010` (source_code `SRC_RWA`) and `QR0124011` (source_code `SRC_OFFICE`) to `QR_CODES`. Consumer login flow already captures `?src=` from URL and persists as `first_touch_source` on user doc — no additional wiring needed.
+- Both QR codes generate WhatsApp deep links with the source tag baked in. Admin can generate QR PNGs via existing `GET /api/qr-codes/{id}/generate`.
+- Filter users by source via `GET /api/users?source=SRC_RWA` (already exists).
+
+### New Files
+- `/app/frontend/src/pages/FundleSync.jsx`
+- `/app/backend/tests/test_iteration29_batch.py`
+
 ## Phase 20 (Feb 8, 2026 — part 4) — Point 3 real fix + Point 9 App Settings
 
 ### Point 3 — Force-Credit fallback now ACTUALLY works
