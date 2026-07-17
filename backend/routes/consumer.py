@@ -909,6 +909,41 @@ async def upload_bill(
     current_user=Depends(get_current_consumer)
 ):
     contents = await file.read()
+    return await _handle_bill_upload_bytes(contents, background_tasks, current_user)
+
+
+class BillUploadJSON(BaseModel):
+    """JSON alternative to multipart upload — handy for Android WebView clients
+    where multipart FormData can be finicky. `image_base64` may be either a raw
+    base64 string OR a full data-URL like 'data:image/jpeg;base64,...'."""
+    image_base64: str
+
+
+@consumer_router.post("/bills/upload-base64")
+async def upload_bill_base64(
+    payload: BillUploadJSON,
+    background_tasks: BackgroundTasks,
+    current_user=Depends(get_current_consumer)
+):
+    """Bill upload via JSON base64 body — reliable path for Android WebView.
+    Point 11: Bill upload from app was failing due to multipart edge cases
+    in older Android WebViews. This endpoint accepts the base64 directly."""
+    b64 = payload.image_base64 or ""
+    if b64.startswith("data:"):
+        # Strip 'data:image/jpeg;base64,' prefix
+        try:
+            b64 = b64.split(",", 1)[1]
+        except IndexError:
+            raise HTTPException(status_code=400, detail="Malformed data URL")
+    try:
+        contents = base64.b64decode(b64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image")
+    return await _handle_bill_upload_bytes(contents, background_tasks, current_user)
+
+
+async def _handle_bill_upload_bytes(contents: bytes, background_tasks: BackgroundTasks, current_user):
+    """Shared bill upload flow used by both multipart and JSON entry points."""
     if len(contents) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large. Max 10MB.")
 

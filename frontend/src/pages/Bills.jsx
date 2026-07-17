@@ -71,6 +71,7 @@ const Bills = () => {
   const [bulkSendWA, setBulkSendWA] = useState(true);
   const [bulkForceCredit, setBulkForceCredit] = useState(false);
   const [bulkForceCreditPct, setBulkForceCreditPct] = useState('1');
+  const [bulkForceOnReject, setBulkForceOnReject] = useState(true);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkDryRun, setBulkDryRun] = useState(null);   // { candidates, bills } or null
   const [bulkResult, setBulkResult] = useState(null);    // { summary, results, total_points_credited }
@@ -358,6 +359,9 @@ const Bills = () => {
           statuses: ['manual_review', 'pending_review'],
           re_ocr: bulkReOcr,
           send_whatsapp: bulkSendWA,
+          force_credit: bulkForceCredit,
+          force_credit_percent: parseFloat(bulkForceCreditPct) || 1,
+          force_credit_on_fundle_reject: bulkForceOnReject,
           dry_run: dryRun,
           limit: 300
         })
@@ -1175,7 +1179,14 @@ const Bills = () => {
                 <Checkbox id="bulk-wa" checked={bulkSendWA} onCheckedChange={setBulkSendWA} />
                 <label htmlFor="bulk-wa" className="text-sm">Send WhatsApp on approval</label>
               </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox id="bulk-force-reject" checked={bulkForceOnReject} onCheckedChange={setBulkForceOnReject} data-testid="bulk-force-on-reject" />
+                <label htmlFor="bulk-force-reject" className="text-sm font-medium text-amber-700">Auto force-credit if Fundle rejects</label>
+              </div>
             </div>
+            <p className="text-xs text-slate-500 pl-1">
+              Point 10: With "Auto force-credit" ON, any bill Fundle still rejects (e.g. brand-mismatch) is credited locally using the tier × amount earn-rate — so June's stuck bills clear in one pass.
+            </p>
 
             {/* Dry-run preview */}
             {bulkDryRun && (

@@ -16,6 +16,7 @@ import Brands from './pages/Brands';
 import Reports from './pages/Reports';
 import Campaigns from './pages/Campaigns';
 import AppSettings from './pages/AppSettings';
+import FundleSync from './pages/FundleSync';
 import Banners from './pages/Banners';
 import Offers from './pages/Offers';
 import Events from './pages/Events';
@@ -171,6 +172,7 @@ function App() {
           <Route path="/brands" element={<ProtectedRoute><Brands /></ProtectedRoute>} />
           <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
           <Route path="/app-settings" element={<ProtectedRoute><AppSettings /></ProtectedRoute>} />
+          <Route path="/fundle-sync" element={<ProtectedRoute><FundleSync /></ProtectedRoute>} />
           <Route path="/banners" element={<ProtectedRoute><Banners /></ProtectedRoute>} />
           <Route path="/offers" element={<ProtectedRoute><Offers /></ProtectedRoute>} />
           <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />

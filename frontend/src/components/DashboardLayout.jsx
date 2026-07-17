@@ -22,7 +22,8 @@ import {
   Tag,
   CalendarDays,
   ShieldOff,
-  Type
+  Type,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -49,6 +50,7 @@ const navItems = [
   { path: '/analytics', label: 'Analytics', icon: BarChart3 },
   { path: '/admin-users', label: 'Admin Users', icon: ShieldCheck },
   { path: '/blocked-users', label: 'Blocked Users', icon: ShieldOff },
+  { path: '/fundle-sync', label: 'Fundle Sync', icon: RefreshCw },
   { path: '/app-settings', label: 'App Settings', icon: Type },
 ];
 

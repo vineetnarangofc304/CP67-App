@@ -37,6 +37,7 @@ const DEFAULTS = {
   content_font_family: 'Antique Olive',
   content_font_size_scale: 1.0,
   content_font_weight: 400,
+  auto_force_credit_on_fundle_reject: false,
 };
 
 export default function AppSettings() {
@@ -186,6 +187,27 @@ export default function AppSettings() {
                 <Save className="h-4 w-4 mr-2" /> {saving ? 'Saving…' : 'Save Settings'}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Fundle rejection fallback (Point 12) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Automation: Fundle Rejection Fallback</CardTitle>
+            <p className="text-sm text-slate-500">When enabled, bills that Fundle rejects for &ldquo;Brand does not match&rdquo; are automatically credited locally using the tier × amount earn-rate (WhatsApp + in-app flows).</p>
+          </CardHeader>
+          <CardContent>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={!!form.auto_force_credit_on_fundle_reject}
+                onChange={e => setForm({ ...form, auto_force_credit_on_fundle_reject: e.target.checked })}
+                data-testid="auto-force-credit-toggle"
+              />
+              <span className="text-sm">Auto force-credit locally when Fundle rejects with brand-mismatch</span>
+            </label>
+            <p className="text-xs text-slate-400 mt-2">Enable this to eliminate customer wait time when Fundle&apos;s master brand list is stale. Keep off if you prefer manual admin review of every rejected bill.</p>
           </CardContent>
         </Card>
       </div>

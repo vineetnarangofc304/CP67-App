@@ -785,6 +785,22 @@ QR_CODES = [
         "category": "loyalty",
         "description": "Default source for users who register directly on the mobile App (without scanning a QR)",
         "internal": True
+    },
+    {
+        "qr_code_id": "QR0124010",
+        "location": "RWA",
+        "source_code": "SRC_RWA",
+        "prefilled_message": "Hi! Register me for CP67 Loyalty — RWA",
+        "category": "loyalty",
+        "description": "For Resident Welfare Association distribution — captures RWA as registration source for reporting"
+    },
+    {
+        "qr_code_id": "QR0124011",
+        "location": "Offices",
+        "source_code": "SRC_OFFICE",
+        "prefilled_message": "Hi! Register me for CP67 Loyalty — Office",
+        "category": "loyalty",
+        "description": "For office building distribution — captures Office as registration source for reporting"
     }
 ]
 
@@ -3110,12 +3126,17 @@ class BulkReprocessRequest(BaseModel):
     # after explicit admin approval (e.g. brand still being added to Fundle).
     force_credit: bool = False
     force_credit_percent: float = 1.0  # 1% of bill amount by default
+    # When True (Point 10): if Fundle rejects (brand-mismatch / 0 points),
+    # auto-fall-back to LOCAL force-credit via _compute_auto_points. This is
+    # the pragmatic path for months of bulk-stuck bills that Fundle refuses.
+    force_credit_on_fundle_reject: bool = False
 
 
 async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag: bool,
                                  background_tasks: BackgroundTasks,
                                  force_credit: bool = False,
-                                 force_credit_percent: float = 1.0) -> dict:
+                                 force_credit_percent: float = 1.0,
+                                 force_credit_on_fundle_reject: bool = False) -> dict:
     """Reprocess one bill EXACTLY the same way a fresh WhatsApp upload would:
        1. (Optional) re-OCR the stored image
        2. Ensure customer is registered with Fundle
@@ -3339,6 +3360,45 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
     # Fundle returned 0 or failed — leave/update reason
     err = earn_result.get("error") or (earn_result.get("data") or {}).get("message") or "Fundle returned 0 points"
     update_payload["rejection_reason"] = err[:300]
+
+    # ------- Point 10 / 12: Fallback to force-credit locally if Fundle rejected -------
+    err_low = (err or "").lower()
+    fundle_brand_reject = ("brand" in err_low) or ("match" in err_low) or ("0 points" in err_low) or ("not found" in err_low)
+    if force_credit_on_fundle_reject and fundle_brand_reject:
+        auto = await _compute_auto_points(amount, store_name)
+        fc_points = int(auto.get("points") or 0)
+        if fc_points > 0:
+            update_payload.update({
+                "status": "approved",
+                "points_issued": fc_points,
+                "rejection_reason": None,
+                "processed_at": datetime.now(timezone.utc).isoformat(),
+                "processed_by": update_payload.get("processed_by") or "auto_force_credit_on_reject",
+                "force_credited": True,
+                "force_credit_rate_pct": auto.get("rate_pct"),
+                "force_credit_category": auto.get("category"),
+                "fundle_original_error": err[:200],
+            })
+            await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$inc": {"balance_points": fc_points, "total_earned_points": fc_points}}
+            )
+            if send_whatsapp_flag and phone and background_tasks is not None:
+                try:
+                    total_balance_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
+                    total_balance = int((total_balance_doc or {}).get("balance_points", 0))
+                    msg = (f"Good news! Your bill has been processed.\n\n"
+                           f"Store: {store_name}\nBill No: {bill_no}\nAmount: \u20b9{amount:.0f}\n"
+                           f"Points Earned: {fc_points}\nTotal Balance: {total_balance}\n\n"
+                           f"Thank you for your patience.")
+                    background_tasks.add_task(send_whatsapp_text, phone, msg)
+                except Exception as e:
+                    logger.warning(f"Auto force-credit WhatsApp send failed: {e}")
+            return {"bill_id": bill_id, "action": "approved",
+                    "status": "approved", "points": fc_points, "error": None,
+                    "fallback": "force_credit"}
+
     # Keep status as it was unless it's a brand-not-found which we keep pending
     await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
     return {"bill_id": bill_id, "action": "kept_pending",
@@ -3411,7 +3471,8 @@ async def bulk_reprocess_bills(request: BulkReprocessRequest,
     # the request lifecycle on some setups. We want a fully detached task.
     asyncio.create_task(_run_bulk_reprocess_job(
         job_id, bills, request.re_ocr, request.send_whatsapp,
-        request.force_credit, request.force_credit_percent
+        request.force_credit, request.force_credit_percent,
+        request.force_credit_on_fundle_reject
     ))
 
     return {
@@ -3426,7 +3487,8 @@ async def bulk_reprocess_bills(request: BulkReprocessRequest,
 async def _run_bulk_reprocess_job(job_id: str, bills: List[dict],
                                    re_ocr: bool, send_whatsapp_flag: bool,
                                    force_credit: bool = False,
-                                   force_credit_percent: float = 1.0):
+                                   force_credit_percent: float = 1.0,
+                                   force_credit_on_fundle_reject: bool = False):
     """Background worker: processes each bill, persists progress to DB after every
     iteration so the UI can poll for live updates."""
     from fastapi import BackgroundTasks as _BG
@@ -3438,7 +3500,8 @@ async def _run_bulk_reprocess_job(job_id: str, bills: List[dict],
         try:
             res = await _reprocess_single_bill(
                 b, re_ocr=re_ocr, send_whatsapp_flag=send_whatsapp_flag, background_tasks=bg,
-                force_credit=force_credit, force_credit_percent=force_credit_percent
+                force_credit=force_credit, force_credit_percent=force_credit_percent,
+                force_credit_on_fundle_reject=force_credit_on_fundle_reject
             )
         except Exception as e:
             logger.exception(f"Bulk reprocess error on bill {b.get('id')}")
@@ -4952,6 +5015,21 @@ Please review in the admin dashboard."""
         if points_result.get("success") and points_result.get("data"):
             total_balance = int(points_result["data"].get("balance_points", 0))
         
+        # ------- Point 12: Fundle rejected → force-credit fallback if admin enabled -------
+        force_credit_fallback_applied = False
+        if points_earned == 0 and tagnpay_error and bill_status == "pending_review":
+            settings = await _get_app_settings()
+            if settings.get("auto_force_credit_on_fundle_reject"):
+                err_low = (tagnpay_error or "").lower()
+                if "brand" in err_low or "match" in err_low or "not found" in err_low or "0 points" in err_low:
+                    auto = await _compute_auto_points(amount, store_name)
+                    fc_points = int(auto.get("points") or 0)
+                    if fc_points > 0:
+                        points_earned = fc_points
+                        bill_status = "auto_approved"
+                        force_credit_fallback_applied = True
+                        logger.info(f"WhatsApp bill auto force-credited: +{fc_points} pts for {phone} (Fundle rejected: {tagnpay_error})")
+        
         # ------- Campaign Engine: apply active multipliers/bonuses -------
         campaign_bonus_points = 0
         applied_campaigns = []
@@ -4990,7 +5068,22 @@ Please review in the admin dashboard."""
         if applied_campaigns:
             bill_dict["campaign_bonus"] = campaign_bonus_points
             bill_dict["applied_campaigns"] = applied_campaigns
+        if force_credit_fallback_applied:
+            bill_dict["force_credited"] = True
+            bill_dict["fundle_original_error"] = tagnpay_error
+            bill_dict["rejection_reason"] = None  # cleared since we accepted
         await db.bills.insert_one(bill_dict)
+
+        # When force-credited, Fundle didn't add to balance so we must locally
+        if force_credit_fallback_applied:
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$inc": {"balance_points": points_earned, "total_earned_points": points_earned}}
+            )
+            # Refresh local total_balance for the WhatsApp reply
+            u_after = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
+            if u_after:
+                total_balance = int(u_after.get("balance_points", total_balance))
         
         # If brand not found, send admin alert and show processing message to user
         if bill_status == "pending_review" and "Brand" in (tagnpay_error or ""):
@@ -5964,6 +6057,10 @@ _DEFAULT_APP_SETTINGS = {
     "content_font_family": "Antique Olive",
     "content_font_size_scale": 1.0,
     "content_font_weight": 400,
+    # Point 12: when True, WhatsApp/in-app auto-approved bills that Fundle
+    # rejects with brand-mismatch are automatically force-credited locally
+    # using the tier × amount earn-rate. Admin toggle in /app-settings.
+    "auto_force_credit_on_fundle_reject": False,
 }
 
 class AppSettingsUpdate(BaseModel):
@@ -5973,6 +6070,7 @@ class AppSettingsUpdate(BaseModel):
     content_font_family: Optional[str] = None
     content_font_size_scale: Optional[float] = None
     content_font_weight: Optional[int] = None
+    auto_force_credit_on_fundle_reject: Optional[bool] = None
 
 async def _get_app_settings() -> Dict:
     doc = await db.app_settings.find_one({"id": "app"}, {"_id": 0})
@@ -6019,6 +6117,200 @@ async def update_admin_app_settings(update: AppSettingsUpdate,
 
 
 # ======================== EXPORT ROUTES ========================
+
+
+# ======================== FUNDLE RECONCILIATION (Points 13, 14) ========================
+
+_LEGACY_154_NUMBERS = [
+    "9971893169", "9501434757", "8288014563", "9888423423", "9805835490", "9041155485",
+    "9878609065", "9888889030", "9814827567", "9416812567", "7009514900", "9815617567",
+    "9872650520", "7895817189", "6280913518", "9818451897", "9999375959", "7696324215",
+    "9888788947", "9888888155", "8557817733", "6280850312", "8287130086", "9855080526",
+    "8802377850", "6392555129", "9653348499", "9779074863", "8541940053", "7009565642",
+    "8395833307", "8077870707", "7009341633", "7536078809", "7742286179", "9781403257",
+    "7814534581", "9878996913", "8289857886", "8219487080", "7580072114", "9682690020",
+    "7973324298", "9888409447", "8360921152", "9888972305", "8894525028", "9999894799",
+    "7006683663", "7973482873", "6239811261", "9877990694", "7351095914", "8699046345",
+    "8699054829", "9478833770", "8448396006", "7909014744", "7344467526", "6571150613",
+    "7404024981", "7404148378", "7405388695", "7902787411", "7944032791", "7436944843",
+    "7423023805", "7423025810", "8725015070", "7440578341", "7733855054", "7889029834",
+    "9495738664", "7466491767", "7748416638", "7867249443", "7898002289", "9872013931",
+    "9465258129", "7740022436", "7435940325", "7459103870", "7767108012", "7747244425",
+    "7405729822", "7818977482", "8888757131", "7459317944", "7747762474", "7451253729",
+    "7721630194", "6701520995", "7986979231", "6284122145", "9253297172", "7740008232",
+    "6239905311", "8427674850", "9872205779", "9888853423", "9781871321", "9026893931",
+    "8727990333", "7087863728", "7719693159", "9360973309", "7814404654", "9780112211",
+    "8360842486", "9530600004", "9646883343", "7009865001", "8396990097", "9855580245",
+    "7999242647", "8217599309", "7347005652", "7490916937", "8894431066", "7470599499",
+    "7982380161", "7352680284", "7901042288", "7424216351", "7696450172", "8136850420",
+    "7922177305", "7303170183", "9877591269", "7777339275", "7572866836", "7876502788",
+    "9877277065", "7696851527", "7495238593", "7788540708", "7087416307", "9205131589",
+    "7473225172", "7484616424", "9766669249", "6562995629", "7459715468", "7949583555",
+    "9687009087", "7344897895", "9814090160", "8195030838", "8725850076", "8894735654",
+    "9876830594", "8968751707", "9592713209", "9103312918"
+]
+
+
+async def _sync_user_to_fundle(user: Dict) -> Dict:
+    """Register a single user on Fundle if not already there. Returns
+    {phone, action: registered|already|failed, error?}. Idempotent."""
+    phone = user.get("phone") or ""
+    phone_10 = phone[-10:] if phone else ""
+    if not phone_10 or len(phone_10) != 10 or not phone_10.isdigit():
+        return {"phone": phone, "action": "failed", "error": "invalid_phone"}
+    # Check if already on Fundle
+    try:
+        chk = await tagnpay_client.get_customer_points(phone_10)
+        if chk.get("success") and chk.get("data"):
+            return {"phone": phone_10, "action": "already"}
+    except Exception:
+        pass
+    # Register on Fundle
+    try:
+        reg = await tagnpay_client.register_customer(
+            mobile_number=phone_10,
+            name=user.get("name") or "Customer",
+            pan_number="",
+            source=user.get("first_touch_source") or "SRC_APP",
+        )
+        if reg.get("success"):
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$set": {"fundle_synced_at": datetime.now(timezone.utc).isoformat(),
+                          "fundle_registered": True}}
+            )
+            return {"phone": phone_10, "action": "registered"}
+        return {"phone": phone_10, "action": "failed", "error": reg.get("error") or "unknown"}
+    except Exception as e:
+        return {"phone": phone_10, "action": "failed", "error": str(e)[:200]}
+
+
+async def _sync_user_bills_to_fundle(user: Dict) -> Dict:
+    """Re-submit any locally-approved bills for a user that were never
+    successfully credited on Fundle. Uses the existing single-reprocess pipeline
+    and honours the force_credit fallback."""
+    phone_10 = (user.get("phone") or "")[-10:]
+    result = {"phone": phone_10, "bills_synced": 0, "bills_failed": 0, "details": []}
+    # Only re-run bills that are still not approved on Fundle (i.e., pending/rejected/manual)
+    async for bill in db.bills.find(
+        {"user_id": user["id"], "status": {"$in": ["pending_review", "manual_review", "rejected"]}},
+        {"_id": 0}
+    ):
+        try:
+            res = await _reprocess_single_bill(
+                bill, re_ocr=False, send_whatsapp_flag=False, background_tasks=None,
+                force_credit=False, force_credit_percent=0.0
+            )
+            if res.get("action") == "approved":
+                result["bills_synced"] += 1
+            else:
+                result["bills_failed"] += 1
+            result["details"].append({"bill_id": bill.get("id"), "action": res.get("action"), "err": res.get("error")})
+        except Exception as e:
+            result["bills_failed"] += 1
+            result["details"].append({"bill_id": bill.get("id"), "err": str(e)[:200]})
+    return result
+
+
+async def run_registration_sync_job():
+    """Nightly job (1AM IST): sync any newly-registered app users to Fundle.
+    Idempotent — skips users already on Fundle."""
+    logger.info("run_registration_sync_job: starting nightly Fundle sync")
+    # Users created today OR marked not-yet-synced to Fundle
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    query = {
+        "created_at": {"$gte": cutoff},
+        "fundle_registered": {"$ne": True},
+        "phone": {"$exists": True}
+    }
+    counters = {"registered": 0, "already": 0, "failed": 0}
+    async for user in db.users.find(query, {"_id": 0}):
+        r = await _sync_user_to_fundle(user)
+        counters[r["action"]] = counters.get(r["action"], 0) + 1
+    logger.info(f"run_registration_sync_job: done — {counters}")
+    await db.sync_jobs.insert_one({
+        "id": str(uuid.uuid4()),
+        "type": "nightly_registration_sync",
+        "run_at": datetime.now(timezone.utc).isoformat(),
+        "counters": counters,
+    })
+    return counters
+
+
+@api_router.post("/admin/sync/legacy-154")
+async def sync_legacy_154(background_tasks: BackgroundTasks,
+                           include_bills: bool = True,
+                           payload: dict = Depends(verify_jwt_token)):
+    """Point 14: One-time sync of the 154 phone numbers (from CP67 feedback doc)
+    to Fundle. For each: (a) register on Fundle if not present, (b) re-sync any
+    locally-approved bills. Runs in background; returns job_id for polling."""
+    job_id = str(uuid.uuid4())
+    await db.sync_jobs.insert_one({
+        "id": job_id,
+        "type": "legacy_154_sync",
+        "status": "queued",
+        "total": len(_LEGACY_154_NUMBERS),
+        "processed": 0,
+        "registered": 0,
+        "already": 0,
+        "failed": 0,
+        "bills_synced": 0,
+        "bills_failed": 0,
+        "include_bills": include_bills,
+        "run_at": datetime.now(timezone.utc).isoformat(),
+        "queued_by": payload.get("username") or "admin",
+    })
+
+    async def _worker():
+        await db.sync_jobs.update_one({"id": job_id}, {"$set": {"status": "running"}})
+        for p10 in _LEGACY_154_NUMBERS:
+            user = await db.users.find_one({"phone": {"$in": [p10, f"91{p10}", f"+91{p10}"]}}, {"_id": 0})
+            if not user:
+                await db.sync_jobs.update_one({"id": job_id}, {"$inc": {"processed": 1, "failed": 1}})
+                continue
+            r = await _sync_user_to_fundle(user)
+            update_inc = {"processed": 1}
+            update_inc[r["action"]] = 1  # registered / already / failed
+            if include_bills and r["action"] in ("registered", "already"):
+                br = await _sync_user_bills_to_fundle(user)
+                update_inc["bills_synced"] = br["bills_synced"]
+                update_inc["bills_failed"] = br["bills_failed"]
+            await db.sync_jobs.update_one({"id": job_id}, {"$inc": update_inc})
+        await db.sync_jobs.update_one({"id": job_id}, {"$set": {
+            "status": "completed",
+            "completed_at": datetime.now(timezone.utc).isoformat()
+        }})
+
+    background_tasks.add_task(_worker)
+    return {"success": True, "job_id": job_id, "total": len(_LEGACY_154_NUMBERS)}
+
+
+@api_router.get("/admin/sync/status/{job_id}")
+async def sync_job_status(job_id: str, payload: dict = Depends(verify_jwt_token)):
+    """Poll sync-job progress."""
+    job = await db.sync_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Sync job not found")
+    return job
+
+
+@api_router.get("/admin/sync/jobs")
+async def list_sync_jobs(limit: int = 20, payload: dict = Depends(verify_jwt_token)):
+    """Recent sync-job history."""
+    jobs = []
+    async for j in db.sync_jobs.find({}, {"_id": 0}).sort("run_at", -1).limit(limit):
+        jobs.append(j)
+    return {"jobs": jobs}
+
+
+@api_router.post("/admin/sync/nightly/run-now")
+async def run_nightly_sync_now(background_tasks: BackgroundTasks,
+                                payload: dict = Depends(verify_jwt_token)):
+    """Trigger the nightly sync immediately for testing."""
+    background_tasks.add_task(run_registration_sync_job)
+    return {"success": True, "message": "Nightly sync queued"}
+
+
 
 @api_router.get("/export/bills")
 async def export_bills(
@@ -7205,6 +7497,32 @@ async def startup_seed():
     asyncio.create_task(_parking_expiry_loop())
     # Ensure DB indexes for fast queries (idempotent)
     await ensure_db_indexes()
+    # Point 13: Schedule nightly Fundle registration sync at 1 AM IST
+    _start_scheduler()
+
+
+_scheduler = None
+def _start_scheduler():
+    """Start APScheduler with nightly Fundle sync (1 AM IST). Idempotent."""
+    global _scheduler
+    if _scheduler is not None:
+        return
+    try:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from apscheduler.triggers.cron import CronTrigger
+        import pytz
+        ist = pytz.timezone("Asia/Kolkata")
+        _scheduler = AsyncIOScheduler(timezone=ist)
+        _scheduler.add_job(
+            run_registration_sync_job,
+            CronTrigger(hour=1, minute=0, timezone=ist),
+            id="nightly_fundle_sync",
+            replace_existing=True,
+        )
+        _scheduler.start()
+        logger.info("Scheduler started — nightly Fundle sync at 1:00 AM IST")
+    except Exception as e:
+        logger.warning(f"Scheduler failed to start: {e}")
 
 
 async def ensure_db_indexes():

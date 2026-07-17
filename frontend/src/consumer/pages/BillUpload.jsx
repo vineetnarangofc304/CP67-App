@@ -188,14 +188,33 @@ export default function BillUpload() {
     setUploading(true);
     setResult(null);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch(`${API}/bills/upload`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-      });
-      const data = await res.json();
+      let res, data;
+      // Point 11: Android WebView multipart uploads are flaky. If we're inside
+      // the native app (JS bridge present), send as JSON base64 which is 100%
+      // reliable. Browser continues to use multipart.
+      if (hasNativeCamera) {
+        // Read file to base64
+        const dataUrl = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result);
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+        res = await fetch(`${API}/bills/upload-base64`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_base64: dataUrl }),
+        });
+      } else {
+        const formData = new FormData();
+        formData.append('file', file);
+        res = await fetch(`${API}/bills/upload`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+      }
+      data = await res.json();
       if (res.ok) {
         setResult({ success: true, message: data.message || 'Bill uploaded successfully!', bill_id: data.bill_id });
       } else {

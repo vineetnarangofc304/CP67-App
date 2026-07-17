@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 29 — Batch tested CP67 points 10-15 (bulk reprocess force-credit fallback, JSON bill upload endpoint, WhatsApp force-credit toggle, nightly Fundle sync scheduler, one-time legacy-154 sync, RWA+Office QR codes). 17/17 backend pytest tests PASS. Frontend: FundleSync page, AppSettings toggle, and Bulk Reprocess dialog all verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration29_batch.py",
+    "/app/test_reports/pytest/pytest_iter29.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~7637 lines — continues to exceed 700-line guideline. Consider extracting Fundle sync (line 6045+), scheduler (line 7500+), and QR code endpoints into separate modules.",
+    "GET /api/consumer/app-settings returns wrapped body {settings: {...}} while GET /api/admin/app-settings returns flat body — inconsistent response envelope; consumer UI has to unwrap. Non-blocking but worth aligning."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration29_batch.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17)",
+    "frontend": "100% (all 4 flows: FundleSync render + start-legacy-sync + run-nightly + toast, AppSettings toggle present, Bulk Reprocess dialog opens with force-on-reject checked by default)"
+  },
+  "test_credentials": "admin/CP67Admin@2025 + 9876543210/OTP 1234 used",
+  "seed_data_creation": "Created 2 test bills via /api/consumer/bills/upload-base64 (data-URL + raw base64) and 1 via multipart upload for regression. Created and cleaned-up 1 new test consumer (random 10-digit phone) for SRC_RWA source-capture verification. auto_force_credit_on_fundle_reject app-setting was toggled true then restored to original value.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Point 15 QR image field is 'image_base64' (not 'qr_image'). Consumer verify-otp response token key is 'token' (not 'access_token'). Consumer /app-settings body wraps settings under 'settings' key. Admin bill list route is /api/bills (not /api/admin/bills). Consumer users with source filter is /api/users?source=... (not /api/admin/users which returns admin users only). Admin routes in frontend use /fundle-sync, /app-settings, /bills (no /admin/ prefix). Legacy-154 sync completes almost instantly with all 154 marked 'failed' because local DB has none of those users — this is the correct/expected behaviour per problem statement.",
+  "rca of the issue": "N/A — no bugs. All 6 CP67 batch points verified working: (10) bulk-reprocess dry-run returns candidates and honours force_credit_on_fundle_reject; UI checkbox default-checked. (11) /bills/upload-base64 accepts both data:URL and raw base64, rejects invalid input with 400. (12) auto_force_credit_on_fundle_reject toggle persists via admin PUT and is exposed via consumer GET. (13) APScheduler running ('Scheduler started — nightly Fundle sync at 1:00 AM IST'); /admin/sync/nightly/run-now queues job; /admin/sync/jobs lists 'nightly_registration_sync'. (14) /admin/sync/legacy-154 returns job_id + total=154; job progresses and completes with counters {processed,registered,already,failed,bills_synced,bills_failed}. FundleSync UI renders and buttons work. (15) /api/qr-links includes SRC_RWA + SRC_OFFICE; QR0124010 and QR0124011 generate valid base64 PNG; first_touch_source=SRC_RWA captured on new-user verify-otp and queryable via /api/users?source=SRC_RWA. Regression: /api/bills, /admin/campaigns, /admin/app-settings, /consumer/campaigns/active, and multipart /consumer/bills/upload all still work."
+}
