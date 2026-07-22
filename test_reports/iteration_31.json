@@ -1,0 +1,32 @@
+{
+  "summary": "Verified Point 11 (unified base64 bill upload) and Point 16 (bill_no normaliser + dedup) end-to-end. 17/17 backend pytest cases pass; frontend UI upload confirmed to hit /api/consumer/bills/upload-base64 with 200 and NEVER the multipart endpoint. Normaliser, check_duplicate_bill, backfill, and both MongoDB indexes all validated on live DB.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_normalize_bill_no.py",
+    "/app/backend/tests/test_point11_upload_base64.py",
+    "/app/backend/tests/test_regression_iteration31.py",
+    "/app/test_reports/pytest/iter31_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is still ~7734 lines — recommend router split (bills/admin/consumer/brands) as flagged in iteration_30.",
+    "Route in review request mentions /app/bill-upload but actual React route is /app/upload — main agent may want to add a redirect or fix docs/testids to match. Not blocking.",
+    "check_duplicate_bill's legacy-fallback OR-branch matches raw bill_no exactly; if a legacy record has bill_no='INV:123' (with punctuation) and new upload comes as 'inv123' the normalised path still catches it via bill_no_normalized after backfill — verified. Backfill is idempotent (only touches docs missing the field)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_normalize_bill_no.py",
+    "/app/backend/tests/test_point11_upload_base64.py",
+    "/app/backend/tests/test_regression_iteration31.py"
+  ],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "100% (1/1 UI flow)"},
+  "test_credentials": "Consumer 9876543210 / OTP 1234; Admin admin / CP67Admin@2025",
+  "seed_data_creation": "Ephemeral: inserted 1 TEST_dup_bill_1 doc for check_duplicate_bill assertion — deleted in fixture teardown. Cleaned 7 leftover app-source bills created during UI/backend tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Point 11 (upload-base64 unified) and Point 16 (bill_no_normalized dedup + indexes + backfill) verified. Route for consumer bill upload is /app/upload (review request said /app/bill-upload — minor doc mismatch, no code fix needed). pytest suite path: /app/backend/tests/test_{normalize_bill_no,point11_upload_base64,regression_iteration31}.py. JUnit at /app/test_reports/pytest/iter31_results.xml.",
+  "rca of the issue": {
+    "point_11": "Original multipart form upload was flaky in older Android WebViews. Fix: BillUpload.jsx now uses FileReader.readAsDataURL → POST JSON {image_base64} to /api/consumer/bills/upload-base64 for ALL clients. Server-side upload_bill_base64 strips optional 'data:...;base64,' prefix, decodes, and delegates to shared _handle_bill_upload_bytes (10MB cap, image_hash dedup, background OCR). Verified: base64 endpoint called from browser, 200 response, success screen rendered.",
+    "point_16": "OCR would surface 'INV12345' vs 'INV:12345' as distinct bills, allowing double credit. Fix: normalize_bill_no strips [^A-Za-z0-9]+ and lowercases. BillData persists bill_no_normalized (Pydantic model_dump override auto-fills when bill_no set). check_duplicate_bill queries by (bill_no_normalized, store_name) with legacy exact-match fallback. _backfill_bill_no_normalized runs as async task on startup — verified all sampled bills have the field. MongoDB has single-field index on bill_no_normalized AND compound (user_id, store_name, bill_no_normalized). Seeded approved bill (INV999/inv999/TestB); check_duplicate_bill('INV:999','TestB') returned True; OtherB returned False; same image_hash returned True."
+  }
+}

@@ -1011,6 +1011,7 @@ async def process_bill_ocr(bill_id: str, image_base64: str, user_id: str, phone:
         ocr_data = ocr_result["data"]
         store_name = ocr_data.get("store_name") or "Unknown"
         bill_no = ocr_data.get("bill_no") or "N/A"
+        bill_no_norm = re.sub(r"[^A-Za-z0-9]+", "", str(bill_no)).lower() if bill_no else ""
         bill_date = ocr_data.get("bill_date") or ""
         try:
             amount = float(ocr_data.get("amount") or 0)
@@ -1021,6 +1022,33 @@ async def process_bill_ocr(bill_id: str, image_base64: str, user_id: str, phone:
         confidence = float(ocr_data.get("confidence_score") or ocr_data.get("confidence") or 0)
 
         phone_10 = phone[-10:]
+
+        # Point 16: Prevent duplicate credit — check if another APPROVED bill
+        # for this user/store has the same normalised bill_no (colon/space etc
+        # stripped). This closes the 'INV:12345' vs 'INV12345' loophole.
+        if bill_no_norm and store_name and store_name != "Unknown":
+            dup = await _db.bills.find_one({
+                "user_id": user_id,
+                "store_name": store_name,
+                "bill_no_normalized": bill_no_norm,
+                "id": {"$ne": bill_id},
+                "status": {"$in": ["auto_approved", "approved"]}
+            }, {"_id": 0, "id": 1, "bill_no": 1})
+            if dup:
+                await _db.bills.update_one({"id": bill_id}, {"$set": {
+                    "status": "rejected",
+                    "store_name": store_name,
+                    "bill_no": bill_no,
+                    "bill_no_normalized": bill_no_norm,
+                    "bill_date": bill_date,
+                    "amount": amount,
+                    "ocr_confidence": confidence,
+                    "ocr_raw_data": ocr_data,
+                    "rejection_reason": f"Duplicate — same bill already credited (bill_no={dup.get('bill_no')})"
+                }})
+                await send_app_notification(user_id, "Bill Rejected",
+                    "This bill has already been credited previously. Only one submission per bill is allowed.", "bill")
+                return
 
         # Validate
         if not is_cp67:
@@ -1156,6 +1184,7 @@ async def process_bill_ocr(bill_id: str, image_base64: str, user_id: str, phone:
             "status": status,
             "store_name": store_name,
             "bill_no": bill_no,
+            "bill_no_normalized": bill_no_norm,
             "bill_date": bill_date,
             "amount": amount,
             "points_issued": points_earned,

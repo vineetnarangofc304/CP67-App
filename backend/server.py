@@ -95,6 +95,7 @@ class BillData(BaseModel):
     user_phone: str
     store_name: Optional[str] = None
     bill_no: Optional[str] = None
+    bill_no_normalized: Optional[str] = None  # Point 16 — punctuation-stripped for dedup
     bill_date: Optional[str] = None
     amount: Optional[float] = None
     tax: Optional[float] = None
@@ -108,6 +109,13 @@ class BillData(BaseModel):
     processed_at: Optional[str] = None
     processed_by: Optional[str] = None  # Admin username who processed this bill
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def model_dump(self, **kwargs):
+        d = super().model_dump(**kwargs)
+        # Auto-fill normalised bill number so every insert path benefits
+        if d.get("bill_no") and not d.get("bill_no_normalized"):
+            d["bill_no_normalized"] = normalize_bill_no(d["bill_no"])
+        return d
 
 class AdminUser(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -695,23 +703,37 @@ DO NOT flag as tampering or invalid:
         logger.error(traceback.format_exc())
         return {"success": False, "error": str(e)}
 
+def normalize_bill_no(bill_no: Optional[str]) -> str:
+    """Point 16: Normalise OCR'd bill/invoice numbers so that trivial
+    punctuation/spacing differences don't create duplicate accepted bills.
+    e.g. 'INV: 12345' and 'INV12345' and 'inv12345' all collapse to 'inv12345'.
+    """
+    if not bill_no:
+        return ""
+    return re.sub(r"[^A-Za-z0-9]+", "", str(bill_no)).lower()
+
+
 async def check_duplicate_bill(image_hash: str, bill_no: Optional[str], store_name: Optional[str]) -> bool:
     """Check if bill already exists in database"""
     # Check by image hash
     existing = await db.bills.find_one({"image_hash": image_hash, "status": {"$ne": "rejected"}})
     if existing:
         return True
-    
-    # Check by bill number and store (if available)
+
+    # Check by bill number and store — use normalised form so punctuation
+    # differences (e.g. colon in the invoice number) don't slip past.
     if bill_no and store_name:
-        existing = await db.bills.find_one({
-            "bill_no": bill_no,
-            "store_name": store_name,
-            "status": {"$ne": "rejected"}
-        })
-        if existing:
-            return True
-    
+        norm = normalize_bill_no(bill_no)
+        if norm:
+            existing = await db.bills.find_one({
+                "$or": [
+                    {"bill_no_normalized": norm, "store_name": store_name, "status": {"$ne": "rejected"}},
+                    # Legacy bills without the normalised field — fall back to exact match
+                    {"bill_no": bill_no, "store_name": store_name, "status": {"$ne": "rejected"}}
+                ]
+            })
+            if existing:
+                return True
     return False
 
 # ======================== QR CODE DEFINITIONS ========================
@@ -7547,8 +7569,31 @@ async def startup_seed():
     asyncio.create_task(_parking_expiry_loop())
     # Ensure DB indexes for fast queries (idempotent)
     await ensure_db_indexes()
+    # Point 16: Backfill bill_no_normalized on legacy bills (idempotent, one-off per doc)
+    asyncio.create_task(_backfill_bill_no_normalized())
     # Point 13: Schedule nightly Fundle registration sync at 1 AM IST
     _start_scheduler()
+
+
+async def _backfill_bill_no_normalized():
+    """One-off backfill so historical bills participate in normalised-dedup.
+    Idempotent — only touches docs missing the field."""
+    try:
+        cursor = db.bills.find(
+            {"bill_no": {"$nin": [None, ""]}, "bill_no_normalized": {"$exists": False}},
+            {"_id": 0, "id": 1, "bill_no": 1}
+        )
+        n = 0
+        async for b in cursor:
+            await db.bills.update_one(
+                {"id": b["id"]},
+                {"$set": {"bill_no_normalized": normalize_bill_no(b.get("bill_no"))}}
+            )
+            n += 1
+        if n:
+            logger.info(f"Backfilled bill_no_normalized on {n} legacy bills")
+    except Exception as e:
+        logger.warning(f"bill_no_normalized backfill skipped: {e}")
 
 
 _scheduler = None
@@ -7590,6 +7635,8 @@ async def ensure_db_indexes():
         ("bills", "status", {}),
         ("bills", "user_id", {}),
         ("bills", "user_phone", {}),
+        ("bills", "bill_no_normalized", {}),
+        ("bills", [("user_id", 1), ("store_name", 1), ("bill_no_normalized", 1)], {}),
         ("bills", [("status", 1), ("created_at", -1)], {}),
         ("whatsapp_logs", "created_at", {}),
         ("whatsapp_logs", "direction", {}),
