@@ -185,6 +185,27 @@ Three production issues + a critical perf fix:
 - AndroidManifest now requests `android.permission.CAMERA`, `android.permission.POST_NOTIFICATIONS`, `android.permission.INTERNET` and declares optional camera features so the in-app bill capture works on Android.
 - Bumped `appVersionCode=2`, `appVersionName="1.1"` — requires rebuild via `./gradlew bundleRelease`.
 
+## Phase 22 (Feb 8, 2026 — part 6) — Point 11 (unified upload) + Point 16 (bill_no dedup)
+
+### Point 11 — Unified base64 bill upload ✅
+- **Root cause**: Multipart FormData uploads were unreliable in older Android WebViews.
+- **Fix**: `BillUpload.jsx` now uses `FileReader.readAsDataURL` → POST JSON `{image_base64}` to `/api/consumer/bills/upload-base64` for ALL clients (browser + WebView). No more `hasNativeCamera` branching.
+- Backend `upload_bill_base64` strips optional `data:...;base64,` prefix, decodes, delegates to shared `_handle_bill_upload_bytes` (10MB cap, image_hash dedup, background OCR).
+- Multipart `/api/consumer/bills/upload` endpoint kept for backward compat.
+
+### Point 16 — Invoice-number dedup ✅
+- **Root cause**: OCR would surface `INV12345` vs `INV:12345` as distinct bills → double credit → money loss.
+- **Fix**: `normalize_bill_no(s)` strips `[^A-Za-z0-9]+` and lowercases. `BillData.model_dump()` override auto-fills `bill_no_normalized` on every insert. `check_duplicate_bill` now queries by (`bill_no_normalized`, `store_name`) with legacy exact-match fallback.
+- Consumer OCR path in `routes/consumer.py` now rejects bills whose normalised bill_no matches an already-approved bill for the same user + store — status set to `rejected` with reason `Duplicate — same bill already credited (bill_no=X)` and app notification sent.
+- MongoDB indexes added: single-field on `bill_no_normalized` + compound `(user_id, store_name, bill_no_normalized)`.
+- Startup task `_backfill_bill_no_normalized` populates the field on legacy bills — idempotent.
+
+### Testing
+- iteration_31: 17/17 backend + 100% frontend. Files:
+  - `/app/backend/tests/test_normalize_bill_no.py`
+  - `/app/backend/tests/test_point11_upload_base64.py`
+  - `/app/backend/tests/test_regression_iteration31.py`
+
 ## Phase 21 (Feb 8, 2026 — part 5) — Batch: Points 10–15 (iteration_29, 17/17 backend + 100% frontend)
 
 ### Point 10 — Bulk June bills auto force-credit ✅
