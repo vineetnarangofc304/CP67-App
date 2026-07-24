@@ -1,0 +1,44 @@
+{
+  "verdict": "fixed",
+  "user_reported_bug": "[7/6, 2:11 PM] Bharat New Sharma: Google Document https://docs.google.com/document/d/1ljCJt99LTbVTLtJwyab62Zn-pHXzP1HHkPuLFnLqxb4/edit?usp=sharing\n[7/20, 2:36 PM] Bharat New Sharma: Pending Point - 11,16,17 to be done\nNot.done ..check.pls",
+  "summary": "Focused verification on PREVIEW only (https://mall-engage-preview.preview.emergentagent.com). No relevant testing skill found. Point 11 base64 bill upload works via API and real /app/upload UI, UI uses /api/consumer/bills/upload-base64 only and shows Bill Uploaded. Point 16 normalized invoice dedup/backfill works for INV12345 vs INV:12345. Point 17 admin Fix Brand returns queued in 0.46s and background force-credit approved the seeded pending bill within ~9s with points_issued=150 and force_credited=true. Regression endpoints and multipart upload also passed. Production was not tested in this run.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verify_points_11_16_17_preview.py",
+    "/app/test_reports/bug_verify_points_11_16_17_preview_run.log",
+    "/app/test_reports/bug_verification_32.json",
+    "/app/test_reports/iteration_32.json"
+  ],
+  "action_items": [
+    "No preview code fix needed for Points 11, 16, or 17.",
+    "If users still see this on production, redeploy/promote the fixed preview backend/frontend to production and re-run this focused smoke test there."
+  ],
+  "critical_code_review_comments": [
+    "Inspected /app/backend/routes/consumer.py upload-base64 shared handler and Point 16 dedup block, /app/backend/server.py normalize/check_duplicate/backfill/edit-brand/force-credit paths, and /app/frontend/src/consumer/pages/BillUpload.jsx. The preview code matches the intended fixes.",
+    "No relevant testing skill found for this specific bill upload/OCR/fix-brand flow.",
+    "Existing untracked workspace files are yarn/Gradle artifacts; product code was not modified by this test."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verify_points_11_16_17_preview.py",
+    "/app/test_reports/bug_verify_points_11_16_17_preview_run.log",
+    "/app/test_reports/bug_verification_32.json",
+    "/app/test_reports/iteration_32.json"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 focused backend/API checks)",
+    "frontend": "100% (1/1 focused UI upload flow)"
+  },
+  "seed_data_creation": "Created ephemeral bills for Point 11 uploads, Point 16 legacy/backfill + approved dedup seed, Point 17 pending_review brand seed, and one UI upload bill. Deleted all seeded/upload test bills; rolled back the 150 force-credit points added to the test consumer.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Use /app/tests/bug_verify_points_11_16_17_preview.py to repeat preview/production verification. Run with MONGO_URL, DB_NAME, and REACT_APP_BACKEND_URL set. Browser proof: /app/upload selected Gallery, previewed image, submitted, observed network call to /api/consumer/bills/upload-base64 and no multipart call, then Bill Uploaded success state.",
+  "rca_of_the_issue": "Preview appears fixed. Point 11 avoids Android WebView multipart/FormData flakiness by posting JSON {image_base64} to /api/consumer/bills/upload-base64 for all clients while keeping multipart regression support. Point 16 stores/backfills bill_no_normalized and checks normalized invoice+store duplicates so punctuation differences like INV12345 vs INV:12345 are rejected. Point 17 queues brand reprocess immediately and, when Fundle rejects unknown/brand-mismatch, auto force-credits locally after admin correction. If production still fails, likely RCA is deployment drift: production is running older code than preview."
+}
