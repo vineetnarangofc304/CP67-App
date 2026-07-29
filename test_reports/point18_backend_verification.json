@@ -1,0 +1,161 @@
+{
+  "run_id": "p18qa_aaab56e7",
+  "api": "https://mall-engage-preview.preview.emergentagent.com/api",
+  "checks": [
+    {
+      "name": "admin_login",
+      "ok": true,
+      "details": {
+        "status": 200,
+        "body": "{\"token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwibmFtZSI6IlN1cGVyIEFkbWluIiwicm9sZSI6InN1cGVyX2FkbWluIiwiYWRtaW5faWQiOiIxYWI4NGU5Zi1iODlhLTQ1ZTItOGUwOC1kMzA1NmM0MDVkY2EiLCJnYXRlIjpudWxsLCJleHAiOjE3ODQ5Nzg1Mzh9.rcntZoP9x7_bQR7lI_7WgYwMWrC6mF0Mo0_JLgBV1fY\",\"username\":\"admin\"}"
+      }
+    },
+    {
+      "name": "single_reprocess_fast_queued_response",
+      "ok": true,
+      "details": {
+        "status": 200,
+        "elapsed_sec": 0.046,
+        "body": {
+          "success": true,
+          "reprocessed": "queued",
+          "bill_id": "bill_p18qa_aaab56e7_1e382",
+          "message": "Reprocess queued. Refresh the list in ~15 seconds to see the result."
+        }
+      }
+    },
+    {
+      "name": "single_reprocess_started_fields_persisted",
+      "ok": true,
+      "details": {
+        "reprocessing_started_at": "2026-07-24T11:22:18.641124+00:00",
+        "reprocessing_by": "admin"
+      }
+    },
+    {
+      "name": "single_reprocess_approved_within_25s",
+      "ok": true,
+      "details": {
+        "final_status": "approved",
+        "points_issued": 123,
+        "force_credited": true,
+        "reprocessing_finished_at": "2026-07-24T11:22:25.904629+00:00",
+        "seen_in_get_bills_approved": true,
+        "elapsed_poll_sec": 8.3,
+        "rejection_reason": null
+      }
+    },
+    {
+      "name": "legacy_wait_true_sync_success",
+      "ok": true,
+      "details": {
+        "status": 200,
+        "elapsed_sec": 7.072,
+        "body": {
+          "success": true,
+          "points_earned": 123,
+          "message": "Bill reprocessed successfully"
+        },
+        "db_status": "approved",
+        "db_points": 123,
+        "force_credited": true
+      }
+    },
+    {
+      "name": "edit_brand_queued_fast_response",
+      "ok": true,
+      "details": {
+        "status": 200,
+        "elapsed_sec": 0.054,
+        "body": {
+          "success": true,
+          "reprocessed": "queued",
+          "store_name": "QA Edited Unknown Brand",
+          "message": "Brand updated. Reprocessing in background \u2014 refresh the list in ~10 seconds to see the result."
+        }
+      }
+    },
+    {
+      "name": "edit_brand_background_eventual_approval",
+      "ok": true,
+      "details": {
+        "status": "approved",
+        "points": 123,
+        "force_credited": true,
+        "store_name": "QA Edited Unknown Brand"
+      }
+    },
+    {
+      "name": "bulk_reprocess_dry_run_candidate",
+      "ok": true,
+      "details": {
+        "status": 200,
+        "candidates": 1,
+        "has_seed_candidate": true
+      }
+    },
+    {
+      "name": "bulk_reprocess_starts_background_job",
+      "ok": true,
+      "details": {
+        "status": 200,
+        "elapsed_sec": 0.047,
+        "body": {
+          "dry_run": false,
+          "job_id": "d5fcd8aa-a7e6-4ed8-8197-a54945a8d4f9",
+          "status": "running",
+          "total": 1,
+          "message": "Started in background. Poll /bulk-reprocess/{job_id}/status for progress."
+        }
+      }
+    },
+    {
+      "name": "bulk_reprocess_status_endpoint_and_completion",
+      "ok": true,
+      "details": {
+        "status": 200,
+        "body": {
+          "id": "d5fcd8aa-a7e6-4ed8-8197-a54945a8d4f9",
+          "status": "completed",
+          "total": 1,
+          "processed": 1,
+          "summary": {
+            "approved": 1,
+            "rejected": 0,
+            "manual_review": 0,
+            "kept_pending": 0,
+            "skipped": 0
+          },
+          "total_points_credited": 123,
+          "results": [
+            {
+              "bill_id": "bill_p18qa_aaab56e7_9c5fe",
+              "action": "approved",
+              "status": "approved",
+              "points": 123,
+              "error": null,
+              "fallback": "force_credit"
+            }
+          ],
+          "started_at": "2026-07-24T11:22:44.236697+00:00",
+          "finished_at": "2026-07-24T11:22:51.254281+00:00",
+          "started_by": "admin",
+          "options": {
+            "re_ocr": false,
+            "send_whatsapp": false,
+            "from_date": "2026-07-24",
+            "to_date": "2026-07-24"
+          }
+        },
+        "db_status": "approved",
+        "db_points": 123,
+        "force_credited": true
+      }
+    }
+  ],
+  "overall_ok": true,
+  "cleanup": {
+    "bills_deleted": 4,
+    "users_deleted": 4
+  }
+}

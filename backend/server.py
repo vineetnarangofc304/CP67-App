@@ -2881,10 +2881,104 @@ Keep shopping at CP67 Mall to earn more rewards!"""
     }
 
 @api_router.post("/bills/{bill_id}/reprocess")
-async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks, payload: dict = Depends(verify_jwt_token)):
+async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks,
+                          wait: bool = False,
+                          payload: dict = Depends(verify_jwt_token)):
     """Reprocess a pending bill after brand has been added to Fundle.
-    This will also register the customer if they are not registered in Fundle.
+
+    Default (fast): queues the reprocess in a background task and returns
+    immediately in <1s so Cloudflare/browser doesn't time out. The admin UI
+    polls the bills list to see the updated status.
+
+    Set `?wait=true` to run synchronously (legacy behaviour) — may take 20-60s.
     """
+    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    if bill.get("status") not in ["pending_review", "rejected", "manual_review"]:
+        raise HTTPException(status_code=400, detail="Only pending/rejected/manual-review bills can be reprocessed")
+
+    # Mark reprocessing_started_at so UI can show a spinner
+    await db.bills.update_one(
+        {"id": bill_id},
+        {"$set": {"reprocessing_started_at": datetime.now(timezone.utc).isoformat(),
+                  "reprocessing_by": payload.get("username") or "admin"}}
+    )
+
+    if not wait:
+        background_tasks.add_task(_do_reprocess_bill_bg, bill_id)
+        return {
+            "success": True,
+            "reprocessed": "queued",
+            "bill_id": bill_id,
+            "message": "Reprocess queued. Refresh the list in ~15 seconds to see the result."
+        }
+
+    # Legacy synchronous path
+    return await _do_reprocess_bill_sync(bill_id, background_tasks)
+
+
+async def _do_reprocess_bill_bg(bill_id: str):
+    """Background wrapper — runs the full sync reprocess pipeline off the
+    request thread so the browser/Cloudflare fetch doesn't time out on slow
+    Fundle calls. Always enables force_credit_on_fundle_reject because the
+    admin explicitly clicked "Reprocess" — they want it credited."""
+    from fastapi import BackgroundTasks as _BG
+    bg = _BG()
+    try:
+        bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+        if not bill:
+            return
+        await _reprocess_single_bill(
+            bill, re_ocr=False, send_whatsapp_flag=True, background_tasks=bg,
+            force_credit_on_fundle_reject=True
+        )
+    except Exception as e:
+        logger.exception(f"Background reprocess failed for bill {bill_id}: {e}")
+        await db.bills.update_one({"id": bill_id},
+            {"$set": {"reprocessing_error": str(e)[:300],
+                      "reprocessing_finished_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        return
+    await db.bills.update_one({"id": bill_id},
+        {"$set": {"reprocessing_finished_at": datetime.now(timezone.utc).isoformat()}}
+    )
+
+
+async def _do_reprocess_bill_sync(bill_id: str, background_tasks: BackgroundTasks):
+    """Original synchronous reprocess kept for `?wait=true`. Delegates to the
+    shared `_reprocess_single_bill` helper (same pipeline as bulk reprocess) so
+    behaviour stays consistent."""
+    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    res = await _reprocess_single_bill(
+        bill, re_ocr=False, send_whatsapp_flag=True, background_tasks=background_tasks,
+        force_credit_on_fundle_reject=True
+    )
+    await db.bills.update_one({"id": bill_id},
+        {"$set": {"reprocessing_finished_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    if res.get("action") == "approved":
+        return {"success": True, "points_earned": res.get("points", 0),
+                "message": "Bill reprocessed successfully"}
+    return {"success": False, "error": res.get("error") or "Reprocess failed",
+            "status": res.get("status")}
+
+
+@api_router.post("/bills/{bill_id}/reprocess-legacy")
+async def reprocess_bill_legacy(bill_id: str, background_tasks: BackgroundTasks,
+                                 payload: dict = Depends(verify_jwt_token)):
+    """Full legacy reprocess implementation kept for reference / debugging.
+    Not used by the admin UI anymore — see reprocess_bill above."""
+    return await _reprocess_bill_full_legacy_impl(bill_id, background_tasks, payload)
+
+
+async def _reprocess_bill_full_legacy_impl(bill_id: str, background_tasks: BackgroundTasks, payload: dict):
+    """Full inline legacy implementation — kept isolated so the main endpoint
+    can use the fast background path. If you need to debug specific Fundle
+    calls step-by-step, POST /api/bills/{id}/reprocess-legacy to get the
+    complete transaction detail."""
     
     # Get bill
     bill = await db.bills.find_one({"id": bill_id})

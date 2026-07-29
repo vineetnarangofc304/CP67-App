@@ -195,39 +195,47 @@ const Bills = () => {
   };
 
   const reprocessBill = (billId) => {
-    // Use XHR so we can distinguish HTTP errors from network/Cloudflare timeouts.
-    // Failed-toast was firing even when the backend had already approved the bill
-    // (the response just arrived after Cloudflare's ingress timeout).
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${API_URL}/bills/${billId}/reprocess`, true);
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.timeout = 90000; // 90s — Fundle can be slow but we'll know within this window
-    xhr.onload = () => {
-      let result = {};
-      try { result = xhr.responseText ? JSON.parse(xhr.responseText) : {}; } catch { /* non-JSON */ }
-      if (xhr.status >= 200 && xhr.status < 300 && result.success) {
-        toast.success(`Bill reprocessed! ${result.points_earned} points credited.`);
-      } else if (result.error) {
-        toast.error(`Reprocess failed: ${result.error}`);
-      } else {
-        toast.error('Reprocess failed — please refresh the page to see the latest status.');
+    // Point 18: The reprocess endpoint now queues in the background and
+    // returns in <1s. We no longer wait 22s+ for Fundle. Frontend refreshes
+    // the list twice (10s + 25s) to pick up the completed status.
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 15000);
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/bills/${billId}/reprocess`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          signal: ctrl.signal,
+        });
+        clearTimeout(timeoutId);
+        const data = await res.json();
+        if (data.reprocessed === 'queued') {
+          toast.success('Reprocess queued. Refreshing list — result in ~15s.');
+        } else if (data.success) {
+          toast.success(`Bill reprocessed! ${data.points_earned || 0} points credited.`);
+        } else if (data.error) {
+          toast.error(`Reprocess failed: ${data.error}`);
+        } else {
+          toast.error('Reprocess failed — refresh to see the latest status.');
+        }
+        fetchBills();
+        fetchPendingBills();
+        setTimeout(() => { fetchBills(); fetchPendingBills(); }, 12000);
+        setTimeout(() => { fetchBills(); fetchPendingBills(); }, 28000);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err && err.name === 'AbortError') {
+          toast.error('Reprocess timed out. Refresh — the bill may still be processing.');
+        } else {
+          toast.error('Network hiccup. Refresh — the bill may have been processed.');
+        }
+        fetchBills();
+        fetchPendingBills();
       }
-      // Always refresh — backend may have approved even if the response was lost
-      fetchBills();
-      fetchPendingBills();
-    };
-    xhr.onerror = () => {
-      toast.error('Network hiccup. Refresh — the bill may have been processed.');
-      fetchBills();
-      fetchPendingBills();
-    };
-    xhr.ontimeout = () => {
-      toast.error('Fundle is slow today. Refreshing — your reprocess may still be running.');
-      fetchBills();
-      fetchPendingBills();
-    };
-    try { xhr.send(); } catch { toast.error('Could not send reprocess request.'); }
+    })();
   };
 
   // -------- Edit Brand (open searchable dropdown of Fundle-matched brands) --------
