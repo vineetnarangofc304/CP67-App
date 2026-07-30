@@ -23,7 +23,8 @@ import {
   CalendarDays,
   ShieldOff,
   Type,
-  RefreshCw
+  RefreshCw,
+  Award
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -51,6 +52,7 @@ const navItems = [
   { path: '/admin-users', label: 'Admin Users', icon: ShieldCheck },
   { path: '/blocked-users', label: 'Blocked Users', icon: ShieldOff },
   { path: '/fundle-sync', label: 'Fundle Sync', icon: RefreshCw },
+  { path: '/staff-incentives', label: 'Staff Incentives', icon: Award },
   { path: '/app-settings', label: 'App Settings', icon: Type },
 ];
 

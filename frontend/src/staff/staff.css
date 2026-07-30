@@ -1,0 +1,166 @@
+/* Homeland Advantage — Retail Staff Mini-App
+   A deliberately distinct visual language from consumer PWA (which is light cream + luxury gold)
+   and the admin dashboard (light corporate blue). This is a dark, high-contrast, mobile-first
+   surface built for retail floor staff to scan, track earnings, and cash out. */
+
+.staff-app-root {
+  --sa-bg:            #0B0F1A;
+  --sa-surface:       #131A2A;
+  --sa-surface-2:     #1B2438;
+  --sa-border:        rgba(255,255,255,0.08);
+  --sa-text:          #F5F7FB;
+  --sa-text-dim:      #A6B0C3;
+  --sa-accent:        #FFB300;   /* amber — earnings */
+  --sa-accent-2:      #7C5CFF;   /* violet — accent gradient */
+  --sa-good:          #34D399;
+  --sa-bad:           #F87171;
+
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 800px at 100% -20%, rgba(124, 92, 255, 0.18), transparent 60%),
+    radial-gradient(900px 600px at -10% 100%, rgba(255, 179, 0, 0.12), transparent 60%),
+    var(--sa-bg);
+  color: var(--sa-text);
+  font-family: 'Inter', system-ui, sans-serif;
+  padding: 0;
+}
+.staff-app-root * { box-sizing: border-box; }
+.staff-app-root .container {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 24px 20px 100px;
+}
+
+.sa-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: rgba(11, 15, 26, 0.7);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--sa-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.sa-brand {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-size: 15px;
+  color: var(--sa-text);
+}
+.sa-brand span { color: var(--sa-accent); }
+
+.sa-card {
+  background: var(--sa-surface);
+  border: 1px solid var(--sa-border);
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.sa-card.gradient {
+  background: linear-gradient(135deg, rgba(124, 92, 255, 0.28), rgba(255, 179, 0, 0.16) 60%, rgba(255, 179, 0, 0.05));
+  border: 1px solid rgba(255, 179, 0, 0.28);
+}
+
+.sa-label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--sa-text-dim); }
+.sa-value { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px; }
+.sa-small { color: var(--sa-text-dim); font-size: 13px; }
+
+.sa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 18px;
+  border-radius: 10px;
+  background: var(--sa-accent);
+  color: #0B0F1A;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+.sa-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(255, 179, 0, 0.35); }
+.sa-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.sa-btn.ghost { background: transparent; color: var(--sa-text); border: 1px solid var(--sa-border); }
+.sa-btn.full { width: 100%; }
+.sa-btn.violet { background: var(--sa-accent-2); color: white; }
+
+.sa-input {
+  width: 100%;
+  padding: 14px 14px;
+  background: var(--sa-surface-2);
+  border: 1px solid var(--sa-border);
+  border-radius: 10px;
+  color: var(--sa-text);
+  font-size: 16px;
+  outline: none;
+}
+.sa-input:focus { border-color: var(--sa-accent); }
+
+.sa-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.sa-tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(11, 15, 26, 0.92);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--sa-border);
+  display: flex;
+  justify-content: space-around;
+  padding: 10px 0 14px;
+  z-index: 20;
+}
+.sa-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: var(--sa-text-dim);
+  font-size: 11px;
+  text-decoration: none;
+  padding: 6px 12px;
+}
+.sa-tab.active { color: var(--sa-accent); }
+
+.sa-list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--sa-border);
+}
+.sa-list-item:last-child { border-bottom: none; }
+.sa-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.sa-chip.good { background: rgba(52, 211, 153, 0.15); color: var(--sa-good); }
+.sa-chip.pending { background: rgba(255, 179, 0, 0.15); color: var(--sa-accent); }
+.sa-chip.bad { background: rgba(248, 113, 113, 0.15); color: var(--sa-bad); }
+.sa-chip.dim { background: rgba(255, 255, 255, 0.06); color: var(--sa-text-dim); }
+
+.sa-otp-boxes { display: flex; gap: 8px; justify-content: center; }
+.sa-otp-boxes input {
+  width: 44px; height: 52px; text-align: center; font-size: 22px; font-weight: 600;
+  background: var(--sa-surface-2); border: 1px solid var(--sa-border);
+  border-radius: 10px; color: var(--sa-text);
+}
+.sa-otp-boxes input:focus { border-color: var(--sa-accent); outline: none; }
+
+.sa-splash {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center; text-align: center;
+  padding: 24px;
+}
+.sa-logo-lg {
+  width: 72px; height: 72px; border-radius: 20px;
+  background: linear-gradient(135deg, var(--sa-accent), var(--sa-accent-2));
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 30px; color: #0B0F1A;
+  margin: 0 auto 20px;
+}

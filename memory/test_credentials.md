@@ -18,6 +18,14 @@
 - WhatsApp: Send "Hi! Sign me up for CP67 Rewards | SRC_PARKING" to 917347576767
 - Use any non-blocked, non-registered phone number
 
+## Retail Staff Mini-App (Point 19)
+- URL: `/staff-app/login`
+- Test staff phone: any phone that admin has added via `/staff-incentives`
+- OTP: `1234` (dev bypass; real 6-digit OTP is also sent via Karix SMS)
+- Sample seed: `9876500001` (staff `HL-0001`, brand `Zara`) — created via API/tests
+- Admin management: `/staff-incentives` (Staff / Leaderboard / Redemptions / Slabs tabs)
+- Attribution: customer sends WhatsApp msg containing `#STAFF:<qr_token>` → 15-min window
+
 
 ## Android TWA Signing Keystore (PROD)
 - Keystore: `/app/twa-build/android.keystore`

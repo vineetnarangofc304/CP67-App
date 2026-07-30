@@ -2846,6 +2846,9 @@ Please ensure your next bill upload:
 Keep shopping at CP67 Mall to earn more rewards!"""
     
     await db.bills.update_one({"id": bill_id}, {"$set": update_data})
+
+    # Staff Incentive Sync — approve/reject affects any attached bill_upload incentive
+    background_tasks.add_task(_sync_staff_incentive_for_bill, bill_id, update_data.get("status", ""), phone or "")
     
     # Send WhatsApp message if enabled
     if request.send_whatsapp and whatsapp_message:
@@ -3454,6 +3457,12 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
             {"$inc": {"balance_points": points_earned, "total_earned_points": points_earned}}
         )
 
+        # Staff Incentive Sync — approve triggers registration-incentive activation
+        try:
+            await _sync_staff_incentive_for_bill(bill_id, "approved", phone or "")
+        except Exception as _e:
+            logger.warning(f"staff-sync (reprocess approved) failed: {_e}")
+
         if send_whatsapp_flag and phone:
             try:
                 total_balance_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
@@ -3500,6 +3509,11 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
                 {"id": user["id"]},
                 {"$inc": {"balance_points": fc_points, "total_earned_points": fc_points}}
             )
+            # Staff Incentive Sync — force-credit approval activates any pending registration incentive
+            try:
+                await _sync_staff_incentive_for_bill(bill_id, "approved", phone or "")
+            except Exception as _e:
+                logger.warning(f"staff-sync (reprocess force-credit) failed: {_e}")
             if send_whatsapp_flag and phone and background_tasks is not None:
                 try:
                     total_balance_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
@@ -4304,8 +4318,11 @@ async def send_whatsapp_image(phone: str, image_base64: str, caption: str = ""):
 
 # ======================== WHATSAPP WEBHOOK ROUTES ========================
 
-async def process_new_user_registration(phone: str, profile_name: str, source_code: str, qr_data: dict, background_tasks: BackgroundTasks):
-    """Handle new user registration flow"""
+async def process_new_user_registration(phone: str, profile_name: str, source_code: str, qr_data: dict, background_tasks: BackgroundTasks, attributing_staff: dict = None):
+    """Handle new user registration flow.
+    `attributing_staff` (optional) — if the customer arrived via a #STAFF:token
+    WhatsApp message, we create a pending staff registration incentive that
+    becomes redeemable when the customer uploads their first approved bill."""
     # Strip 91 prefix for API calls
     mobile_10 = phone[2:] if phone.startswith("91") and len(phone) == 12 else phone
     
@@ -4367,7 +4384,16 @@ async def process_new_user_registration(phone: str, profile_name: str, source_co
         balance_points=balance_points
     )
     await db.users.insert_one(new_user.model_dump())
-    
+
+    # Staff attribution → pending registration incentive (activates when first bill approved)
+    if attributing_staff:
+        try:
+            mobile_10 = phone[2:] if phone.startswith("91") and len(phone) == 12 else phone
+            await create_registration_incentive(mobile_10, attributing_staff)
+            logger.info(f"Staff registration incentive created: staff={attributing_staff.get('staff_code')} customer={mobile_10}")
+        except Exception as e:
+            logger.error(f"Failed to create staff registration incentive: {e}")
+
     # Update QR analytics - only count NEW customers as registrations
     if qr_data:
         if customer_type == "new":
@@ -5240,6 +5266,12 @@ Please review in the admin dashboard."""
             bill_dict["rejection_reason"] = None  # cleared since we accepted
         await db.bills.insert_one(bill_dict)
 
+        # Staff Incentive Sync — WhatsApp bill upload triggers attribution + registration activation
+        try:
+            await _sync_staff_incentive_for_bill(bill_dict.get("id"), bill_status, phone or "")
+        except Exception as _e:
+            logger.warning(f"staff-sync (whatsapp bill) failed: {_e}")
+
         # When force-credited, Fundle didn't add to balance so we must locally
         if force_credit_fallback_applied:
             await db.users.update_one(
@@ -5524,11 +5556,23 @@ Use the menu below to explore your rewards!"""
             return {"status": "ok", "message": "Parking registration processed"}
         
         # ===== FLOW LOGIC =====
-        
+
+        # Detect Staff Attribution Token (#STAFF:xxx). Open a 15-min window for
+        # this customer_phone → staff. Registration & bill incentives get
+        # created downstream against this attribution.
+        attributing_staff = None
+        try:
+            attributing_staff = await parse_staff_token_from_message(clean_message)
+            if attributing_staff:
+                await open_attribution_window(mobile_10, attributing_staff)
+                logger.info(f"Staff attribution opened: customer={mobile_10} staff={attributing_staff.get('staff_code')}")
+        except Exception as e:
+            logger.warning(f"Staff attribution parse failed: {e}")
+
         if not user:
             # NEW USER - Register
             await log_entry_update(log_entry)
-            background_tasks.add_task(process_new_user_registration, phone, profile_name, source_code, qr_data, background_tasks)
+            background_tasks.add_task(process_new_user_registration, phone, profile_name, source_code, qr_data, background_tasks, attributing_staff)
             
         else:
             # EXISTING USER
@@ -7632,6 +7676,38 @@ from routes.consumer import consumer_router, init_consumer_routes, auto_seed_if_
 BACKEND_PUBLIC_URL = os.environ.get('BACKEND_PUBLIC_URL', '')
 init_consumer_routes(db, tagnpay_client, JWT_SECRET, JWT_ALGORITHM, EMERGENT_LLM_KEY, BACKEND_PUBLIC_URL)
 app.include_router(consumer_router)
+
+# Staff Incentive Routes (Retailer Staff Incentive Platform — Point 19)
+from routes.staff import (
+    staff_router,
+    staff_admin_router,
+    bind_db as bind_staff_db,
+    parse_staff_token_from_message,
+    open_attribution_window,
+    create_registration_incentive,
+    create_or_activate_bill_incentive,
+    sync_incentive_on_bill_status_change,
+)
+bind_staff_db(db, send_sms_otp=send_otp_sms, store_otp=store_otp, verify_stored_otp=verify_stored_otp)
+app.include_router(staff_router)
+app.include_router(staff_admin_router)
+
+
+async def _sync_staff_incentive_for_bill(bill_id: str, new_status: str, user_phone: str):
+    """Central hook called after ANY bill status change.
+       - Creates a bill_upload incentive if the customer has an active
+         staff attribution window and this bill hasn't been credited yet.
+       - Syncs any existing bill_upload incentive on this bill to the new status.
+       - Activates any pending registration incentive when a bill is approved.
+    All calls are safe / idempotent."""
+    try:
+        # Normalise phone to 10-digit for attribution lookup
+        mobile_10 = re.sub(r"\D", "", user_phone or "")[-10:]
+        await create_or_activate_bill_incentive(bill_id, mobile_10, new_status)
+        await sync_incentive_on_bill_status_change(bill_id, new_status)
+    except Exception as e:
+        logger.warning(f"staff-incentive sync failed for bill={bill_id}: {e}")
+
 
 async def expire_old_parking_coupons():
     """Mark all parking coupons past their 24hr expiry as expired"""

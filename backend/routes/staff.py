@@ -36,15 +36,25 @@ staff_router = APIRouter(prefix="/api/staff")
 staff_admin_router = APIRouter(prefix="/api/admin/staff")
 
 _db = None
+_send_sms_otp = None      # async fn(phone_10: str, otp: str) -> dict
+_store_otp = None         # async fn(phone_10: str, otp: str) -> None
+_verify_stored_otp = None # async fn(phone_10: str, otp: str) -> bool
 security = HTTPBearer(auto_error=False)
 
 JWT_SECRET = os.environ.get('JWT_SECRET', 'cp67-secret-key-2025')
+OTP_DEV_BYPASS = os.environ.get('OTP_DEV_BYPASS', '')
 
 # ==================== SETUP ====================
 
-def bind_db(db):
-    global _db
+def bind_db(db, send_sms_otp=None, store_otp=None, verify_stored_otp=None):
+    global _db, _send_sms_otp, _store_otp, _verify_stored_otp
     _db = db
+    if send_sms_otp is not None:
+        _send_sms_otp = send_sms_otp
+    if store_otp is not None:
+        _store_otp = store_otp
+    if verify_stored_otp is not None:
+        _verify_stored_otp = verify_stored_otp
 
 
 DEFAULT_STAFF_CONFIG = {
@@ -68,8 +78,10 @@ DEFAULT_STAFF_CONFIG = {
 async def get_staff_config() -> Dict:
     doc = await _db.staff_config.find_one({"id": "staff_config"}, {"_id": 0})
     if not doc:
-        await _db.staff_config.insert_one(DEFAULT_STAFF_CONFIG)
-        return DEFAULT_STAFF_CONFIG
+        # copy so pymongo doesn't inject _id into our module-level constant
+        seed = dict(DEFAULT_STAFF_CONFIG)
+        await _db.staff_config.insert_one(seed)
+        return dict(DEFAULT_STAFF_CONFIG)
     return doc
 
 
@@ -174,7 +186,8 @@ async def admin_create_staff(payload: StaffCreate, auth=Depends(_verify_admin)):
         "qr_token": f"HL{staff_id[:12].replace('-','').upper()}",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await _db.retail_staff.insert_one(doc)
+    # insert_one mutates the dict by adding _id → clone to avoid leaking ObjectId to response
+    await _db.retail_staff.insert_one(dict(doc))
     return {"success": True, "staff": doc}
 
 
@@ -317,6 +330,45 @@ async def admin_leaderboard(period: str = "monthly", auth=Depends(_verify_admin)
     return {"period": period, "leaderboard": rows}
 
 
+@staff_admin_router.get("/redemptions")
+async def admin_list_redemptions(status: Optional[str] = None, limit: int = 200,
+                                  auth=Depends(_verify_admin)):
+    """List redemption requests. Simple request-only stub — admin manually
+    settles offline (marks 'settled' via PATCH)."""
+    q = {}
+    if status:
+        q["status"] = status
+    rows = []
+    async for r in _db.staff_redemptions.find(q, {"_id": 0}).sort("requested_at", -1).limit(limit):
+        # Enrich with staff details
+        s = await _db.retail_staff.find_one({"id": r.get("staff_id")}, {"_id": 0, "name": 1, "phone": 1, "staff_code": 1, "brand_name": 1})
+        if s:
+            r.update({f"staff_{k}": v for k, v in s.items()})
+        rows.append(r)
+    return {"redemptions": rows, "total": len(rows)}
+
+
+class RedemptionStatusUpdate(BaseModel):
+    status: str  # requested | approved | settled | rejected
+    admin_note: Optional[str] = None
+    payout_ref: Optional[str] = None
+
+
+@staff_admin_router.patch("/redemptions/{redemption_id}")
+async def admin_update_redemption(redemption_id: str, patch: RedemptionStatusUpdate,
+                                    auth=Depends(_verify_admin)):
+    updates = {"status": patch.status, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if patch.admin_note:
+        updates["admin_note"] = patch.admin_note
+    if patch.payout_ref:
+        updates["payout_ref"] = patch.payout_ref
+    r = await _db.staff_redemptions.update_one({"id": redemption_id}, {"$set": updates})
+    if r.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Redemption not found")
+    doc = await _db.staff_redemptions.find_one({"id": redemption_id}, {"_id": 0})
+    return {"success": True, "redemption": doc}
+
+
 # ==================== STAFF: LOGIN + DASHBOARD ====================
 
 class StaffOTPRequest(BaseModel):
@@ -335,24 +387,56 @@ async def staff_send_otp(payload: StaffOTPRequest):
     if not staff:
         # Silent success — don't leak which numbers are registered
         return {"success": True, "message": "OTP sent if number is registered"}
-    otp = "1234"  # Dev bypass; will be replaced by real SMS integration
-    await _db.staff_otps.update_one(
-        {"phone": phone},
-        {"$set": {"otp": otp, "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()}},
-        upsert=True,
-    )
-    logger.info(f"Staff OTP for {phone}: {otp}")
+
+    # Generate 6-digit OTP, persist, then send via Karix SMS (best-effort, non-blocking success)
+    import random
+    otp = f"{random.randint(0, 999999):06d}"
+    if _store_otp is not None:
+        try:
+            await _store_otp(phone, otp)
+        except Exception as e:
+            logger.error(f"staff store_otp failed: {e}")
+    else:
+        # Fallback local storage
+        await _db.staff_otps.update_one(
+            {"phone": phone},
+            {"$set": {"otp": otp, "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()}},
+            upsert=True,
+        )
+
+    if _send_sms_otp is not None:
+        try:
+            r = await _send_sms_otp(phone, otp)
+            logger.info(f"Staff OTP SMS to {phone}: {r}")
+        except Exception as e:
+            logger.error(f"staff SMS send failed for {phone}: {e}")
+
+    logger.info(f"Staff OTP generated for {phone}: {otp}")  # dev observability
     return {"success": True, "message": "OTP sent"}
 
 
 @staff_router.post("/auth/verify-otp")
 async def staff_verify_otp(payload: StaffOTPVerify):
     phone = _normalise_phone(payload.phone)
+
     # Dev bypass
-    if payload.otp != "1234":
+    ok = False
+    if OTP_DEV_BYPASS and payload.otp == OTP_DEV_BYPASS:
+        ok = True
+    elif _verify_stored_otp is not None:
+        try:
+            ok = await _verify_stored_otp(phone, payload.otp)
+        except Exception as e:
+            logger.error(f"staff verify_stored_otp failed: {e}")
+            ok = False
+    else:
         rec = await _db.staff_otps.find_one({"phone": phone}, {"_id": 0})
-        if not rec or rec.get("otp") != payload.otp:
-            raise HTTPException(status_code=401, detail="Invalid OTP")
+        if rec and rec.get("otp") == payload.otp:
+            ok = True
+
+    if not ok:
+        raise HTTPException(status_code=401, detail="Invalid OTP")
+
     staff = await _db.retail_staff.find_one({"phone": phone, "is_active": True}, {"_id": 0})
     if not staff:
         raise HTTPException(status_code=401, detail="Staff not registered or inactive")

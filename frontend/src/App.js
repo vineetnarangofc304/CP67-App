@@ -17,11 +17,13 @@ import Reports from './pages/Reports';
 import Campaigns from './pages/Campaigns';
 import AppSettings from './pages/AppSettings';
 import FundleSync from './pages/FundleSync';
+import StaffIncentives from './pages/StaffIncentives';
 import Banners from './pages/Banners';
 import Offers from './pages/Offers';
 import Events from './pages/Events';
 import BlockedUsers from './pages/BlockedUsers';
 import ConsumerApp from './consumer/ConsumerApp';
+import StaffApp from './staff/StaffApp';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -173,12 +175,14 @@ function App() {
           <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
           <Route path="/app-settings" element={<ProtectedRoute><AppSettings /></ProtectedRoute>} />
           <Route path="/fundle-sync" element={<ProtectedRoute><FundleSync /></ProtectedRoute>} />
+          <Route path="/staff-incentives" element={<ProtectedRoute><StaffIncentives /></ProtectedRoute>} />
           <Route path="/banners" element={<ProtectedRoute><Banners /></ProtectedRoute>} />
           <Route path="/offers" element={<ProtectedRoute><Offers /></ProtectedRoute>} />
           <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           {/* Consumer App */}
           <Route path="/app/*" element={<ConsumerApp />} />
+          <Route path="/staff-app/*" element={<StaffApp />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

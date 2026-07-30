@@ -1197,6 +1197,17 @@ async def process_bill_ocr(bill_id: str, image_base64: str, user_id: str, phone:
             update_set["applied_campaigns"] = applied_campaigns
         await _db.bills.update_one({"id": bill_id}, {"$set": update_set})
 
+        # Staff Incentive Sync — creates bill_upload incentive if attribution window active,
+        # and activates any pending registration incentive on approval.
+        try:
+            from routes.staff import create_or_activate_bill_incentive, sync_incentive_on_bill_status_change
+            import re as _re
+            mobile_10 = _re.sub(r"\D", "", phone or "")[-10:]
+            await create_or_activate_bill_incentive(bill_id, mobile_10, status)
+            await sync_incentive_on_bill_status_change(bill_id, status)
+        except Exception as _e:
+            logger.warning(f"staff-sync (consumer ocr) failed: {_e}")
+
         if status == "approved":
             bonus_txt = f" (incl. +{campaign_bonus_points} campaign bonus)" if campaign_bonus_points > 0 else ""
             await send_app_notification(user_id, "Points Earned!",
