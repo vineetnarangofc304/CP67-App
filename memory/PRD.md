@@ -185,7 +185,43 @@ Three production issues + a critical perf fix:
 - AndroidManifest now requests `android.permission.CAMERA`, `android.permission.POST_NOTIFICATIONS`, `android.permission.INTERNET` and declares optional camera features so the in-app bill capture works on Android.
 - Bumped `appVersionCode=2`, `appVersionName="1.1"` — requires rebuild via `./gradlew bundleRelease`.
 
-## Phase 22 (Feb 8, 2026 — part 6) — Point 11 (unified upload) + Point 16 (bill_no dedup)
+## Phase 23 (Feb 8, 2026 — part 7) — Point 19: Retailer Staff Incentive Platform ✅
+
+**Backend** (`/app/backend/routes/staff.py` + wiring in `server.py`)
+- **Data models** (Mongo collections): `retail_staff`, `staff_config`, `staff_incentives`, `staff_attributions`, `staff_redemptions`, `staff_otps`.
+- **Admin endpoints** (`/api/admin/staff/*`, JWT-protected):
+  - `POST /` — onboard staff (name, phone, brand_name, store_location, email) → auto-generates human-readable `staff_code` (HL-XXXX) + `qr_token`.
+  - `GET /` — list with `?active_only` and `?brand` filters.
+  - `PATCH /{id}` — update or activate/deactivate.
+  - `GET /{id}/qr` — returns wa.me deep-link with prefilled `#STAFF:<token>` message + base64 QR PNG.
+  - `GET /config/current` + `PUT` — configurable slabs, attribution window, registration validity.
+  - `GET /metrics/overview` + `GET /leaderboard?period=daily|weekly|monthly|all`.
+  - `GET /redemptions` + `PATCH /redemptions/{id}` — admin lists + settles (`settled`/`rejected`) with payout_ref.
+- **Staff endpoints** (`/api/staff/*`, JWT staff-role):
+  - `POST /auth/send-otp` — silent success if phone unknown; 6-digit OTP stored + sent via existing Karix SMS (`send_otp_sms`), dev-bypass `1234` from `OTP_DEV_BYPASS`.
+  - `POST /auth/verify-otp` → JWT (30-day) with `role=retail_staff`.
+  - `GET /me`, `GET /dashboard`, `GET /incentives`, `GET /qr`, `POST /redeem`, `GET /redemptions`.
+- **Attribution Engine**:
+  - Regex `#STAFF:([A-Z0-9]+)` parsed on every WhatsApp inbound.
+  - When customer sends the QR-prefilled message → `open_attribution_window` (15 min).
+  - If user is NEW → `create_registration_incentive` (pending; activates on first approved bill).
+  - `create_or_activate_bill_incentive` creates a `bill_upload` incentive when a bill is uploaded within the active window.
+  - `sync_incentive_on_bill_status_change` syncs status (approved → redeemable, rejected → cancelled).
+- **Hooks wired** (5 sites): `process_bill_image` (WhatsApp), `process_bill` (admin approve/reject), `_reprocess_single_bill` (approved + force-credit paths), consumer `process_bill_ocr`.
+- **Slab defaults** (admin can tune from UI): Registration 4-tier (₹50/75/100/150), Bill Upload 3-tier (₹20/30/50), 15-min attribution window, 60-day registration validity.
+
+**Frontend Admin** — `/staff-incentives` (`/app/frontend/src/pages/StaffIncentives.jsx`)
+- 4 KPI cards + 4 tabs (Staff / Leaderboard / Redemptions / Slabs) with Add Staff dialog and QR modal (base64 PNG viewer).
+
+**Frontend Staff Mini-App** — `/staff-app/*` (`/app/frontend/src/staff/`)
+- Fully separate visual identity from consumer (light-cream luxury) and admin (light corporate) — deep navy + amber/violet gradient dark theme with glass topbar and floating tab bar.
+- Own `StaffAuthProvider` (isolates from admin auth so `/staff-app` does not redirect to `/login`).
+- Pages: `StaffLogin` (phone + 6-OTP with paste-autofill), `StaffDashboard` (Total Earned + Next-slab rate + How-to-earn), `StaffQR` (Share + Copy + prefilled msg), `StaffIncentivesList` (chip-based status), `StaffRedeem` (balance + request + history).
+
+**Testing**
+- iteration_33: 12/12 backend + 100% frontend. Files: `/app/backend/tests/test_point19_staff.py`.
+
+
 
 ### Point 11 — Unified base64 bill upload ✅
 - **Root cause**: Multipart FormData uploads were unreliable in older Android WebViews.
@@ -205,6 +241,17 @@ Three production issues + a critical perf fix:
   - `/app/backend/tests/test_normalize_bill_no.py`
   - `/app/backend/tests/test_point11_upload_base64.py`
   - `/app/backend/tests/test_regression_iteration31.py`
+
+## Phase 22 (Feb 8, 2026 — part 6) — Point 11 (unified upload) + Point 16 (bill_no dedup)
+
+### Point 11 — Unified base64 bill upload ✅
+- **Fix**: `BillUpload.jsx` uses `FileReader.readAsDataURL` → POST JSON `{image_base64}` to `/api/consumer/bills/upload-base64` for ALL clients (browser + WebView).
+- Backend `upload_bill_base64` strips optional `data:...;base64,` prefix, decodes, delegates to shared `_handle_bill_upload_bytes`.
+
+### Point 16 — Invoice-number dedup ✅
+- `normalize_bill_no(s)` strips `[^A-Za-z0-9]+` and lowercases; `bill_no_normalized` auto-filled on every insert.
+- Compound index `(user_id, store_name, bill_no_normalized)` added.
+- Consumer OCR path rejects duplicates and notifies user.
 
 ## Phase 21 (Feb 8, 2026 — part 5) — Batch: Points 10–15 (iteration_29, 17/17 backend + 100% frontend)
 
@@ -323,11 +370,12 @@ Addressed 4 pending items from the user's Google Doc:
 - Test file: `/app/backend/tests/test_iteration26_campaigns_pwa.py`
 
 ## Pending / Next
-- **User action required**: Upload `cp67-v1.8.aab` to Play Console + release. Verify camera opens without crash.
-- (P2) Refactor `server.py` (~7176 lines) into `/routes/admin_bills.py`, `/routes/admin_campaigns.py`, `/services/ocr.py`, `/services/tagnpay.py`, `/utils/campaigns.py` (extract duplicate campaign helper from consumer.py + server.py).
+- (P1) **User action required**: Trigger production redeploy so live users get Point 19 (staff incentives), Point 11, Point 16, campaign engine, Android v1.10, and all other pending fixes.
+- (P2) Refactor `server.py` (~7900 lines) into `/routes/admin_bills.py`, `/routes/admin_campaigns.py`, `/services/ocr.py`, `/services/tagnpay.py`, `/utils/campaigns.py`.
 - (P2) Brand/Store separate dashboard.
 - (P2) Automate footfall data via email parser.
 - (P2) Advanced Analytics: RFM, CLV, AI Concierge.
+- (P2) Wire Firebase Cloud Messaging on Web Push subscription endpoints.
 
 ## Upcoming Tasks (P1)
 - Campaign-aware bill processing: Auto-apply multipliers during active campaigns
