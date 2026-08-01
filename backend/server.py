@@ -2801,37 +2801,39 @@ Happy Shopping!"""
         # Rejection
         system_reason = bill.get("rejection_reason") or bill.get("ocr_raw_data", {}).get("extraction_notes", "")
         admin_reason = request.rejection_reason or "Bill could not be verified"
-        
+
         update_data["status"] = "rejected"
         update_data["system_rejection_reason"] = system_reason
         update_data["admin_rejection_reason"] = admin_reason
-        
-        # Log rejection to Fundle/TagnPay API
-        try:
-            bill_amount = bill.get("amount") or 0
-            store_name = bill.get("store_name") or "Unknown"
-            bill_no = bill.get("bill_no") or "N/A"
-            bill_date = bill.get("bill_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            
-            reject_result = await tagnpay_client.log_rejected_bill(
-                mobile_number=mobile_10,
-                bill_number=bill_no,
-                bill_amount=bill_amount,
-                bill_date=bill_date,
-                store_name=store_name,
-                rejection_reason=admin_reason
-            )
-            logger.info(f"TagnPay rejection log for bill {bill_id}: {reject_result}")
-        except Exception as e:
-            logger.error(f"Failed to log rejection to TagnPay: {e}")
-        
-        # Get current balance for message
-        points_result = await tagnpay_client.get_customer_points(mobile_10)
-        current_balance = 0
-        if points_result.get("success") and points_result.get("data"):
-            current_balance = int(points_result["data"].get("balance_points", 0))
-        
-        # WhatsApp rejection message
+
+        # Log rejection to Fundle/TagnPay API IN BACKGROUND — this call can take 20-30s
+        # on flaky Fundle latency and was previously blocking the reject response,
+        # causing Cloudflare timeout and "Failed to process bill" toasts.
+        bill_amount = bill.get("amount") or 0
+        store_name_r = bill.get("store_name") or "Unknown"
+        bill_no_r = bill.get("bill_no") or "N/A"
+        bill_date_r = bill.get("bill_date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        async def _log_reject_bg():
+            try:
+                await tagnpay_client.log_rejected_bill(
+                    mobile_number=mobile_10,
+                    bill_number=bill_no_r,
+                    bill_amount=bill_amount,
+                    bill_date=bill_date_r,
+                    store_name=store_name_r,
+                    rejection_reason=admin_reason,
+                )
+            except Exception as e:
+                logger.error(f"BG TagnPay rejection log failed for bill {bill_id}: {e}")
+
+        background_tasks.add_task(_log_reject_bg)
+
+        # WhatsApp rejection message — use local balance instead of a fresh Fundle
+        # fetch to keep the response fast. Frontend & user get an instant confirmation.
+        u_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
+        current_balance = int((u_doc or {}).get("balance_points") or 0)
+
         whatsapp_message = f"""We're sorry, but your bill could not be processed.
 
 Reason: {admin_reason}
@@ -4660,14 +4662,33 @@ We're scanning your bill now. Please wait a moment..."""
             logger.warning(f"Invalid or missing image URL: {image_url}")
         
         if not image_base64:
-            logger.error("No image data available - sending manual review message")
-            # Send unclear image response
+            logger.error("No image data available — inserting stub bill for admin review")
+
+            # Point 19 fix: save a placeholder bill so admin can see it in the panel
+            # and manually review / reprocess. Previously this branch silently
+            # returned, leaving nothing in the admin panel and confusing the customer.
+            try:
+                stub_bill = BillData(
+                    user_id=user["id"],
+                    user_phone=phone,
+                    store_name=None,
+                    bill_no=None,
+                    bill_date=None,
+                    amount=None,
+                    status="manual_review",
+                    image_url=image_url or None,  # keep original Karix URL so admin can retry download
+                    rejection_reason="Image could not be downloaded from WhatsApp — manual review",
+                )
+                await db.bills.insert_one(stub_bill.model_dump())
+            except Exception as _e:
+                logger.error(f"Failed to insert stub bill for {phone}: {_e}")
+
             unclear_msg = """Your uploaded bill image is unclear for automatic processing.
 
 No worries — it has been submitted for manual review. Verification will be completed within 24-48 hours, and points will be credited after approval.
 
 Thank you for being a valued Homeland Advantage member."""
-            
+
             buttons = [
                 {"id": "upload_bill", "title": "Upload Bill"},
                 {"id": "redeem_points", "title": "Redeem Points"}
@@ -5376,7 +5397,37 @@ Happy Shopping!"""
         logger.error(f"Bill processing error: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        
+
+        # Point 19 fix: previously this branch sent "trouble processing" to the
+        # customer but NEVER inserted a bill record → admin panel was empty and
+        # the bill was lost. Now save a stub with the raw image (if we have it)
+        # so admin can review + retry manually.
+        try:
+            user_local = await db.users.find_one({"phone": phone})
+            if user_local:
+                # Prefer the base64 we downloaded if available, else the raw URL
+                _img = None
+                _b64 = locals().get("image_base64")
+                if _b64:
+                    _img = f"data:image/jpeg;base64,{_b64}"
+                elif isinstance(image_url, str) and image_url.startswith("http"):
+                    _img = image_url
+
+                stub_bill = BillData(
+                    user_id=user_local["id"],
+                    user_phone=phone,
+                    store_name=None,
+                    bill_no=None,
+                    bill_date=None,
+                    amount=None,
+                    status="manual_review",
+                    image_url=_img,
+                    rejection_reason=f"WhatsApp bill processing failed: {str(e)[:200]}",
+                )
+                await db.bills.insert_one(stub_bill.model_dump())
+        except Exception as inner:
+            logger.error(f"Failed to save fallback bill stub for {phone}: {inner}")
+
         # Send error message
         error_msg = """We're having trouble processing your bill right now.
 
@@ -5385,7 +5436,7 @@ Your bill has been submitted to our backend team for manual review.
 We will verify it within 24-48 hours.
 
 Thank you for your patience!"""
-        
+
         buttons = [
             {"id": "upload_bill", "title": "Upload Bill"},
             {"id": "redeem_points", "title": "Redeem Points"}

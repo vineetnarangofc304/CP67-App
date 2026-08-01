@@ -185,7 +185,24 @@ Three production issues + a critical perf fix:
 - AndroidManifest now requests `android.permission.CAMERA`, `android.permission.POST_NOTIFICATIONS`, `android.permission.INTERNET` and declares optional camera features so the in-app bill capture works on Android.
 - Bumped `appVersionCode=2`, `appVersionName="1.1"` — requires rebuild via `./gradlew bundleRelease`.
 
-## Phase 23 (Feb 8, 2026 — part 7) — Point 19: Retailer Staff Incentive Platform ✅
+## Phase 24 (Aug 1, 2026 — CP67 Doc Pending Points 17-19)
+
+### Point 17 — "Network error while editing brand" ✅
+- **Root cause**: `submitFixBrand` in Bills.jsx used `fetch()` — Cloudflare's edge occasionally marks the response body as already-read on production, `res.json()` throws → catch block fired the generic "Network error while editing brand" toast even when the backend had queued the edit successfully.
+- **Fix**: Migrated `submitFixBrand` to `XMLHttpRequest` (same pattern as admin login / consumer login fixes in earlier sessions). Explicit `onload`/`ontimeout`/`onerror` handlers with backend-state-honest messaging ("Refreshing the list…" instead of a hard error). Timeout dropped from 20s → 25s and no longer surfaces AbortError.
+
+### Point 18 — "Failed to process Bill" on reject ✅
+- **Root cause (backend)**: `process_bill(action='reject')` made TWO synchronous Fundle calls: `log_rejected_bill` (up to 25s) + `get_customer_points` (up to 25s). Combined 50s+ wall time → Cloudflare 524 → "Failed to process bill" toast.
+- **Fix (backend)**: Moved `log_rejected_bill` to `background_tasks` and removed the redundant `get_customer_points` — use local `users.balance_points` (already denormalised) for the WhatsApp reject message. Reject latency dropped from **~5s → 0.11s** on preview.
+- **Fix (frontend)**: Migrated `processBill()` to XHR — same reasoning as Point 17. Explicit 60s timeout with "your action was submitted — refreshing" instead of a hard error.
+
+### Point 19 — WhatsApp bill not showing in admin panel ✅
+- **Root cause**: `process_bill_image` had TWO exit paths that sent "trouble processing your bill" / "unclear image" to the customer but **never inserted a bill record**:
+  1. `if not image_base64` branch when Karix's `fileLink` fails to download (auth mismatch, etc.).
+  2. The outer `except Exception` handler for any OCR / Fundle / decode error.
+- Result: customer got a "manual review" promise, admin panel showed nothing, bill was lost.
+- **Fix**: Both branches now `db.bills.insert_one(...)` a `manual_review` stub carrying whatever we have (base64 → data-URL image_url, else the raw Karix URL). Admin sees the bill in Pending Review, can view/reprocess/reject like any other bill. `rejection_reason` field carries the exact backend error for triage.
+
 
 **Backend** (`/app/backend/routes/staff.py` + wiring in `server.py`)
 - **Data models** (Mongo collections): `retail_staff`, `staff_config`, `staff_incentives`, `staff_attributions`, `staff_redemptions`, `staff_otps`.
@@ -221,26 +238,9 @@ Three production issues + a critical perf fix:
 **Testing**
 - iteration_33: 12/12 backend + 100% frontend. Files: `/app/backend/tests/test_point19_staff.py`.
 
+## Phase 23 (Feb 8, 2026 — part 7) — Point 19: Retailer Staff Incentive Platform ✅
 
-
-### Point 11 — Unified base64 bill upload ✅
-- **Root cause**: Multipart FormData uploads were unreliable in older Android WebViews.
-- **Fix**: `BillUpload.jsx` now uses `FileReader.readAsDataURL` → POST JSON `{image_base64}` to `/api/consumer/bills/upload-base64` for ALL clients (browser + WebView). No more `hasNativeCamera` branching.
-- Backend `upload_bill_base64` strips optional `data:...;base64,` prefix, decodes, delegates to shared `_handle_bill_upload_bytes` (10MB cap, image_hash dedup, background OCR).
-- Multipart `/api/consumer/bills/upload` endpoint kept for backward compat.
-
-### Point 16 — Invoice-number dedup ✅
-- **Root cause**: OCR would surface `INV12345` vs `INV:12345` as distinct bills → double credit → money loss.
-- **Fix**: `normalize_bill_no(s)` strips `[^A-Za-z0-9]+` and lowercases. `BillData.model_dump()` override auto-fills `bill_no_normalized` on every insert. `check_duplicate_bill` now queries by (`bill_no_normalized`, `store_name`) with legacy exact-match fallback.
-- Consumer OCR path in `routes/consumer.py` now rejects bills whose normalised bill_no matches an already-approved bill for the same user + store — status set to `rejected` with reason `Duplicate — same bill already credited (bill_no=X)` and app notification sent.
-- MongoDB indexes added: single-field on `bill_no_normalized` + compound `(user_id, store_name, bill_no_normalized)`.
-- Startup task `_backfill_bill_no_normalized` populates the field on legacy bills — idempotent.
-
-### Testing
-- iteration_31: 17/17 backend + 100% frontend. Files:
-  - `/app/backend/tests/test_normalize_bill_no.py`
-  - `/app/backend/tests/test_point11_upload_base64.py`
-  - `/app/backend/tests/test_regression_iteration31.py`
+(moved above; kept anchor here for CHANGELOG legibility)
 
 ## Phase 22 (Feb 8, 2026 — part 6) — Point 11 (unified upload) + Point 16 (bill_no dedup)
 

@@ -144,53 +144,60 @@ const Bills = () => {
 
   const processBill = async (action) => {
     if (!selectedBill) return;
-    
+
     setProcessingBill(true);
-    try {
-      const body = { 
-        bill_id: selectedBill.id, 
-        action,
-        send_whatsapp: sendWhatsapp
-      };
-      
-      if (action === 'reject' && rejectionReason) {
-        body.rejection_reason = rejectionReason;
-      }
-      if (adminNotes) {
-        body.admin_notes = adminNotes;
-      }
-      if (action === 'approve' && pointsOverride) {
-        body.points_override = parseFloat(pointsOverride);
-      }
+    const body = {
+      bill_id: selectedBill.id,
+      action,
+      send_whatsapp: sendWhatsapp
+    };
+    if (action === 'reject' && rejectionReason) body.rejection_reason = rejectionReason;
+    if (adminNotes) body.admin_notes = adminNotes;
+    if (action === 'approve' && pointsOverride) body.points_override = parseFloat(pointsOverride);
 
-      const response = await fetch(`${API_URL}/bills/${selectedBill.id}/process`, {
-        method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
-
-      if (response.ok) {
-        const result = await response.json();
+    // Use XHR (not fetch) to avoid Cloudflare's "body stream already read" issue
+    // on non-2xx responses on production edge (session-13 fix pattern).
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_URL}/bills/${selectedBill.id}/process`, true);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 60000;
+    xhr.onload = () => {
+      setProcessingBill(false);
+      let data = {};
+      try { data = xhr.responseText ? JSON.parse(xhr.responseText) : {}; } catch { /* keep {} */ }
+      if (xhr.status >= 200 && xhr.status < 300) {
         toast.success(
-          action === 'approve' 
-            ? `Bill approved! ${result.points_issued} points credited.${result.whatsapp_sent ? ' WhatsApp sent.' : ''}`
-            : `Bill rejected.${result.whatsapp_sent ? ' WhatsApp notification sent.' : ''}`
+          action === 'approve'
+            ? `Bill approved! ${data.points_issued || 0} points credited.${data.whatsapp_sent ? ' WhatsApp sent.' : ''}`
+            : `Bill rejected.${data.whatsapp_sent ? ' WhatsApp notification sent.' : ''}`
         );
         fetchBills();
         fetchPendingBills();
         setShowReviewDialog(false);
         setSelectedBill(null);
       } else {
-        const error = await response.json();
-        toast.error(error.detail || 'Failed to process bill');
+        toast.error(data.detail || `Failed to process bill (HTTP ${xhr.status}). Refreshing list…`);
+        fetchBills();
+        fetchPendingBills();
       }
-    } catch (error) {
-      toast.error('Failed to process bill');
-    } finally {
+    };
+    xhr.ontimeout = () => {
       setProcessingBill(false);
+      toast.warning('Fundle is slow. Your action was submitted — refreshing the list to see the result.');
+      fetchBills();
+      fetchPendingBills();
+    };
+    xhr.onerror = () => {
+      setProcessingBill(false);
+      toast.error('Network hiccup. Refreshing the list to check if the action went through…');
+      fetchBills();
+      fetchPendingBills();
+    };
+    try { xhr.send(JSON.stringify(body)); }
+    catch (_) {
+      setProcessingBill(false);
+      toast.error('Failed to send request');
     }
   };
 
@@ -262,34 +269,33 @@ const Bills = () => {
     const trimmed = String(chosenName).trim();
     if (!trimmed) return;
     setFixBrandBusy(true);
-    // Guard against long-running requests — new backend queues in background
-    // so this response should return in <1s. If it hangs, abort at 20s so the
-    // user isn't stuck on a spinner.
-    const ctrl = new AbortController();
-    const timeoutId = setTimeout(() => ctrl.abort(), 20000);
-    try {
-      const res = await fetch(`${API_URL}/admin/bills/${fixBrandBill.id}/edit-brand`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ new_store_name: trimmed, reprocess: true, auto_force_credit_on_fundle_reject: true }),
-        signal: ctrl.signal,
-      });
-      clearTimeout(timeoutId);
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.detail || 'Brand edit failed');
+
+    // Use XHR (not fetch) to avoid Cloudflare's "body stream already read" bug
+    // that surfaces as "Network error while editing brand" on production edge.
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API_URL}/admin/bills/${fixBrandBill.id}/edit-brand`, true);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 25000;
+
+    const closeAndRefresh = () => {
+      setFixBrandOpen(false);
+      setFixBrandBill(null);
+      fetchBills();
+      fetchPendingBills();
+    };
+
+    xhr.onload = () => {
+      setFixBrandBusy(false);
+      let data = {};
+      try { data = xhr.responseText ? JSON.parse(xhr.responseText) : {}; } catch { /* keep {} */ }
+      if (xhr.status < 200 || xhr.status >= 300) {
+        toast.error(data.detail || `Brand edit failed (HTTP ${xhr.status})`);
         return;
       }
       if (data.reprocessed === 'queued') {
         toast.success(`Brand fixed → "${trimmed}". Reprocessing in background — refreshing list in 10s.`);
-        setFixBrandOpen(false);
-        setFixBrandBill(null);
-        // Refresh after ~10s to give the background reprocess time to finish
-        fetchBills();
-        fetchPendingBills();
+        closeAndRefresh();
         setTimeout(() => { fetchBills(); fetchPendingBills(); }, 10000);
         setTimeout(() => { fetchBills(); fetchPendingBills(); }, 25000);
       } else if (data.action === 'approved') {
@@ -298,32 +304,39 @@ const Bills = () => {
         } else {
           toast.success(`Brand fixed → "${trimmed}". Approved with ${data.points || 0} pts`);
         }
-        setFixBrandOpen(false);
-        setFixBrandBill(null);
-        fetchBills();
-        fetchPendingBills();
+        closeAndRefresh();
       } else if (data.error) {
         toast.warning(`Brand updated but Fundle: ${data.error}. Try a different variant.`);
-        setFixBrandOpen(false);
-        setFixBrandBill(null);
-        fetchBills();
-        fetchPendingBills();
+        closeAndRefresh();
       } else {
         toast.success(`Brand updated to "${trimmed}". Status: ${data.status || 'pending'}`);
-        setFixBrandOpen(false);
-        setFixBrandBill(null);
-        fetchBills();
-        fetchPendingBills();
+        closeAndRefresh();
       }
-    } catch (err) {
-      clearTimeout(timeoutId);
-      if (err && err.name === 'AbortError') {
-        toast.error('Brand edit timed out. Refresh the list — reprocess may still be running in background.');
-      } else {
-        toast.error('Network error while editing brand');
-      }
-    } finally {
+    };
+
+    xhr.ontimeout = () => {
       setFixBrandBusy(false);
+      toast.warning('Brand edit is still processing in background. Refreshing the list…');
+      closeAndRefresh();
+      setTimeout(() => { fetchBills(); fetchPendingBills(); }, 15000);
+    };
+
+    xhr.onerror = () => {
+      setFixBrandBusy(false);
+      // Backend may still have accepted the edit — refresh to check
+      toast.warning('Network hiccup. Refreshing the list to check if the brand was updated…');
+      closeAndRefresh();
+    };
+
+    try {
+      xhr.send(JSON.stringify({
+        new_store_name: trimmed,
+        reprocess: true,
+        auto_force_credit_on_fundle_reject: true,
+      }));
+    } catch (_) {
+      setFixBrandBusy(false);
+      toast.error('Failed to send request');
     }
   };
 
