@@ -1,0 +1,45 @@
+# XcodeGen spec — generates CP67iOS.xcodeproj on the Mac side.
+# Run: `brew install xcodegen && xcodegen generate`
+name: CP67iOS
+options:
+  bundleIdPrefix: com.fundle
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    DEVELOPMENT_TEAM: ""                     # ⚠ Set your Apple Developer Team ID in Xcode → Signing
+    PRODUCT_BUNDLE_IDENTIFIER: com.fundle.cp67ios
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.9"
+    IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+    TARGETED_DEVICE_FAMILY: "1,2"            # iPhone + iPad
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_ENTITLEMENTS: CP67iOS/CP67iOS.entitlements
+    GENERATE_INFOPLIST_FILE: NO
+    INFOPLIST_FILE: CP67iOS/Info.plist
+    ENABLE_BITCODE: NO
+
+targets:
+  CP67iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: CP67iOS
+        excludes:
+          - "**/*.md"
+    resources:
+      - path: CP67iOS/Assets.xcassets
+        optional: true
+      - path: CP67iOS/LaunchScreen.storyboard
+        optional: true
+    entitlements:
+      path: CP67iOS/CP67iOS.entitlements
+    info:
+      path: CP67iOS/Info.plist
+    settings:
+      base:
+        PRODUCT_NAME: "Homeland Advantage"
+        DEVELOPMENT_ASSET_PATHS: ""

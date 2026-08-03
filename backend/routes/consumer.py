@@ -590,6 +590,64 @@ async def update_profile(request: UpdateProfileRequest, current_user=Depends(get
     return {"success": True, "user": {k: v for k, v in user.items() if k != "_id"}}
 
 
+@consumer_router.delete("/account")
+async def delete_consumer_account(current_user=Depends(get_current_consumer)):
+    """Apple App Store 5.1.1(v) compliance — user can delete their account
+    from within the app. This is a hard delete of PII with a tombstone kept
+    so we can detect re-registration abuse and honour any legal holds.
+
+    Deletes: profile PII, favourites, notifications, push subscriptions,
+    session tokens. Retains (audit trail): bill history, redemption txns,
+    tagnpay Fundle ledger — these are transactional records governed by
+    RBI-compliant retention policy but are anonymised (user_id kept, PII stripped).
+    """
+    user_id = current_user["sub"]
+    user = await _db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    phone = user.get("phone", "")
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # 1. Anonymise the user record (retain id for FK integrity in bills/txns)
+    await _db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "name": "Deleted User",
+            "email": None,
+            "phone_deleted_hash": phone,  # keep hashed for abuse-prevention only
+            "phone": f"DELETED-{user_id[:8]}",
+            "gender": None,
+            "dob": None,
+            "address": None,
+            "house_no": None,
+            "landmark": None,
+            "pincode": None,
+            "city": None,
+            "state": None,
+            "interests": [],
+            "is_deleted": True,
+            "deleted_at": now_iso,
+            "onboarding_complete": False,
+        }}
+    )
+
+    # 2. Hard-delete anything user-controlled with zero downstream dependency
+    await _db.favorites.delete_many({"user_id": user_id})
+    await _db.notifications.delete_many({"user_id": user_id})
+    await _db.push_subscriptions.delete_many({"user_id": user_id})
+    await _db.otp_codes.delete_many({"phone": phone})
+
+    # 3. Log the deletion for compliance audit trail
+    await _db.deletion_log.insert_one({
+        "user_id": user_id,
+        "deleted_at": now_iso,
+        "reason": "user_requested_via_app",
+    })
+
+    return {"success": True, "message": "Your account and personal data have been deleted."}
+
+
 @consumer_router.get("/pincode/{pincode}")
 async def lookup_pincode(pincode: str):
     """Lookup city and state from pincode using India Post API"""

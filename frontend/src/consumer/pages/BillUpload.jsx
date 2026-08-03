@@ -45,10 +45,16 @@ export default function BillUpload() {
     };
   }, []);
 
-  // Detect Android WebView native bridge (v1.8+)
-  const hasNativeCamera = typeof window !== 'undefined'
-    && window.AndroidBridge
-    && typeof window.AndroidBridge.openCamera === 'function';
+  // Detect native bridge — Android WebView (v1.8+) or iOS WKWebView.
+  // Both expose the same JS surface: openCamera() + __cp67OnCameraResult callback.
+  const nativeBridge = (typeof window !== 'undefined')
+    ? (
+        (window.AndroidBridge && typeof window.AndroidBridge.openCamera === 'function' && window.AndroidBridge)
+        || (window.iOSBridge && typeof window.iOSBridge.openCamera === 'function' && window.iOSBridge)
+        || null
+      )
+    : null;
+  const hasNativeCamera = !!nativeBridge;
 
   // Direct native camera invocation (bypasses <input type="file" capture>
   // which Android WebView often ignores on newer devices).
@@ -75,13 +81,13 @@ export default function BillUpload() {
     window.__cp67OnCameraError = (reason) => {
       if (reason === 'cancelled') return; // user cancelled — no error UI
       if (reason === 'permission_denied') {
-        setCameraError('Camera permission denied. Please enable it in Settings → Apps → Homeland Advantage → Permissions → Camera.');
+        setCameraError('Camera permission denied. Enable it in Settings → Homeland Advantage → Camera.');
         return;
       }
       setCameraError('Camera unavailable. Please try the Gallery option.');
     };
     try {
-      window.AndroidBridge.openCamera();
+      nativeBridge.openCamera();
     } catch (e) {
       setCameraError('Camera unavailable in this build. Please try Gallery.');
     }

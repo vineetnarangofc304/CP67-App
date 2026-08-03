@@ -25,6 +25,7 @@ import BlockedUsers from './pages/BlockedUsers';
 import ConsumerApp from './consumer/ConsumerApp';
 import StaffApp from './staff/StaffApp';
 import IOSInstall from './pages/IOSInstall';
+import Privacy from './pages/Privacy';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -183,6 +184,7 @@ function App() {
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           {/* Public install guides */}
           <Route path="/ios-install" element={<IOSInstall />} />
+          <Route path="/privacy" element={<Privacy />} />
           {/* Consumer App */}
           <Route path="/app/*" element={<ConsumerApp />} />
           <Route path="/staff-app/*" element={<StaffApp />} />

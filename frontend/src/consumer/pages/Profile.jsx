@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { LogOut, ChevronRight, Phone, Mail, Heart, User, Calendar, MapPin, Users, Bell, Home, Navigation } from 'lucide-react';
+import { LogOut, ChevronRight, Phone, Mail, Heart, User, Calendar, MapPin, Users, Bell, Home, Navigation, Trash2 } from 'lucide-react';
 import { useConsumerAuth, API } from '../ConsumerApp';
 import { toast } from 'sonner';
 
@@ -181,6 +181,37 @@ export default function Profile() {
 
       <button className="profile-logout" onClick={handleLogout} data-testid="logout-btn">
         <LogOut size={18} /> Sign Out
+      </button>
+
+      <button
+        className="profile-logout"
+        style={{ marginTop: 12, background: 'transparent', color: '#B24A4A', border: '1px solid rgba(178, 74, 74, 0.35)' }}
+        onClick={async () => {
+          const confirm1 = window.confirm(
+            'Delete your Homeland Advantage account?\n\nYour name, email, address and phone will be removed. Bill history is retained (anonymised) for tax and rewards audit.\n\nThis cannot be undone.'
+          );
+          if (!confirm1) return;
+          const confirm2 = window.prompt('Type DELETE to confirm.');
+          if (confirm2 !== 'DELETE') { toast.info('Cancelled.'); return; }
+          try {
+            const res = await fetch(`${API}/account`, {
+              method: 'DELETE',
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+              toast.success('Account deleted. Signing you out.');
+              setTimeout(() => { logout(); navigate('/app/welcome'); }, 1200);
+            } else {
+              const d = await res.json().catch(() => ({}));
+              toast.error(d.detail || 'Delete failed. Please contact support.');
+            }
+          } catch {
+            toast.error('Network error. Please try again.');
+          }
+        }}
+        data-testid="delete-account-btn"
+      >
+        <Trash2 size={18} /> Delete Account
       </button>
 
       <div className="home-spacer" />

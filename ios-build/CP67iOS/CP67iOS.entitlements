@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Universal Links: tapping mall-rewards-1.emergent.host in Messages/Mail opens THIS app -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+        <string>applinks:mall-rewards-1.emergent.host</string>
+        <string>applinks:cp67bot.fundlexperiences.com</string>
+    </array>
+
+    <!-- Push notifications (APNs — production) -->
+    <key>aps-environment</key>
+    <string>production</string>
+</dict>
+</plist>
