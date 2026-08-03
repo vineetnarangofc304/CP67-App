@@ -714,26 +714,40 @@ def normalize_bill_no(bill_no: Optional[str]) -> str:
 
 
 async def check_duplicate_bill(image_hash: str, bill_no: Optional[str], store_name: Optional[str]) -> bool:
-    """Check if bill already exists in database"""
-    # Check by image hash
-    existing = await db.bills.find_one({"image_hash": image_hash, "status": {"$ne": "rejected"}})
-    if existing:
-        return True
+    """Check if bill already exists in database. Timeouts fail-open (return False)
+    so an occasional Atlas latency doesn't block a legit bill upload — worst case
+    we double-store an image; force-dedup by admin later."""
+    try:
+        # Check by image hash — indexed via ensure_db_indexes
+        existing = await db.bills.find_one(
+            {"image_hash": image_hash, "status": {"$ne": "rejected"}},
+            max_time_ms=5000,
+        )
+        if existing:
+            return True
+    except Exception as e:
+        logger.warning(f"dedup image_hash lookup failed: {e}")
 
     # Check by bill number and store — use normalised form so punctuation
     # differences (e.g. colon in the invoice number) don't slip past.
     if bill_no and store_name:
         norm = normalize_bill_no(bill_no)
         if norm:
-            existing = await db.bills.find_one({
-                "$or": [
-                    {"bill_no_normalized": norm, "store_name": store_name, "status": {"$ne": "rejected"}},
-                    # Legacy bills without the normalised field — fall back to exact match
-                    {"bill_no": bill_no, "store_name": store_name, "status": {"$ne": "rejected"}}
-                ]
-            })
-            if existing:
-                return True
+            try:
+                existing = await db.bills.find_one(
+                    {
+                        "$or": [
+                            {"bill_no_normalized": norm, "store_name": store_name, "status": {"$ne": "rejected"}},
+                            # Legacy bills without the normalised field — fall back to exact match
+                            {"bill_no": bill_no, "store_name": store_name, "status": {"$ne": "rejected"}}
+                        ]
+                    },
+                    max_time_ms=5000,
+                )
+                if existing:
+                    return True
+            except Exception as e:
+                logger.warning(f"dedup bill_no lookup failed: {e}")
     return False
 
 # ======================== QR CODE DEFINITIONS ========================
@@ -4696,9 +4710,19 @@ Thank you for being a valued Homeland Advantage member."""
             await send_whatsapp_buttons(phone, unclear_msg, buttons)
             return
         
-        # Check for duplicate (by image hash)
+        # Check for duplicate (by image hash) — timeout-guarded so a slow index
+        # doesn't blow up the whole pipeline (previously caused Atlas
+        # "operation exceeded time limit" errors that killed the bill).
         image_hash = hashlib.md5(base64.b64decode(image_base64)).hexdigest()
-        existing_bill = await db.bills.find_one({"image_hash": image_hash, "status": {"$ne": "rejected"}})
+        existing_bill = None
+        try:
+            existing_bill = await db.bills.find_one(
+                {"image_hash": image_hash, "status": {"$ne": "rejected"}},
+                max_time_ms=5000,
+            )
+        except Exception as _e:
+            logger.warning(f"image_hash dedup lookup failed (skipping): {_e}")
+            existing_bill = None
         
         if existing_bill:
             # Get current balance
@@ -7857,8 +7881,10 @@ async def ensure_db_indexes():
         ("bills", "user_id", {}),
         ("bills", "user_phone", {}),
         ("bills", "bill_no_normalized", {}),
+        ("bills", "image_hash", {}),
         ("bills", [("user_id", 1), ("store_name", 1), ("bill_no_normalized", 1)], {}),
         ("bills", [("status", 1), ("created_at", -1)], {}),
+        ("bills", [("image_hash", 1), ("status", 1)], {}),
         ("whatsapp_logs", "created_at", {}),
         ("whatsapp_logs", "direction", {}),
         ("whatsapp_logs", "user_phone", {}),
