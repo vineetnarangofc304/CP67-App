@@ -1459,6 +1459,73 @@ async def push_status(current_user=Depends(get_current_consumer)):
     return {"subscribed": count > 0, "endpoints": count}
 
 
+class APNsRegisterRequest(BaseModel):
+    apns_token: str
+    bundle_id: Optional[str] = None
+    device_model: Optional[str] = None
+    os_version: Optional[str] = None
+    app_version: Optional[str] = None
+
+
+@consumer_router.post("/push/apns/register")
+async def register_apns_token(payload: APNsRegisterRequest,
+                               current_user=Depends(get_current_consumer)):
+    """Register the iOS APNs device token. Called by the iOS WKWebView shell
+    once Apple issues a device token (see AppDelegate.swift → __cp67APNsToken).
+    Same shape as the web-push endpoint so admin fan-out treats them uniformly."""
+    user_id = current_user["sub"]
+    phone = current_user.get("phone")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "user_id": user_id,
+        "phone": phone,
+        "endpoint": f"apns:{payload.apns_token}",
+        "apns_token": payload.apns_token,
+        "keys": {},
+        "user_agent": f"{payload.device_model or 'iOS'} / {payload.os_version or ''}",
+        "platform": "ios",
+        "bundle_id": payload.bundle_id or "com.fundle.cp67ios",
+        "app_version": payload.app_version or "",
+        "updated_at": now_iso,
+    }
+    await _db.push_subscriptions.update_one(
+        {"endpoint": doc["endpoint"]},
+        {"$set": doc, "$setOnInsert": {"created_at": now_iso}},
+        upsert=True,
+    )
+    await _db.users.update_one(
+        {"id": user_id},
+        {"$set": {"push_opt_in": True, "push_opt_in_at": now_iso, "ios_apns_token": payload.apns_token}}
+    )
+    return {"success": True}
+
+
+@consumer_router.post("/push/apns/test")
+async def send_apns_test(current_user=Depends(get_current_consumer)):
+    """Send a test push to the caller's registered iOS device — useful during
+    TestFlight beta. Requires APNs env vars to be configured; otherwise
+    returns success=False with reason='not_configured'."""
+    from services.apns_client import send_apns, is_configured
+    if not is_configured():
+        return {"success": False, "reason": "not_configured",
+                "hint": "Set APNS_KEY_ID / APNS_TEAM_ID / APNS_KEY_P8 in backend/.env"}
+
+    sub = await _db.push_subscriptions.find_one(
+        {"user_id": current_user["sub"], "platform": "ios"},
+        sort=[("updated_at", -1)],
+    )
+    if not sub or not sub.get("apns_token"):
+        raise HTTPException(status_code=404, detail="No iOS device registered for this account")
+
+    r = await send_apns(
+        device_token=sub["apns_token"],
+        title="Homeland Advantage",
+        body="Test push — you're all set to receive rewards updates.",
+        data={"kind": "test"},
+    )
+    return {"success": r.get("success"), "status": r.get("status"), "detail": r.get("body")}
+
+
 # ==================== TRANSACTIONS ====================
 
 @consumer_router.get("/transactions")

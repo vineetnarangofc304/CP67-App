@@ -87,6 +87,34 @@ const ConsumerAuthProvider = ({ children }) => {
 
   const refreshProfile = () => token && fetchProfile(token);
 
+  // iOS APNs token auto-register — fires when the native shell posts
+  // window.__cp67APNsToken (see WebViewContainer.swift). Idempotent.
+  useEffect(() => {
+    if (!token) return;
+    const register = async (apnsToken) => {
+      if (!apnsToken) return;
+      try {
+        await fetch(`${API}/push/apns/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            apns_token: apnsToken,
+            bundle_id: 'com.fundle.cp67ios',
+            device_model: navigator.userAgent,
+            os_version: (navigator.userAgent.match(/OS (\d+_\d+)/) || [])[1] || '',
+            app_version: '1.0',
+          }),
+        });
+      } catch { /* silent */ }
+    };
+    // If token already present at page load
+    if (window.__cp67APNsToken) register(window.__cp67APNsToken);
+    // Or when native pushes it later
+    const handler = (e) => register(e.detail);
+    window.addEventListener('apnsTokenReady', handler);
+    return () => window.removeEventListener('apnsTokenReady', handler);
+  }, [token]);
+
   return (
     <ConsumerAuthContext.Provider value={{ token, user, login, logout, loading, refreshProfile, API }}>
       {children}
