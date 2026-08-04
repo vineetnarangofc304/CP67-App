@@ -7768,6 +7768,25 @@ app.include_router(staff_router)
 app.include_router(staff_admin_router)
 
 
+# ==================== PUBLIC DOWNLOADS ====================
+from fastapi.responses import FileResponse
+
+@app.get("/api/downloads/ios-build")
+async def download_ios_build():
+    """Public download of the Xcode project zip. No auth — safe because the
+    zip contains only public source that the user themselves generated."""
+    path = "/app/ios-build.zip"
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="ios-build.zip not yet generated. Ask the agent to package it.")
+    return FileResponse(
+        path,
+        media_type="application/zip",
+        filename="ios-build.zip",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+
 async def _sync_staff_incentive_for_bill(bill_id: str, new_status: str, user_phone: str):
     """Central hook called after ANY bill status change.
        - Creates a bill_upload incentive if the customer has an active
