@@ -34,28 +34,72 @@ const PARKING_NAV = [
   { path: '/parking-report', label: 'Parking Report', icon: Car },
 ];
 
-const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/qr-codes', label: 'QR Codes', icon: QrCode },
-  { path: '/users', label: 'Users', icon: Users },
-  { path: '/bills', label: 'Bills', icon: Receipt },
-  { path: '/brands', label: 'Brands & ATV', icon: Store },
-  { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
-  { path: '/banners', label: 'Banners', icon: ImageIcon },
-  { path: '/offers', label: 'Hot Deals', icon: Tag },
-  { path: '/events', label: 'Events', icon: CalendarDays },
-  { path: '/reports', label: 'Export Reports', icon: Download },
-  { path: '/parking-scanner', label: 'Parking Scanner', icon: ScanLine },
-  { path: '/parking-report', label: 'Parking Report', icon: Car },
-  { path: '/whatsapp-logs', label: 'WhatsApp Logs', icon: MessageCircle },
-  { path: '/whatsapp', label: 'WhatsApp Simulator', icon: MessageSquare },
-  { path: '/analytics', label: 'Analytics', icon: BarChart3 },
-  { path: '/admin-users', label: 'Admin Users', icon: ShieldCheck },
-  { path: '/blocked-users', label: 'Blocked Users', icon: ShieldOff },
-  { path: '/fundle-sync', label: 'Fundle Sync', icon: RefreshCw },
-  { path: '/staff-incentives', label: 'Staff Incentives', icon: Award },
-  { path: '/app-controls', label: 'App Controls', icon: Rocket },
-  { path: '/app-settings', label: 'App Settings', icon: Type },
+/**
+ * Sidebar is grouped into named sections for scannability. Add a new module
+ * by appending it to the right group — do NOT create new top-level pages.
+ */
+const NAV_SECTIONS = [
+  {
+    heading: null,   // no heading for the first section
+    items: [
+      { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    heading: 'Content',
+    items: [
+      { path: '/banners', label: 'Banners', icon: ImageIcon },
+      { path: '/offers', label: 'Hot Deals', icon: Tag },
+      { path: '/events', label: 'Events', icon: CalendarDays },
+      { path: '/campaigns', label: 'Campaigns', icon: Megaphone },
+    ],
+  },
+  {
+    heading: 'Customers',
+    items: [
+      { path: '/users', label: 'Users', icon: Users },
+      { path: '/qr-codes', label: 'QR Codes', icon: QrCode },
+      { path: '/blocked-users', label: 'Blocked Users', icon: ShieldOff },
+    ],
+  },
+  {
+    heading: 'Bills & Brands',
+    items: [
+      { path: '/bills', label: 'Bills', icon: Receipt },
+      { path: '/brands', label: 'Brands & ATV', icon: Store },
+      { path: '/fundle-sync', label: 'Fundle Sync', icon: RefreshCw },
+    ],
+  },
+  {
+    heading: 'Parking',
+    items: [
+      { path: '/parking-scanner', label: 'Parking Scanner', icon: ScanLine },
+      { path: '/parking-report', label: 'Parking Report', icon: Car },
+    ],
+  },
+  {
+    heading: 'Modules',
+    items: [
+      { path: '/staff-incentives', label: 'Staff Incentives', icon: Award },
+      { path: '/app-controls', label: 'App Controls', icon: Rocket },
+    ],
+  },
+  {
+    heading: 'Ops',
+    items: [
+      { path: '/whatsapp-logs', label: 'WhatsApp Logs', icon: MessageCircle },
+      { path: '/whatsapp', label: 'WhatsApp Simulator', icon: MessageSquare },
+      { path: '/analytics', label: 'Analytics', icon: BarChart3 },
+      { path: '/reports', label: 'Export Reports', icon: Download },
+    ],
+  },
+  {
+    heading: 'System',
+    items: [
+      { path: '/admin-users', label: 'Admin Users', icon: ShieldCheck },
+      { path: '/app-settings', label: 'App Settings', icon: Type },
+    ],
+  },
 ];
 
 const DashboardLayout = ({ children, title }) => {
@@ -65,7 +109,11 @@ const DashboardLayout = ({ children, title }) => {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   const isParkingStaff = user?.role === 'parking_staff';
-  const visibleNav = isParkingStaff ? PARKING_NAV : navItems;
+  // Flatten sections for parking staff (they only see 2 items — no headings needed).
+  // Regular admin sees fully grouped sidebar.
+  const sections = isParkingStaff
+    ? [{ heading: null, items: PARKING_NAV }]
+    : NAV_SECTIONS;
 
   const handleLogout = () => {
     logout();
@@ -111,30 +159,39 @@ const DashboardLayout = ({ children, title }) => {
             </button>
           </div>
 
-          {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-1">
-            {visibleNav.map((item) => {
-              const isActive = location.pathname === item.path;
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  data-testid={`nav-${item.path.replace('/', '') || 'dashboard'}`}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`
-                    flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
-                    ${isActive 
-                      ? 'bg-slate-900 text-white' 
-                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    }
-                  `}
-                >
-                  <Icon className="h-5 w-5" />
-                  <span className="font-medium">{item.label}</span>
-                </Link>
-              );
-            })}
+          {/* Navigation — grouped into named sections for scannability */}
+          <nav className="flex-1 p-4 space-y-4 overflow-y-auto">
+            {sections.map((section, sIdx) => (
+              <div key={section.heading || `sec-${sIdx}`} className="space-y-1">
+                {section.heading && (
+                  <div className="px-4 pt-2 pb-1 text-[10px] font-semibold tracking-widest text-slate-400 uppercase">
+                    {section.heading}
+                  </div>
+                )}
+                {section.items.map((item) => {
+                  const isActive = location.pathname === item.path;
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      data-testid={`nav-${item.path.replace('/', '') || 'dashboard'}`}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`
+                        flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors
+                        ${isActive
+                          ? 'bg-slate-900 text-white'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                        }
+                      `}
+                    >
+                      <Icon className="h-5 w-5" />
+                      <span className="font-medium text-sm">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
           </nav>
 
           {/* User & Logout */}
