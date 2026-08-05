@@ -3426,6 +3426,18 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
     bill_id = bill.get("id")
     user = await db.users.find_one({"id": bill.get("user_id")})
     if not user:
+        # Fallback: match by phone. Some legacy stub bills stored a user_id that
+        # got drift after phone normalization changes — retry via user_phone so
+        # we don't silently skip an otherwise-recoverable bill.
+        phone_lookup = (bill.get("user_phone") or "").strip()
+        if phone_lookup:
+            candidates = [phone_lookup]
+            if phone_lookup.startswith("91") and len(phone_lookup) == 12:
+                candidates.append(phone_lookup[2:])
+            elif len(phone_lookup) == 10:
+                candidates.append(f"91{phone_lookup}")
+            user = await db.users.find_one({"phone": {"$in": candidates}})
+    if not user:
         return {"bill_id": bill_id, "action": "skipped", "status": bill.get("status"),
                 "points": 0, "error": "User not found"}
 
@@ -3445,6 +3457,7 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
     # ----- Fetch the stored image ONCE — used for both OCR + Fundle call -----
     image_url = bill.get("image_url") or ""
     image_base64 = None
+    image_download_error: Optional[str] = None
     if image_url.startswith("data:"):
         try:
             image_base64 = image_url.split(",", 1)[1]
@@ -3474,12 +3487,25 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
                     # and the image survives even if Karix expires the URL.
                     update_payload["image_url"] = f"data:image/jpeg;base64,{image_base64}"
                 else:
-                    logger.warning(f"Bulk reprocess image download failed for {bill_id}: HTTP {r.status_code}")
+                    image_download_error = f"HTTP {r.status_code}"
+                    logger.warning(f"Bulk reprocess image download failed for {bill_id}: {image_download_error}")
         except Exception as e:
+            image_download_error = str(e)[:120]
             logger.warning(f"Bulk reprocess image download failed for {bill_id}: {e}")
 
+    # ----- Auto-force re-OCR for bills that never had data extracted -----
+    # Failed WhatsApp bills (rejection_reason starts with "WhatsApp bill processing failed")
+    # have no prior OCR data at all — force re-OCR regardless of the caller flag so
+    # Bulk Reprocess actually attempts to recover them instead of instantly skipping.
+    prior_reason = (bill.get("rejection_reason") or "")
+    is_whatsapp_failed = (
+        prior_reason.lower().startswith("whatsapp bill processing failed")
+        or prior_reason.lower().startswith("ocr could not extract")
+    )
+    effective_re_ocr = re_ocr or is_whatsapp_failed
+
     # ----- Step 1: Optionally re-run OCR -----
-    if re_ocr and image_base64:
+    if effective_re_ocr and image_base64:
         ocr_result = await analyze_bill_image(image_base64)
         if ocr_result.get("success") and ocr_result.get("data"):
             d = ocr_result["data"]
@@ -3502,7 +3528,7 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
             })
         else:
             logger.info(f"Bulk reprocess: OCR still failing for {bill_id}: {ocr_result.get('error')}")
-    elif re_ocr and not image_base64:
+    elif effective_re_ocr and not image_base64:
         logger.info(f"Bulk reprocess: no image available for {bill_id}, skipping re-OCR")
 
     # ----- Step 2: Ensure customer is registered in Fundle -----
@@ -3539,13 +3565,33 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
             pass
 
     # ----- Step 4: Send to Fundle earn_points (SAME payload as WhatsApp flow) -----
+    # For failed WhatsApp bills where OCR extracted the amount but not a bill_no,
+    # auto-generate a synthetic bill_no so Fundle can credit points instead of
+    # bouncing the bill back to manual_review indefinitely.
+    if amount > 0 and not bill_no:
+        bill_no = f"WA-{(bill_id or '')[:8].upper()}"
+        update_payload["bill_no"] = bill_no
+        update_payload["synthetic_bill_no"] = True
+        logger.info(f"Bulk reprocess: generated synthetic bill_no {bill_no} for {bill_id}")
+
     if amount <= 0 or not bill_no:
+        # Distinguish "no image at all" from "OCR failed on image" so admins can
+        # tell WhatsApp-failed bills apart from genuinely unreadable ones.
+        if not image_base64:
+            reason = (
+                f"Cannot reprocess: image not available"
+                + (f" ({image_download_error})" if image_download_error else "")
+            )
+            action = "no_image"
+        else:
+            reason = "OCR could not extract amount/bill_no; manual review required"
+            action = "manual_review"
         update_payload["status"] = "manual_review"
-        update_payload["rejection_reason"] = "OCR could not extract amount/bill_no; manual review required"
+        update_payload["rejection_reason"] = reason
         await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
-        return {"bill_id": bill_id, "action": "manual_review",
+        return {"bill_id": bill_id, "action": action,
                 "status": "manual_review", "points": 0,
-                "error": "Missing amount/bill_no after OCR"}
+                "error": reason}
 
     # ---- force_credit branch: SKIP Fundle, credit locally using tier × amount rate ----
     if force_credit:
@@ -3761,7 +3807,7 @@ async def bulk_reprocess_bills(request: BulkReprocessRequest,
         "status": "running",
         "total": len(bills),
         "processed": 0,
-        "summary": {"approved": 0, "rejected": 0, "manual_review": 0, "kept_pending": 0, "skipped": 0},
+        "summary": {"approved": 0, "rejected": 0, "manual_review": 0, "kept_pending": 0, "skipped": 0, "no_image": 0},
         "total_points_credited": 0,
         "results": [],
         "started_at": datetime.now(timezone.utc).isoformat(),
@@ -3799,7 +3845,7 @@ async def _run_bulk_reprocess_job(job_id: str, bills: List[dict],
     iteration so the UI can poll for live updates."""
     from fastapi import BackgroundTasks as _BG
     bg = _BG()  # fake container so _reprocess_single_bill can queue WA messages
-    summary = {"approved": 0, "rejected": 0, "manual_review": 0, "kept_pending": 0, "skipped": 0}
+    summary = {"approved": 0, "rejected": 0, "manual_review": 0, "kept_pending": 0, "skipped": 0, "no_image": 0}
     total_points = 0
     results: List[dict] = []
     for idx, b in enumerate(bills, 1):

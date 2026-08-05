@@ -472,7 +472,7 @@ const Bills = () => {
             setBulkRunning(false);
             const s = job.summary || {};
             toast.success(
-              `Done. Approved ${s.approved || 0} • Rejected ${s.rejected || 0} • Pending ${s.kept_pending || 0} • Points: ${job.total_points_credited || 0}`
+              `Done. Approved ${s.approved || 0} • Rejected ${s.rejected || 0} • Manual ${s.manual_review || 0} • Pending ${s.kept_pending || 0} • No-image ${s.no_image || 0} • Skipped ${s.skipped || 0} • Points: ${job.total_points_credited || 0}`
             );
             fetchBills();
             fetchPendingBills();
@@ -1271,10 +1271,12 @@ const Bills = () => {
                   />
                 </div>
                 {bulkProgress.summary && (
-                  <div className="grid grid-cols-4 gap-2 mt-3 text-xs">
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mt-3 text-xs">
                     <div><span className="text-slate-500">Approved:</span> <strong className="text-green-700">{bulkProgress.summary.approved || 0}</strong></div>
                     <div><span className="text-slate-500">Rejected:</span> <strong className="text-red-700">{bulkProgress.summary.rejected || 0}</strong></div>
+                    <div><span className="text-slate-500">Manual:</span> <strong className="text-amber-700">{bulkProgress.summary.manual_review || 0}</strong></div>
                     <div><span className="text-slate-500">Pending:</span> <strong className="text-amber-700">{bulkProgress.summary.kept_pending || 0}</strong></div>
+                    <div><span className="text-slate-500">No image:</span> <strong className="text-orange-700">{bulkProgress.summary.no_image || 0}</strong></div>
                     <div><span className="text-slate-500">Skipped:</span> <strong className="text-slate-700">{bulkProgress.summary.skipped || 0}</strong></div>
                   </div>
                 )}
@@ -1285,10 +1287,12 @@ const Bills = () => {
             {bulkResult && (
               <div className="bg-green-50 border border-green-200 rounded-lg p-3" data-testid="bulk-result">
                 <p className="text-sm font-semibold mb-2 text-green-800">Reprocess complete</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs">
                   <div><span className="text-slate-500">Approved:</span> <strong>{bulkResult.summary?.approved || 0}</strong></div>
                   <div><span className="text-slate-500">Rejected:</span> <strong>{bulkResult.summary?.rejected || 0}</strong></div>
+                  <div><span className="text-slate-500">Manual:</span> <strong>{bulkResult.summary?.manual_review || 0}</strong></div>
                   <div><span className="text-slate-500">Pending:</span> <strong>{bulkResult.summary?.kept_pending || 0}</strong></div>
+                  <div><span className="text-slate-500">No image:</span> <strong>{bulkResult.summary?.no_image || 0}</strong></div>
                   <div><span className="text-slate-500">Skipped:</span> <strong>{bulkResult.summary?.skipped || 0}</strong></div>
                 </div>
                 <p className="text-xs mt-2 text-green-700">
