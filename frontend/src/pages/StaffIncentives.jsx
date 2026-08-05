@@ -8,7 +8,7 @@ import { Label } from '../components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Users, QrCode, Award, Wallet, Settings, Plus, Trophy, RefreshCw, Upload } from 'lucide-react';
+import { Users, QrCode, Award, Wallet, Settings, Plus, Trophy, RefreshCw, Upload, FileText } from 'lucide-react';
 
 export default function StaffIncentives() {
   const { token, API_URL } = useAuth();
@@ -159,6 +159,7 @@ export default function StaffIncentives() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Retail Staff ({staffList.length})</CardTitle>
                 <div className="flex gap-2 items-center">
+                  <QRCardsPDFButton token={token} API_URL={API_URL} brands={[...new Set(staffList.map(s => s.brand_name).filter(Boolean))].sort()} />
                   <label className="cursor-pointer" data-testid="bulk-import-label">
                     <input
                       type="file"
@@ -370,5 +371,83 @@ export default function StaffIncentives() {
         </Dialog>
       </div>
     </DashboardLayout>
+  );
+}
+
+// Sub-component: PDF QR cards download button + brand filter
+function QRCardsPDFButton({ token, API_URL, brands }) {
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [brand, setBrand] = useState('');   // '' = all
+
+  const download = async () => {
+    setBusy(true);
+    try {
+      const qs = brand ? `?brand=${encodeURIComponent(brand)}` : '';
+      const r = await fetch(`${API_URL}/admin/staff/qr-cards.pdf${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        toast.error(err.detail || `PDF export failed (HTTP ${r.status})`);
+        return;
+      }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = brand
+        ? `homeland-qrs-${brand.toLowerCase().replace(/\s+/g, '-')}.pdf`
+        : 'homeland-qrs-all.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('QR cards PDF downloaded');
+      setOpen(false);
+    } catch (e) {
+      toast.error('Download failed: ' + e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" data-testid="qr-pdf-btn">
+          <FileText size={14} className="mr-1" /> QR Cards PDF
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Print QR Cards</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="text-sm text-slate-600">
+            One A4 sheet holds 6 laminate-ready cards. Each card has the staff&apos;s QR,
+            name, code and brand. Filter to print for a single brand or export all
+            active staff in one PDF.
+          </div>
+          <div>
+            <Label>Brand filter</Label>
+            <select
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+              className="w-full h-10 px-3 rounded-md border border-slate-200 bg-white text-sm"
+              data-testid="qr-pdf-brand-select"
+            >
+              <option value="">All active staff ({brands.length} brands)</option>
+              {brands.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button onClick={download} disabled={busy} data-testid="qr-pdf-download-btn">
+            {busy ? 'Generating…' : 'Download PDF'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -205,7 +205,159 @@ async def admin_list_staff(active_only: bool = False, brand: Optional[str] = Non
     return {"staff": staff, "total": len(staff)}
 
 
-@staff_admin_router.post("/bulk-import")
+@staff_admin_router.get("/qr-cards.pdf")
+async def admin_export_qr_cards_pdf(
+    brand: Optional[str] = None,
+    active_only: bool = True,
+    ids: Optional[str] = None,
+    auth=Depends(_verify_admin),
+):
+    """Generate a print-ready A4 PDF of QR cards for retail staff.
+    6 cards per A4 page (3 rows × 2 columns). Each card contains:
+      - Staff QR (encodes wa.me link with #STAFF:<token>)
+      - Staff Name
+      - Staff Code
+      - Brand
+      - Cut & fold guides
+
+    Query params:
+      brand=Zara         → only staff for that brand
+      active_only=true   → skip deactivated staff (default true)
+      ids=id1,id2,...    → specific staff IDs (overrides brand + active_only)
+    """
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.utils import ImageReader
+    from io import BytesIO
+    import qrcode
+    from fastapi.responses import Response
+
+    # Resolve target staff list
+    if ids:
+        id_list = [s.strip() for s in ids.split(",") if s.strip()]
+        query = {"id": {"$in": id_list}}
+    else:
+        query = {}
+        if active_only:
+            query["is_active"] = True
+        if brand:
+            query["brand_name"] = brand
+
+    staff_docs = []
+    async for s in _db.retail_staff.find(query, {"_id": 0}).sort([("brand_name", 1), ("name", 1)]):
+        staff_docs.append(s)
+
+    if not staff_docs:
+        raise HTTPException(status_code=404, detail="No staff match the given filter")
+
+    # Use the same WhatsApp phone + message format as the single-QR endpoint
+    # so PDF cards + in-app cards decode to identical URLs.
+    wa_phone = os.environ.get("WA_BUSINESS_PHONE") or "917988077663"
+
+    # ---- Layout constants (A4 = 210 × 297 mm) ----
+    PAGE_W, PAGE_H = A4
+    MARGIN = 10 * mm
+    COLS, ROWS = 2, 3
+    CARDS_PER_PAGE = COLS * ROWS
+    GUTTER = 4 * mm
+    CARD_W = (PAGE_W - 2 * MARGIN - (COLS - 1) * GUTTER) / COLS
+    CARD_H = (PAGE_H - 2 * MARGIN - (ROWS - 1) * GUTTER) / ROWS
+
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+
+    for idx, staff in enumerate(staff_docs):
+        # Position of this card on the current page
+        slot = idx % CARDS_PER_PAGE
+        col = slot % COLS
+        row = slot // COLS
+        # y grows from bottom in reportlab, so flip
+        x0 = MARGIN + col * (CARD_W + GUTTER)
+        y0 = PAGE_H - MARGIN - (row + 1) * CARD_H - row * GUTTER
+
+        # Draw card border (dashed cut-guide + soft fill)
+        c.setStrokeColorRGB(0.72, 0.53, 0.04)  # luxury gold
+        c.setLineWidth(0.6)
+        c.setDash(3, 2)
+        c.rect(x0, y0, CARD_W, CARD_H, stroke=1, fill=0)
+        c.setDash()
+
+        # Cream fill panel (top 40%)
+        c.setFillColorRGB(0.98, 0.97, 0.96)
+        c.rect(x0 + 2 * mm, y0 + 2 * mm, CARD_W - 4 * mm, CARD_H - 4 * mm, stroke=0, fill=1)
+
+        # ---- Header — "Homeland Advantage" + brand ----
+        c.setFillColorRGB(0.72, 0.53, 0.04)
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(x0 + 6 * mm, y0 + CARD_H - 7 * mm, "HOMELAND ADVANTAGE")
+        c.setFillColorRGB(0.35, 0.32, 0.28)
+        c.setFont("Helvetica", 6)
+        c.drawString(x0 + 6 * mm, y0 + CARD_H - 10 * mm, "CP67 Mall · Retail Rewards")
+
+        # ---- QR ----
+        msg = f"Hi CP67! I'm registering via staff {staff.get('staff_code','')} ({staff.get('brand_name','')}). #STAFF:{staff.get('qr_token','')}"
+        wa_url = f"https://wa.me/{wa_phone}?text={_url_encode(msg)}"
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10, border=1,
+        )
+        qr.add_data(wa_url)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="#1E1B18", back_color="#FAF8F5").convert("RGB")
+
+        # Place QR — 40mm square centered horizontally, near the top
+        qr_size = 38 * mm
+        qr_x = x0 + (CARD_W - qr_size) / 2
+        qr_y = y0 + CARD_H - qr_size - 15 * mm
+        c.drawImage(ImageReader(qr_img), qr_x, qr_y, width=qr_size, height=qr_size, mask="auto")
+
+        # ---- Staff details (below QR) ----
+        c.setFillColorRGB(0.12, 0.11, 0.09)
+        c.setFont("Helvetica-Bold", 11)
+        name = (staff.get("name") or "")[:28]
+        c.drawCentredString(x0 + CARD_W / 2, y0 + 20 * mm, name)
+
+        c.setFont("Helvetica", 8)
+        c.setFillColorRGB(0.35, 0.32, 0.28)
+        brand_txt = (staff.get("brand_name") or "")[:32]
+        c.drawCentredString(x0 + CARD_W / 2, y0 + 15 * mm, brand_txt)
+
+        c.setFont("Helvetica-Bold", 9)
+        c.setFillColorRGB(0.72, 0.53, 0.04)
+        code = staff.get("staff_code") or ""
+        c.drawCentredString(x0 + CARD_W / 2, y0 + 10 * mm, code)
+
+        c.setFont("Helvetica-Oblique", 6)
+        c.setFillColorRGB(0.5, 0.48, 0.44)
+        c.drawCentredString(x0 + CARD_W / 2, y0 + 5 * mm,
+                            "Scan → WhatsApp → earn rewards on your bill")
+
+        # Page break
+        if slot == CARDS_PER_PAGE - 1 and idx != len(staff_docs) - 1:
+            c.showPage()
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+
+    fname_bits = ["homeland-staff-qrs"]
+    if brand:
+        fname_bits.append(brand.lower().replace(" ", "-"))
+    fname_bits.append(f"{len(staff_docs)}cards")
+    filename = "-".join(fname_bits) + ".pdf"
+
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+
 async def admin_bulk_import_staff(
     file: UploadFile = File(...),
     dry_run: bool = Form(False),
