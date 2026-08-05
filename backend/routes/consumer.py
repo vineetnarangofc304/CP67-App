@@ -384,6 +384,11 @@ async def send_otp(request: SendOTPRequest, background_tasks: BackgroundTasks):
     if blocked:
         raise HTTPException(status_code=403, detail="This number is not eligible for the Homeland Advantage loyalty program.")
 
+    # App Store / Play Store reviewer bypass (Point 22): skip SMS + Fundle sync
+    # for the reviewer number so review teams get an instant success.
+    if phone_10 == "9999999999":
+        return {"success": True, "message": "OTP sent to your phone", "phone": phone}
+
     # Generate a 6-digit OTP and persist it (5-min TTL, max 5 attempts)
     from server import send_otp_sms, store_otp
     otp = str(random.randint(100000, 999999))
@@ -428,10 +433,15 @@ async def verify_otp(request: VerifyOTPRequest):
         raise HTTPException(status_code=403, detail="This number is not eligible for the Homeland Advantage loyalty program.")
 
     # Dev override (testing agent + QA) — read from env, default '1234'
+    # + App Store / Play Store reviewer bypass (Point 22): phone 9999999999 → OTP 123456
     from server import verify_stored_otp, OTP_DEV_BYPASS
-    is_dev = bool(OTP_DEV_BYPASS) and request.otp == OTP_DEV_BYPASS
+    APP_STORE_REVIEWER_PHONE = "9999999999"
+    APP_STORE_REVIEWER_OTP = "123456"
 
-    if not is_dev:
+    is_dev = bool(OTP_DEV_BYPASS) and request.otp == OTP_DEV_BYPASS
+    is_reviewer = (phone_10 == APP_STORE_REVIEWER_PHONE and request.otp == APP_STORE_REVIEWER_OTP)
+
+    if not is_dev and not is_reviewer:
         ok = await verify_stored_otp(phone_10, request.otp)
         if not ok:
             raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
@@ -1986,23 +1996,29 @@ async def get_amenities():
 
 @consumer_router.get("/referral")
 async def get_referral_info(current_user=Depends(get_current_consumer)):
-    """Get user's referral info and stats"""
+    """Get user's referral info and stats (uses live admin-configured values)"""
+    from routes.admin_diy import get_live_referral_config
+    cfg = await get_live_referral_config()
+    referrer_pts = int(cfg.get("referrer_points", 50))
+
     user = await _db.users.find_one({"id": current_user["sub"]}, {"_id": 0})
     referral_code = user.get("referral_code", "")
 
     # Count successful referrals
     referral_count = await _db.users.count_documents({"referred_by": referral_code})
 
-    # Referral bonus points earned
-    bonus_earned = referral_count * 50  # 50 points per referral
+    # Referral bonus points earned — uses live admin config
+    bonus_earned = referral_count * referrer_pts
 
     return {
         "referral_code": referral_code,
         "referral_link": f"{os.environ.get('BACKEND_PUBLIC_URL', '')}/app/welcome?ref={referral_code}",
         "total_referrals": referral_count,
         "bonus_points_earned": bonus_earned,
-        "points_per_referral": 50,
-        "share_text": f"Join Homeland Advantage at CP67 Mall and earn exciting rewards! Use my referral code: {referral_code}"
+        "points_per_referral": referrer_pts,
+        "referee_points": int(cfg.get("referee_points", 50)),
+        "program_active": bool(cfg.get("active", True)),
+        "share_text": cfg.get("message") or f"Join Homeland Advantage at CP67 Mall and earn exciting rewards! Use my referral code: {referral_code}"
     }
 
 

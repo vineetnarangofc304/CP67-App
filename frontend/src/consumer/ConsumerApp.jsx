@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import BottomNav from './components/BottomNav';
 import SideDrawer from './components/SideDrawer';
+import InAppPopup from './components/InAppPopup';
 import NotificationPrompt from './components/NotificationPrompt';
 import Welcome from './pages/Welcome';
 import Login from './pages/Login';
@@ -198,6 +199,7 @@ function ConsumerShell({ drawerOpen, setDrawerOpen, showBottomNav, location }) {
   return (
     <div className="consumer-app">
       <SideDrawer isOpen={drawerOpen} onClose={() => setDrawerOpen(false)} />
+      <InAppPopup />
       {/* NotificationPrompt disabled per CP67 team request — no pop-up on login.
           Users can enable notifications via Profile → Notification Settings. */}
       {/* {token && <NotificationPrompt token={token} />} */}

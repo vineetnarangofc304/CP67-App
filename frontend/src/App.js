@@ -18,6 +18,7 @@ import Campaigns from './pages/Campaigns';
 import AppSettings from './pages/AppSettings';
 import FundleSync from './pages/FundleSync';
 import StaffIncentives from './pages/StaffIncentives';
+import AdminDIY from './pages/AdminDIY';
 import Banners from './pages/Banners';
 import Offers from './pages/Offers';
 import Events from './pages/Events';
@@ -178,6 +179,7 @@ function App() {
           <Route path="/app-settings" element={<ProtectedRoute><AppSettings /></ProtectedRoute>} />
           <Route path="/fundle-sync" element={<ProtectedRoute><FundleSync /></ProtectedRoute>} />
           <Route path="/staff-incentives" element={<ProtectedRoute><StaffIncentives /></ProtectedRoute>} />
+          <Route path="/app-controls" element={<ProtectedRoute><AdminDIY /></ProtectedRoute>} />
           <Route path="/banners" element={<ProtectedRoute><Banners /></ProtectedRoute>} />
           <Route path="/offers" element={<ProtectedRoute><Offers /></ProtectedRoute>} />
           <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />

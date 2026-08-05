@@ -3310,11 +3310,28 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
     elif image_url.startswith("base64:"):
         image_base64 = image_url[7:]
     elif image_url.startswith("http"):
+        # Karix media URLs require Bearer auth. Previously we sent no headers
+        # → 401/403 → OCR skipped → bill stayed "manual_review" forever (Point 19).
         try:
-            async with httpx.AsyncClient(timeout=20.0) as cx:
-                r = await cx.get(image_url)
-                if r.status_code == 200:
+            async with httpx.AsyncClient(timeout=25.0) as cx:
+                headers = {}
+                if KARIX_API_KEY:
+                    headers = {
+                        "Authentication": f"Bearer {KARIX_API_KEY}",
+                        "Authorization": f"Bearer {KARIX_API_KEY}",
+                    }
+                r = await cx.get(image_url, headers=headers)
+                if r.status_code != 200 and headers:
+                    # Fallback without auth (some CDN URLs work anonymously)
+                    r = await cx.get(image_url)
+                if r.status_code == 200 and r.content:
                     image_base64 = base64.b64encode(r.content).decode()
+                    logger.info(f"Bulk reprocess: downloaded image for {bill_id} ({len(image_base64)} chars, HTTP {r.status_code})")
+                    # PERSIST the base64 so future reprocesses skip the network call
+                    # and the image survives even if Karix expires the URL.
+                    update_payload["image_url"] = f"data:image/jpeg;base64,{image_base64}"
+                else:
+                    logger.warning(f"Bulk reprocess image download failed for {bill_id}: HTTP {r.status_code}")
         except Exception as e:
             logger.warning(f"Bulk reprocess image download failed for {bill_id}: {e}")
 
@@ -7767,9 +7784,15 @@ bind_staff_db(db, send_sms_otp=send_otp_sms, store_otp=store_otp, verify_stored_
 app.include_router(staff_router)
 app.include_router(staff_admin_router)
 
+# Point 21 — DIY Admin panels: Push broadcasts, Popups, Referral config
+from routes.admin_diy import admin_diy_router, consumer_diy_router, init_diy_routes
+init_diy_routes(db)
+app.include_router(admin_diy_router)
+app.include_router(consumer_diy_router)
+
 
 # ==================== PUBLIC DOWNLOADS ====================
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response, RedirectResponse
 
 @app.get("/api/downloads/ios-build")
 async def download_ios_build():
@@ -7784,6 +7807,53 @@ async def download_ios_build():
         filename="ios-build.zip",
         headers={"Cache-Control": "no-store"},
     )
+
+
+# Point 23 — QR that redirects to Play Store listing.
+PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.homelandadvantage.cp67&hl=en_IN"
+APP_STORE_URL = os.environ.get("APP_STORE_URL", "")  # fill once iOS app is live
+
+@app.get("/api/downloads/play-store-qr")
+async def download_play_store_qr(size: int = 512):
+    """PNG QR code that scans → opens the Homeland Advantage Play Store listing.
+    Print + laminate + display at CP67 information desks."""
+    import qrcode
+    from io import BytesIO
+    size = max(128, min(size, 2048))
+    qr = qrcode.QRCode(
+        version=None, error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=10, border=2,
+    )
+    qr.add_data(PLAY_STORE_URL)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="#1E1B18", back_color="#FAF8F5").convert("RGB")
+    if img.size[0] != size:
+        img = img.resize((size, size))
+    buf = BytesIO()
+    img.save(buf, format="PNG", optimize=True)
+    return Response(
+        content=buf.getvalue(),
+        media_type="image/png",
+        headers={"Content-Disposition": 'inline; filename="homeland-play-store.png"',
+                 "Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/api/download-app")
+async def download_app_redirect(request: Request):
+    """Universal download page — Android goes to Play Store, iOS to App Store,
+    desktop shows a landing page with both links + PWA install guide.
+    Point QR codes at this URL for a single, future-proof entry point."""
+    ua = (request.headers.get("user-agent") or "").lower()
+    if "android" in ua:
+        return RedirectResponse(url=PLAY_STORE_URL, status_code=302)
+    if any(k in ua for k in ("iphone", "ipad", "ipod")):
+        if APP_STORE_URL:
+            return RedirectResponse(url=APP_STORE_URL, status_code=302)
+        # No App Store link yet → send iPhone users to install guide
+        return RedirectResponse(url="/ios-install", status_code=302)
+    # Desktop / other — bounce to Play Store (biggest audience) as default
+    return RedirectResponse(url=PLAY_STORE_URL, status_code=302)
 
 
 

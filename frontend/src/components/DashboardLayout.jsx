@@ -24,7 +24,8 @@ import {
   ShieldOff,
   Type,
   RefreshCw,
-  Award
+  Award,
+  Rocket
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -53,6 +54,7 @@ const navItems = [
   { path: '/blocked-users', label: 'Blocked Users', icon: ShieldOff },
   { path: '/fundle-sync', label: 'Fundle Sync', icon: RefreshCw },
   { path: '/staff-incentives', label: 'Staff Incentives', icon: Award },
+  { path: '/app-controls', label: 'App Controls', icon: Rocket },
   { path: '/app-settings', label: 'App Settings', icon: Type },
 ];
 
