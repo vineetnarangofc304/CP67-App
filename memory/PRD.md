@@ -384,9 +384,18 @@ Addressed 4 pending items from the user's Google Doc:
 
 ## Future Tasks (P2)
 - Automate Footfall Data via Email Parser
-- **Refactor monolithic server.py** (6700+ lines → `/routes/admin_bills.py`, `/services/ocr.py`, `/services/tagnpay.py`)
+- **Refactor monolithic server.py** (8200+ lines → `/routes/admin_bills.py`, `/services/ocr.py`, `/services/tagnpay.py`)
 - Brand/Store Dashboard (separate brand login)
 - Advanced Analytics (RFM, CLV, AI Concierge)
+
+## Phase 11 (Aug 5, 2026) — Bulk Reprocess Recovery for Failed WhatsApp Bills
+Fixed the P0 issue where Bulk Reprocess was silently skipping bills marked "WhatsApp bill processing failed":
+- Auto-force re-OCR when `rejection_reason` starts with "WhatsApp bill processing failed" or "OCR could not extract" — no more silent skips due to caller flag.
+- New `no_image` action bucket cleanly separates "image unavailable" from "OCR failed on image" (with the specific HTTP/download error surfaced in `rejection_reason`).
+- Synthetic bill_no auto-generation (`WA-{FIRST8}`) when OCR extracts a valid amount but no bill number — lets Fundle receive a valid earn_points payload instead of endlessly bouncing back.
+- Phone-based user fallback (`91XXX` / 10-digit) when `user_id` doesn't match — rescues legacy stubs from user_id drift.
+- Admin Bills UI updated: Bulk Reprocess progress/result grids now show 6 counters (Approved / Rejected / Manual / Pending / No image / Skipped).
+- Backend regression suite added at `/app/backend/tests/test_bulk_reprocess_whatsapp_failed.py`. Testing agent confirmed 100% pass across all 6 scenarios.
 
 ## Key API Endpoints
 - POST /api/whatsapp/webhook - Karix WhatsApp entry point (handles SRC_PARKING)
