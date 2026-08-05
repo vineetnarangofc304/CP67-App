@@ -41,6 +41,7 @@ const Brands = () => {
   const [uploadingImage, setUploadingImage] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const fileInputRef = useRef(null);
+  const categoryInputRef = useRef(null);
   const logoInputRef = useRef(null);
   const coverInputRef = useRef(null);
 
@@ -166,6 +167,24 @@ const Brands = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const handleCategoryUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch(`${API_URL}/admin/brands/upload-categories-excel`, {
+        method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd
+      });
+      const d = await res.json();
+      if (res.ok && d.success) { toast.success(`Imported ${d.imported} new brands, updated categories on ${d.updated} existing`); fetchBrands(); }
+      else { toast.error(d.message || d.detail || 'Upload failed'); }
+    } catch { toast.error('Failed'); }
+    setUploading(false);
+    if (categoryInputRef.current) categoryInputRef.current.value = '';
+  };
+
   const syncToStores = async () => {
     setSyncing(true);
     try {
@@ -208,8 +227,12 @@ const Brands = () => {
           </div>
           <div className="flex flex-wrap gap-2">
             <input type="file" ref={fileInputRef} accept=".xlsx,.xls,.csv" onChange={handleFileUpload} className="hidden" />
+            <input type="file" ref={categoryInputRef} accept=".xlsx,.xls,.csv" onChange={handleCategoryUpload} className="hidden" />
             <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={uploading} data-testid="upload-excel-btn">
               {uploading ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" />Uploading...</> : <><Upload className="h-4 w-4 mr-2" />Upload ATV Sheet</>}
+            </Button>
+            <Button variant="outline" onClick={() => categoryInputRef.current?.click()} disabled={uploading} data-testid="upload-categories-btn">
+              <Upload className="h-4 w-4 mr-2" />Upload Category Sheet
             </Button>
             <Button variant="outline" onClick={() => { fetchUploadHistory(); setShowHistoryDialog(true); }}>
               <History className="h-4 w-4 mr-2" />History

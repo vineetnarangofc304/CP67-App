@@ -2404,6 +2404,149 @@ async def get_brand_upload_history(payload: dict = Depends(verify_jwt_token)):
     history = await db.brand_upload_history.find({}, {"_id": 0}).sort("uploaded_at", -1).limit(20).to_list(20)
     return {"history": history}
 
+
+@api_router.post("/admin/brands/upload-categories-excel")
+async def upload_brands_categories_excel(
+    file: UploadFile = File(...),
+    payload: dict = Depends(verify_jwt_token)
+):
+    """Upload Excel/CSV file with brand names and category taxonomy.
+    Expected columns (any order, header row detected automatically):
+        Brand Name, Category, Sub Category, Sub Category 2
+    Never touches `atv` — pair with /upload-excel for ATV updates."""
+    import openpyxl
+    import io as _io
+
+    logger.info(f"Uploading brand categories: {file.filename}")
+    content = await file.read()
+    rows = []
+
+    def _match_col(cell_str: str):
+        s = (cell_str or "").strip().lower()
+        if not s: return None
+        if s in ("brand", "brand name", "brand_name", "name"): return "brand_name"
+        if s in ("categery", "category"): return "category"
+        if s in ("sub categery", "sub category", "sub_category", "subcategory"): return "sub_category"
+        if s in ("sub categery 2", "sub category 2", "sub_category_2", "subcategory 2"): return "sub_category_2"
+        return None
+
+    try:
+        if file.filename and file.filename.lower().endswith('.csv'):
+            import csv
+            text = content.decode('utf-8-sig', errors='ignore')
+            reader = csv.reader(_io.StringIO(text))
+            all_rows = list(reader)
+            header_idx, col_map = None, {}
+            for i, row in enumerate(all_rows):
+                mapped = {j: _match_col(str(c)) for j, c in enumerate(row)}
+                if any(v == "brand_name" for v in mapped.values()):
+                    header_idx = i
+                    col_map = {v: j for j, v in mapped.items() if v}
+                    break
+            if header_idx is None:
+                raise HTTPException(400, "Could not find header row with 'Brand Name' column")
+            for row in all_rows[header_idx + 1:]:
+                if len(row) <= col_map["brand_name"]: continue
+                b = str(row[col_map["brand_name"]] or "").strip()
+                if not b: continue
+                def _get(k):
+                    idx = col_map.get(k)
+                    if idx is None or idx >= len(row): return ""
+                    return str(row[idx] or "").strip()
+                rows.append({
+                    "brand_name": b,
+                    "category": _get("category"),
+                    "sub_category": _get("sub_category"),
+                    "sub_category_2": _get("sub_category_2"),
+                })
+        else:
+            wb = openpyxl.load_workbook(_io.BytesIO(content), read_only=True, data_only=True)
+            sh = wb.active
+            all_rows = list(sh.iter_rows(values_only=True))
+            header_idx, col_map = None, {}
+            for i, row in enumerate(all_rows):
+                if not row: continue
+                mapped = {j: _match_col(str(c) if c is not None else "") for j, c in enumerate(row)}
+                if any(v == "brand_name" for v in mapped.values()):
+                    header_idx = i
+                    col_map = {v: j for j, v in mapped.items() if v}
+                    break
+            if header_idx is None:
+                raise HTTPException(400, "Could not find header row with 'Brand Name' column")
+            for row in all_rows[header_idx + 1:]:
+                if not row: continue
+                b_idx = col_map.get("brand_name")
+                if b_idx is None or b_idx >= len(row): continue
+                b = str(row[b_idx] or "").strip()
+                if not b or b.lower() in ("nan", "none"): continue
+                def _get(k):
+                    idx = col_map.get(k)
+                    if idx is None or idx >= len(row): return ""
+                    v = row[idx]
+                    return str(v).strip() if v is not None else ""
+                rows.append({
+                    "brand_name": b,
+                    "category": _get("category"),
+                    "sub_category": _get("sub_category"),
+                    "sub_category_2": _get("sub_category_2"),
+                })
+            wb.close()
+
+        logger.info(f"Parsed {len(rows)} brand-category rows")
+        if not rows:
+            return {"success": False, "message": "No valid rows found",
+                    "imported": 0, "updated": 0}
+
+        imported, updated = 0, 0
+        now = datetime.now(timezone.utc).isoformat()
+        for r in rows:
+            existing = await db.brands.find_one({
+                "brand_name": {"$regex": f"^{re.escape(r['brand_name'])}$", "$options": "i"}
+            })
+            update_doc = {
+                "category": r["category"],
+                "sub_category": r["sub_category"],
+                "sub_category_2": r["sub_category_2"],
+                "updated_at": now,
+            }
+            if existing:
+                await db.brands.update_one({"id": existing["id"]}, {"$set": update_doc})
+                updated += 1
+            else:
+                new_doc = BrandConfig(brand_name=r["brand_name"], atv=0.0).model_dump()
+                new_doc.update(update_doc)
+                await db.brands.insert_one(new_doc)
+                imported += 1
+
+        await db.brand_upload_history.insert_one({
+            "id": str(uuid.uuid4()),
+            "filename": file.filename,
+            "kind": "categories",
+            "uploaded_by": payload.get("username", "unknown"),
+            "uploaded_at": now,
+            "brands_in_file": len(rows),
+            "imported": imported,
+            "updated": updated,
+        })
+
+        return {
+            "success": True,
+            "message": f"Imported {imported} new brands, updated categories on {updated} existing",
+            "imported": imported,
+            "updated": updated,
+            "brands_in_file": len(rows),
+            "total_brands": await db.brands.count_documents({}),
+            "preview": rows[:5],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Category upload failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
 @api_router.get("/admin/brands/lookup/{store_name}")
 async def lookup_brand_atv(store_name: str, payload: dict = Depends(verify_jwt_token)):
     """Lookup brand ATV by store name"""
