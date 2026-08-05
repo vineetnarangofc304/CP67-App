@@ -8,7 +8,7 @@ import { Label } from '../components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Users, QrCode, Award, Wallet, Settings, Plus, Trophy, RefreshCw } from 'lucide-react';
+import { Users, QrCode, Award, Wallet, Settings, Plus, Trophy, RefreshCw, Upload } from 'lucide-react';
 
 export default function StaffIncentives() {
   const { token, API_URL } = useAuth();
@@ -21,6 +21,8 @@ export default function StaffIncentives() {
   const [showQR, setShowQR] = useState(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: '', phone: '', brand_name: '', store_location: '' });
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
 
   const api = (path, opts = {}) => fetch(`${API_URL}${path}`, {
     ...opts,
@@ -101,6 +103,35 @@ export default function StaffIncentives() {
     else { toast.error('Update failed'); }
   };
 
+  const doBulkImport = async (file, dryRun) => {
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('dry_run', dryRun ? 'true' : 'false');
+    try {
+      const r = await fetch(`${API_URL}/admin/staff/bulk-import${dryRun ? '?dry_run=true' : ''}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      const data = await r.json();
+      if (!r.ok) { toast.error(data.detail || 'Import failed'); return; }
+      setImportResult(data);
+      if (dryRun) {
+        toast.info(`Dry run: ${data.summary.imported} rows will be imported, ${data.summary.invalid} invalid, ${data.summary.skipped_existing} already exist.`);
+      } else {
+        toast.success(`Imported ${data.summary.imported} staff across ${data.summary.brands_imported} brands.`);
+        loadAll();
+      }
+    } catch (e) {
+      toast.error('Import failed: ' + e.message);
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <DashboardLayout title="Staff Incentive Program">
       <div className="space-y-6" data-testid="staff-incentives-page">
@@ -127,7 +158,28 @@ export default function StaffIncentives() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Retail Staff ({staffList.length})</CardTitle>
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
+                  <label className="cursor-pointer" data-testid="bulk-import-label">
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      className="hidden"
+                      data-testid="bulk-import-input"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        if (window.confirm(`Import staff from "${f.name}"?\n\nClick OK to run a dry-run first (preview only, nothing saved). Cancel to do a live import.`)) {
+                          doBulkImport(f, true);
+                        } else {
+                          doBulkImport(f, false);
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border hover:bg-slate-50">
+                      <Upload size={14} /> {importing ? 'Importing…' : 'Bulk Import CSV'}
+                    </span>
+                  </label>
                   <Button variant="outline" size="sm" onClick={loadAll} data-testid="refresh-staff-btn"><RefreshCw size={16} /></Button>
                   <Dialog open={creating} onOpenChange={setCreating}>
                     <DialogTrigger asChild>
@@ -149,6 +201,25 @@ export default function StaffIncentives() {
                 </div>
               </CardHeader>
               <CardContent>
+                {importResult && (
+                  <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm" data-testid="import-result-banner">
+                    <div className="font-medium mb-1">
+                      {importResult.dry_run ? 'Dry-run result:' : 'Last import result:'}
+                      &nbsp;{importResult.summary.imported} imported · {importResult.summary.skipped_existing} skipped (already exist) · {importResult.summary.invalid} invalid
+                    </div>
+                    {importResult.invalid_preview?.length > 0 && (
+                      <details>
+                        <summary className="cursor-pointer text-amber-700">Show {importResult.invalid_preview.length} invalid rows</summary>
+                        <ul className="mt-2 text-xs text-slate-600 pl-4 list-disc">
+                          {importResult.invalid_preview.map((r, i) => (
+                            <li key={i}>Row {r.row}: {r.reason} — {r.name || ''} {r.brand ? `(${r.brand})` : ''} {r.phone_raw ? `phone="${r.phone_raw}"` : ''}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                    <button className="ml-2 text-xs text-slate-500 underline" onClick={() => setImportResult(null)}>dismiss</button>
+                  </div>
+                )}
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="text-left border-b">

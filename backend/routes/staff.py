@@ -12,7 +12,7 @@ MVP defaults (user-picked):
   - 15-minute attribution window for existing-customer bill uploads
   - Separate staff app served at /staff-app/*
 """
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
@@ -203,6 +203,144 @@ async def admin_list_staff(active_only: bool = False, brand: Optional[str] = Non
     async for s in _db.retail_staff.find(q, {"_id": 0}).sort("created_at", -1):
         staff.append(s)
     return {"staff": staff, "total": len(staff)}
+
+
+@staff_admin_router.post("/bulk-import")
+async def admin_bulk_import_staff(
+    file: UploadFile = File(...),
+    dry_run: bool = Form(False),
+    auth=Depends(_verify_admin),
+):
+    """Bulk-import retail staff from a CSV file.
+
+    Accepts the CP67 "merged-cell" format where Brand Name is filled only on
+    the first row of each brand and blank for subsequent staff of the same
+    brand — this endpoint forward-fills automatically.
+
+    Required columns (headers can have trailing spaces):
+        Brand Name, Staff Name, Contact No.
+    Optional columns:
+        Designation, S.no, Email, Store Location
+
+    Behavior:
+      - Rows without staff name or phone → invalid
+      - Phones normalised to 10 digits (strips country code, punctuation)
+      - Existing phones → skipped (never overwrite an active staff record)
+      - Each accepted row gets an auto-generated staff_code (HL-NNNN)
+      - dry_run=true → parses + validates but doesn't insert (preview only)
+    """
+    import csv, io, re
+
+    try:
+        raw = await file.read()
+        text = raw.decode("utf-8-sig")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Failed to read CSV — expected UTF-8 text")
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="CSV appears empty or missing header row")
+
+    # Normalise header names — strip whitespace + lowercase for lookup
+    norm_headers = {h.strip().lower(): h for h in reader.fieldnames if h}
+
+    def h(key):  # returns actual header string or None
+        return norm_headers.get(key)
+
+    col_brand = h("brand name") or h("brand")
+    col_name = h("staff name") or h("name")
+    col_phone = h("contact no.") or h("contact") or h("phone")
+    col_desig = h("designation") or h("role")
+    col_store = h("store location") or h("store")
+    col_email = h("email")
+
+    if not (col_brand and col_name and col_phone):
+        raise HTTPException(
+            status_code=400,
+            detail="CSV missing required columns. Need: Brand Name, Staff Name, Contact No.",
+        )
+
+    # Parse + ffill brand name
+    parsed = []
+    last_brand = ""
+    for row in reader:
+        brand_cell = (row.get(col_brand) or "").strip()
+        if brand_cell:
+            last_brand = brand_cell
+        parsed.append({
+            "brand": last_brand,
+            "name": (row.get(col_name) or "").strip(),
+            "phone_raw": (row.get(col_phone) or "").strip(),
+            "designation": (row.get(col_desig) or "").strip() if col_desig else "",
+            "store": (row.get(col_store) or "").strip() if col_store else "",
+            "email": (row.get(col_email) or "").strip() if col_email else "",
+        })
+
+    imported, skipped_existing, invalid = [], [], []
+    seq_base = await _db.retail_staff.count_documents({})
+
+    # Pre-load existing phones to avoid N round-trips
+    existing_phones = set()
+    async for s in _db.retail_staff.find({}, {"_id": 0, "phone": 1}):
+        if s.get("phone"):
+            existing_phones.add(s["phone"])
+
+    to_insert = []
+    for idx, r in enumerate(parsed):
+        digits = re.sub(r"\D", "", r["phone_raw"])
+        phone = digits[-10:] if len(digits) >= 10 else ""
+        if not r["name"]:
+            invalid.append({"row": idx + 2, "reason": "missing staff name",
+                            "brand": r["brand"], "phone_raw": r["phone_raw"]})
+            continue
+        if not r["brand"]:
+            invalid.append({"row": idx + 2, "reason": "missing brand", "name": r["name"]})
+            continue
+        if not phone or len(phone) != 10:
+            invalid.append({"row": idx + 2, "reason": "invalid phone",
+                            "name": r["name"], "phone_raw": r["phone_raw"]})
+            continue
+        if phone in existing_phones:
+            skipped_existing.append({"row": idx + 2, "phone": phone, "name": r["name"], "brand": r["brand"]})
+            continue
+
+        seq_base += 1
+        staff_id = str(uuid.uuid4())
+        doc = {
+            "id": staff_id,
+            "staff_code": f"HL-{seq_base:04d}",
+            "name": r["name"],
+            "phone": phone,
+            "brand_name": r["brand"],
+            "store_location": r["store"] or "",
+            "designation": r["designation"] or "",
+            "email": r["email"] or "",
+            "is_active": True,
+            "qr_token": f"HL{staff_id[:12].replace('-','').upper()}",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "import_source": "csv_bulk",
+        }
+        existing_phones.add(phone)   # prevent dupes within the same file
+        to_insert.append(doc)
+        imported.append({"phone": phone, "name": r["name"], "brand": r["brand"], "staff_code": doc["staff_code"]})
+
+    if not dry_run and to_insert:
+        await _db.retail_staff.insert_many([dict(d) for d in to_insert])
+
+    return {
+        "success": True,
+        "dry_run": dry_run,
+        "summary": {
+            "total_rows": len(parsed),
+            "imported": len(imported),
+            "skipped_existing": len(skipped_existing),
+            "invalid": len(invalid),
+            "brands_imported": len({r["brand"] for r in imported}),
+        },
+        "imported_preview": imported[:20],
+        "skipped_preview": skipped_existing[:20],
+        "invalid_preview": invalid[:20],
+    }
 
 
 @staff_admin_router.patch("/{staff_id}")
