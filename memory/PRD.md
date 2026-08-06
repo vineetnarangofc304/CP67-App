@@ -388,14 +388,34 @@ Addressed 4 pending items from the user's Google Doc:
 - Brand/Store Dashboard (separate brand login)
 - Advanced Analytics (RFM, CLV, AI Concierge)
 
-## Phase 11 (Aug 5, 2026) — Bulk Reprocess Recovery for Failed WhatsApp Bills
-Fixed the P0 issue where Bulk Reprocess was silently skipping bills marked "WhatsApp bill processing failed":
+## Phase 11 (Aug 5-6, 2026) — Bulk Reprocess Recovery + Bill Image + Ops Alerts (Points 19/24/25)
+Fixed the three critical items from the client's Google Doc (Points 19, 24, 25):
+
+**Point 19 ✅ (Aug 5)** — Bulk Reprocess was silently skipping bills marked "WhatsApp bill processing failed":
 - Auto-force re-OCR when `rejection_reason` starts with "WhatsApp bill processing failed" or "OCR could not extract" — no more silent skips due to caller flag.
-- New `no_image` action bucket cleanly separates "image unavailable" from "OCR failed on image" (with the specific HTTP/download error surfaced in `rejection_reason`).
-- Synthetic bill_no auto-generation (`WA-{FIRST8}`) when OCR extracts a valid amount but no bill number — lets Fundle receive a valid earn_points payload instead of endlessly bouncing back.
+- New `no_image` action bucket cleanly separates "image unavailable" from "OCR failed on image" (with specific HTTP/download error in `rejection_reason`).
+- Synthetic bill_no auto-generation (`WA-{FIRST8}`) when OCR extracts a valid amount but no bill number — lets Fundle receive a valid earn_points payload.
 - Phone-based user fallback (`91XXX` / 10-digit) when `user_id` doesn't match — rescues legacy stubs from user_id drift.
-- Admin Bills UI updated: Bulk Reprocess progress/result grids now show 6 counters (Approved / Rejected / Manual / Pending / No image / Skipped).
-- Backend regression suite added at `/app/backend/tests/test_bulk_reprocess_whatsapp_failed.py`. Testing agent confirmed 100% pass across all 6 scenarios.
+- Admin Bills UI: Bulk Reprocess grids now show 6 counters (Approved / Rejected / Manual / Pending / No image / Skipped).
+- Regression suite at `/app/backend/tests/test_bulk_reprocess_whatsapp_failed.py`. Testing agent: 100% pass.
+
+**Point 24 ✅ (Aug 6)** — Bill image was not opening in admin panel:
+- `GET /api/bills/{bill_id}/image` now normalizes stored `image_url` into a browser-renderable data: URL:
+  - `data:image/...` returned as-is
+  - `base64:<b64>` wrapped as `data:image/jpeg;base64,<b64>`
+  - `https://` (Karix) fetched server-side with Bearer auth and returned as `data:jpeg;base64,...` (also persisted to skip future round-trips)
+- Response includes `fetch_error` when download fails so the admin sees exactly why (e.g. "HTTP 404", "Name or service not known").
+- Bills.jsx: image wrapped in `<a target=_blank>` so admin can click-to-open; graceful error placeholder when image can't be loaded.
+
+**Point 25 ✅ (Aug 6)** — Mall-ops alert whenever a bill goes pending/rejected:
+- New env `ADMIN_ALERT_PHONES` (default: `9766692497`) + DB override via `db.settings`.
+- Admin API: `GET/PUT /api/admin/alerts/config` and `POST /api/admin/alerts/test` for CRUD + test-send.
+- Alert dedup via `admin_alerts_sent.<status>` field on bill doc — retries never spam.
+- Wired inline alerts on: (a) admin reject via `POST /api/bills/{id}/process`, (b) WhatsApp stub creation (Point 19 fallback), (c) reprocess age-rule rejection.
+- Safety-net background scanner runs every 60s to catch any transition path not wired inline.
+- Startup backfill: marks all pre-existing bills as `admin_alerts_sent.backfill=<iso>` so the scanner never floods ops with historical bills.
+- Bills.jsx: new "Alert Phones" button opens a dialog with number editor + test-send button.
+- Regression suite at `/app/backend/tests/test_point24_25_bill_image_and_alerts.py`. Testing agent: 12/12 pass.
 
 ## Key API Endpoints
 - POST /api/whatsapp/webhook - Karix WhatsApp entry point (handles SRC_PARKING)
