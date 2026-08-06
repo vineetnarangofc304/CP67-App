@@ -33,7 +33,8 @@ import {
   Image as ImageIcon,
   AlertCircleIcon,
   Edit,
-  Send
+  Send,
+  Bell
 } from 'lucide-react';
 
 const Bills = () => {
@@ -76,6 +77,59 @@ const Bills = () => {
   const [bulkDryRun, setBulkDryRun] = useState(null);   // { candidates, bills } or null
   const [bulkResult, setBulkResult] = useState(null);    // { summary, results, total_points_credited }
   const [bulkProgress, setBulkProgress] = useState(null); // { processed, total, summary } during async job
+
+  // Point 25: Admin alert config state
+  const [alertsOpen, setAlertsOpen] = useState(false);
+  const [alertPhones, setAlertPhones] = useState('');
+  const [alertBusy, setAlertBusy] = useState(false);
+
+  const openAlertsDialog = async () => {
+    setAlertsOpen(true);
+    try {
+      const res = await fetch(`${API_URL}/admin/alerts/config`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setAlertPhones((d.phones || []).join(', '));
+      }
+    } catch { /* keep field empty on error */ }
+  };
+
+  const saveAlertPhones = async () => {
+    setAlertBusy(true);
+    try {
+      const phones = alertPhones.split(',').map(p => p.trim()).filter(Boolean);
+      const res = await fetch(`${API_URL}/admin/alerts/config`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phones })
+      });
+      if (res.ok) {
+        toast.success(`Saved ${phones.length} alert phone(s)`);
+      } else {
+        toast.error('Failed to save alert phones');
+      }
+    } catch { toast.error('Network error saving alert phones'); }
+    setAlertBusy(false);
+  };
+
+  const sendTestAlert = async () => {
+    setAlertBusy(true);
+    try {
+      const res = await fetch(`${API_URL}/admin/alerts/test`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const d = await res.json();
+        toast.success(`Test alert sent to ${(d.phones || []).join(', ')}`);
+      } else {
+        toast.error('Failed to send test alert');
+      }
+    } catch { toast.error('Network error sending test'); }
+    setAlertBusy(false);
+  };
 
   useEffect(() => {
     fetchBills();
@@ -127,16 +181,23 @@ const Bills = () => {
     setSendWhatsapp(true);
     setShowReviewDialog(true);
     // Lazy-load the bill image so the list endpoint stays cheap.
-    if (!bill.image_url && bill.id) {
+    // Point 24: even when bill.image_url is present in the list row, if it's
+    // a raw Karix HTTP URL or a `base64:` prefix, the <img> tag won't render
+    // it. Re-fetch through the normalized endpoint which server-side proxies
+    // the Karix media with Bearer auth and returns a data: URL.
+    const needsNormalize = !bill.image_url
+      || (typeof bill.image_url === 'string' &&
+          (bill.image_url.startsWith('base64:') || bill.image_url.startsWith('http')));
+    if (needsNormalize && bill.id) {
       try {
         const res = await fetch(`${API_URL}/bills/${bill.id}/image`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
           const d = await res.json();
-          if (d.image_url) {
-            setSelectedBill(prev => prev && prev.id === bill.id ? { ...prev, image_url: d.image_url } : prev);
-          }
+          setSelectedBill(prev => prev && prev.id === bill.id
+            ? { ...prev, image_url: d.image_url || null, image_fetch_error: d.fetch_error || null }
+            : prev);
         }
       } catch { /* ignore — bill detail still shows even without the image */ }
     }
@@ -723,6 +784,16 @@ const Bills = () => {
             <Button
               size="sm"
               variant="outline"
+              className="gap-2 border-amber-300 text-amber-700 hover:bg-amber-50"
+              onClick={openAlertsDialog}
+              data-testid="open-alert-config-btn"
+            >
+              <Bell className="h-4 w-4" />
+              Alert Phones
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               className="gap-2 border-blue-300 text-blue-700 hover:bg-blue-50"
               onClick={() => { setBulkOpen(true); setBulkDryRun(null); setBulkResult(null); }}
               data-testid="open-bulk-reprocess-btn"
@@ -949,14 +1020,22 @@ const Bills = () => {
               {/* Bill Image */}
               <div className="bg-slate-50 rounded-lg p-4">
                 {selectedBill.image_url ? (
-                  <img 
-                    src={selectedBill.image_url} 
-                    alt="Bill" 
-                    className="w-full max-h-[400px] object-contain rounded-lg"
-                  />
+                  <a href={selectedBill.image_url} target="_blank" rel="noopener noreferrer"
+                     data-testid="bill-image-open">
+                    <img
+                      src={selectedBill.image_url}
+                      alt="Bill"
+                      className="w-full max-h-[400px] object-contain rounded-lg cursor-zoom-in hover:opacity-90 transition"
+                    />
+                  </a>
                 ) : (
-                  <div className="h-[300px] flex items-center justify-center text-slate-400">
+                  <div className="h-[300px] flex flex-col items-center justify-center text-slate-400 gap-2" data-testid="bill-image-empty">
                     <ImageIcon className="h-16 w-16" />
+                    <p className="text-xs text-slate-500 text-center px-4">
+                      {selectedBill.image_fetch_error
+                        ? `Image cannot be opened (${selectedBill.image_fetch_error}). The WhatsApp media link may have expired.`
+                        : 'No image available for this bill.'}
+                    </p>
                   </div>
                 )}
               </div>
@@ -1324,6 +1403,54 @@ const Bills = () => {
             >
               {bulkRunning ? <div className="animate-spin h-4 w-4 border-b-2 border-white rounded-full" /> : <RefreshCw className="h-4 w-4" />}
               Run Reprocess
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Point 25: Alert Phones Dialog */}
+      <Dialog open={alertsOpen} onOpenChange={setAlertsOpen}>
+        <DialogContent className="sm:max-w-lg" data-testid="alert-config-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-['Manrope'] flex items-center gap-2">
+              <Bell className="h-5 w-5 text-amber-600" />
+              Bill Alert Phone Numbers
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-slate-600">
+              Whenever a bill enters <strong>Pending Review</strong>, <strong>Manual Review</strong> or is <strong>Rejected</strong>,
+              a WhatsApp alert will be sent to the numbers below. Enter one or more numbers separated by commas
+              (10-digit or country-code-prefixed).
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="alert-phones-input" className="text-sm font-medium">Alert Phone Numbers</Label>
+              <Input
+                id="alert-phones-input"
+                value={alertPhones}
+                onChange={(e) => setAlertPhones(e.target.value)}
+                placeholder="9766692497, 9876543210"
+                data-testid="alert-phones-input"
+              />
+              <p className="text-xs text-slate-500">Example: 9766692497 or 919766692497</p>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={sendTestAlert}
+              disabled={alertBusy}
+              data-testid="send-test-alert-btn"
+            >
+              <Send className="h-4 w-4 mr-1" />
+              Send Test Alert
+            </Button>
+            <Button
+              onClick={saveAlertPhones}
+              disabled={alertBusy}
+              data-testid="save-alert-phones-btn"
+            >
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>

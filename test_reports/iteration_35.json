@@ -1,0 +1,33 @@
+{
+  "summary": "Backend-only validation of Point 24 (GET /api/bills/{bill_id}/image normalization) and Point 25 (admin alert config CRUD + test-send + reject-triggered alert dedup + backfill invariant). Wrote pytest at /app/backend/tests/test_point24_25_bill_image_and_alerts.py with 12 tests covering all listed scenarios. All 12 passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_point24_25_bill_image_and_alerts.py",
+    "/app/test_reports/pytest/point24_25.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 8506 lines — long overdue for modularisation (bills, admin_alerts, wa_helpers, etc.).",
+    "get_bill_image persists the fetched base64 back into image_url which grows the bills doc unbounded; consider a separate images collection or GridFS to keep bill docs small.",
+    "_bill_alert_scanner_loop has no shutdown handling; on hot-reload the previous task may linger — wrap with try/except CancelledError and use app.state.",
+    "send_admin_bill_alert catches all exceptions but the underlying send_whatsapp_text call is not awaited via asyncio.gather → serial send to multiple numbers; low priority (2 numbers max in practice)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_point24_25_bill_image_and_alerts.py"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "n/a - not tested per request"},
+  "test_credentials": "admin / CP67Admin@2025 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Inserted TEST- prefixed bills for image-normalization + reject-alert coverage; all cleaned up via module-scoped fixture teardown.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Point 24 endpoint verified for data:, base64:, https:// broken URL, 404 and 401 cases. Point 25 verified: GET returns env default ['9766692497'] with default_from_env populated; PUT roundtrip with 2 numbers persists to db.settings.admin_alert_phones and GET returns them; POST /api/admin/alerts/test returns {success:true, phones:[...]} even though Karix send is fire-and-forget in preview; startup backfill leaves 0 bills without admin_alerts_sent; process_bill with action=reject sets admin_alerts_sent.rejected via background_task within ~1-3s. Note: /api/bills/{bill_id}/process expects bill_id in the JSON body (not just the path).",
+  "rca of the issue": "N/A — all listed scenarios pass on first properly-authored test run."
+}

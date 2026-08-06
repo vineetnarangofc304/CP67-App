@@ -2813,11 +2813,60 @@ async def get_pending_bills(payload: dict = Depends(verify_jwt_token)):
 @api_router.get("/bills/{bill_id}/image")
 async def get_bill_image(bill_id: str, payload: dict = Depends(verify_jwt_token)):
     """Return just the inline base64 image for a single bill (loaded on demand
-    by the admin UI). Keeps list endpoints cheap."""
+    by the admin UI). Keeps list endpoints cheap.
+
+    Point 24: Normalize the image_url so the browser can always render it —
+      • data:image/...  → returned as-is
+      • base64:<b64>    → wrapped as data:image/jpeg;base64,<b64>
+      • https://... (Karix)  → fetched server-side with Karix Bearer auth and
+        returned as data:image/jpeg;base64,... so the admin browser doesn't
+        hit 401/403 loading a signed WhatsApp media URL.
+    """
     b = await db.bills.find_one({"id": bill_id}, {"_id": 0, "image_url": 1, "image_hash": 1})
     if not b:
         raise HTTPException(status_code=404, detail="Bill not found")
-    return {"image_url": b.get("image_url"), "image_hash": b.get("image_hash")}
+
+    raw = b.get("image_url") or ""
+    normalized = raw
+    fetch_error: Optional[str] = None
+
+    if isinstance(raw, str) and raw.startswith("base64:"):
+        normalized = f"data:image/jpeg;base64,{raw[7:]}"
+    elif isinstance(raw, str) and raw.startswith("http"):
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as cx:
+                headers = {}
+                if KARIX_API_KEY:
+                    headers = {
+                        "Authentication": f"Bearer {KARIX_API_KEY}",
+                        "Authorization": f"Bearer {KARIX_API_KEY}",
+                    }
+                r = await cx.get(raw, headers=headers)
+                if r.status_code != 200 and headers:
+                    # Fallback without auth (some CDN URLs work anonymously)
+                    r = await cx.get(raw)
+                if r.status_code == 200 and r.content:
+                    ctype = r.headers.get("content-type", "image/jpeg").split(";")[0].strip() or "image/jpeg"
+                    b64 = base64.b64encode(r.content).decode()
+                    normalized = f"data:{ctype};base64,{b64}"
+                    # Persist so the admin doesn't wait on Karix again next time
+                    # and the image survives even if the signed URL expires.
+                    try:
+                        await db.bills.update_one({"id": bill_id}, {"$set": {"image_url": normalized}})
+                    except Exception:
+                        pass
+                else:
+                    fetch_error = f"HTTP {r.status_code}"
+                    normalized = None
+        except Exception as e:
+            fetch_error = str(e)[:120]
+            normalized = None
+
+    return {
+        "image_url": normalized,
+        "image_hash": b.get("image_hash"),
+        "fetch_error": fetch_error,
+    }
 
 @api_router.get("/bills/{bill_id}")
 async def get_bill_details(bill_id: str, payload: dict = Depends(verify_jwt_token)):
@@ -3005,6 +3054,13 @@ Please ensure your next bill upload:
 Keep shopping at CP67 Mall to earn more rewards!"""
     
     await db.bills.update_one({"id": bill_id}, {"$set": update_data})
+
+    # Point 25: alert mall-ops on rejection so no rejected bill sits unnoticed
+    if request.action == "reject":
+        background_tasks.add_task(
+            maybe_alert_admin, bill_id, "rejected",
+            update_data.get("rejection_reason") or request.rejection_reason or ""
+        )
 
     # Staff Incentive Sync — approve/reject affects any attached bill_upload incentive
     background_tasks.add_task(_sync_staff_incentive_for_bill, bill_id, update_data.get("status", ""), phone or "")
@@ -3558,6 +3614,9 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
                     "rejection_reason": f"Bill is {days_old} days old (limit: 15 days)"
                 })
                 await db.bills.update_one({"id": bill_id}, {"$set": update_payload})
+                # Point 25: alert mall-ops when reprocess rejects a bill
+                asyncio.create_task(maybe_alert_admin(bill_id, "rejected",
+                                                     f"Bill is {days_old} days old (limit: 15 days)"))
                 return {"bill_id": bill_id, "action": "rejected",
                         "status": "rejected", "points": 0,
                         "error": f"Bill {days_old} days old"}
@@ -3902,6 +3961,70 @@ async def bulk_reprocess_status(job_id: str, payload: dict = Depends(verify_jwt_
     return job
 
 
+# ---------------- Point 25: Admin alert config ----------------
+class AdminAlertPhonesUpdate(BaseModel):
+    phones: List[str]
+
+
+@api_router.get("/admin/alerts/config")
+async def get_admin_alert_config(payload: dict = Depends(verify_jwt_token)):
+    """Return the mall-ops phone numbers that receive bill-status alerts."""
+    doc = await db.settings.find_one({"key": "admin_alert_phones"}, {"_id": 0})
+    phones = (doc or {}).get("phones") if doc else None
+    if not phones:
+        phones = ADMIN_ALERT_PHONES  # fall back to env default
+    return {"phones": phones, "default_from_env": ADMIN_ALERT_PHONES}
+
+
+@api_router.put("/admin/alerts/config")
+async def update_admin_alert_config(body: AdminAlertPhonesUpdate,
+                                     payload: dict = Depends(verify_jwt_token)):
+    """Set the mall-ops phone numbers. Overrides ADMIN_ALERT_PHONES env at runtime."""
+    global ADMIN_ALERT_PHONES
+    phones = [p.strip() for p in (body.phones or []) if p and p.strip()]
+    await db.settings.update_one(
+        {"key": "admin_alert_phones"},
+        {"$set": {"key": "admin_alert_phones", "phones": phones,
+                  "updated_at": datetime.now(timezone.utc).isoformat(),
+                  "updated_by": payload.get("username")}},
+        upsert=True
+    )
+    ADMIN_ALERT_PHONES = phones
+    logger.info(f"Admin alert phones updated by {payload.get('username')}: {phones}")
+    return {"phones": phones, "success": True}
+
+
+@api_router.post("/admin/alerts/test")
+async def send_test_admin_alert(payload: dict = Depends(verify_jwt_token)):
+    """Fire a test alert to the currently-configured phones so admin can verify
+    Karix delivery without waiting for a real bill event."""
+    fake_bill = {
+        "id": "TEST-" + str(uuid.uuid4())[:8],
+        "user_phone": "919999999999",
+        "store_name": "Test Store",
+        "amount": 999,
+        "bill_no": "TEST-123",
+        "rejection_reason": "This is a TEST alert triggered from admin panel"
+    }
+    await send_admin_bill_alert("manual_review", fake_bill, "Manual test from admin panel")
+    return {"success": True, "phones": ADMIN_ALERT_PHONES}
+
+
+@app.on_event("startup")
+async def _load_admin_alert_phones_from_db():
+    """On startup, restore admin_alert_phones override from db.settings if set."""
+    try:
+        doc = await db.settings.find_one({"key": "admin_alert_phones"}, {"_id": 0})
+        if doc and isinstance(doc.get("phones"), list) and doc["phones"]:
+            global ADMIN_ALERT_PHONES
+            ADMIN_ALERT_PHONES = [str(p).strip() for p in doc["phones"] if str(p).strip()]
+            logger.info(f"Loaded admin_alert_phones from DB: {ADMIN_ALERT_PHONES}")
+    except Exception as e:
+        logger.warning(f"admin_alert_phones load skipped: {e}")
+
+
+
+
 @api_router.get("/admin/bills/{bill_id}/force-credit-preview")
 async def force_credit_preview(bill_id: str, payload: dict = Depends(verify_jwt_token)):
     """Returns the auto-calculated force-credit points for this bill (no mutation).
@@ -4132,6 +4255,84 @@ KARIX_SMS_SENDER_ID = os.environ.get('KARIX_SMS_SENDER_ID', 'CP67')
 KARIX_SMS_DLT_ENTITY_ID = os.environ.get('KARIX_SMS_DLT_ENTITY_ID', '')
 KARIX_SMS_DLT_TEMPLATE_ID = os.environ.get('KARIX_SMS_DLT_TEMPLATE_ID', '')
 OTP_DEV_BYPASS = os.environ.get('OTP_DEV_BYPASS', '')
+
+# Point 25: Admin alert channel — WhatsApp text messages are pushed here
+# whenever a bill enters pending / manual_review / rejected state. Comma-
+# separated list of E.164 or 10/12-digit Indian numbers (both formats accepted;
+# normalised at send time). Falls back to the mall ops number below.
+ADMIN_ALERT_PHONES = [p.strip() for p in os.environ.get('ADMIN_ALERT_PHONES', '9766692497').split(',') if p.strip()]
+
+
+def _normalize_alert_phone(p: str) -> str:
+    p = "".join(ch for ch in (p or "") if ch.isdigit())
+    if len(p) == 10:
+        return f"91{p}"
+    return p
+
+
+async def send_admin_bill_alert(event: str, bill: dict, reason: Optional[str] = None) -> None:
+    """Fire-and-forget: notify configured mall-ops phones on bill state change.
+
+    event: one of 'pending', 'manual_review', 'rejected'
+    """
+    if not ADMIN_ALERT_PHONES:
+        return
+    try:
+        pretty_event = {
+            "pending": "PENDING REVIEW",
+            "manual_review": "MANUAL REVIEW",
+            "rejected": "REJECTED",
+            "pending_review": "PENDING REVIEW",
+        }.get(event, (event or "").upper() or "UPDATED")
+        user_phone = bill.get("user_phone") or "-"
+        store = bill.get("store_name") or "Unknown"
+        amount = bill.get("amount")
+        bill_no = bill.get("bill_no") or "-"
+        bill_id = bill.get("id") or "-"
+        rej = (reason or bill.get("rejection_reason") or "").strip()
+        amount_str = f"\u20b9{amount:.0f}" if isinstance(amount, (int, float)) and amount > 0 else "-"
+        msg = (
+            f"CP67 Bill Alert - {pretty_event}\n\n"
+            f"Customer: {user_phone}\n"
+            f"Store: {store}\n"
+            f"Amount: {amount_str}\n"
+            f"Bill No: {bill_no}\n"
+            f"Bill ID: {bill_id[:8]}\n"
+        )
+        if rej:
+            msg += f"Reason: {rej[:180]}\n"
+        for admin_phone in ADMIN_ALERT_PHONES:
+            to = _normalize_alert_phone(admin_phone)
+            if not to:
+                continue
+            try:
+                await send_whatsapp_text(to, msg)
+            except Exception as e:
+                logger.warning(f"Admin alert send failed to {to}: {e}")
+    except Exception as e:
+        logger.warning(f"send_admin_bill_alert failed: {e}")
+
+
+async def maybe_alert_admin(bill_id: str, status: str, reason: Optional[str] = None) -> None:
+    """Alert admin about a bill state change, deduped per (bill_id, status)
+    so retries/re-inserts don't spam the ops number. Safe to call in any path.
+    """
+    if not bill_id or status not in ("pending", "pending_review", "manual_review", "rejected"):
+        return
+    try:
+        b = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+        if not b:
+            return
+        already = (b.get("admin_alerts_sent") or {}).get(status)
+        if already:
+            return
+        await send_admin_bill_alert(status, b, reason)
+        await db.bills.update_one(
+            {"id": bill_id},
+            {"$set": {f"admin_alerts_sent.{status}": datetime.now(timezone.utc).isoformat()}}
+        )
+    except Exception as e:
+        logger.warning(f"maybe_alert_admin failed for {bill_id}/{status}: {e}")
 
 
 async def send_otp_sms(phone_10: str, otp: str) -> dict:
@@ -5655,6 +5856,9 @@ Happy Shopping!"""
                     rejection_reason=f"WhatsApp bill processing failed: {str(e)[:200]}",
                 )
                 await db.bills.insert_one(stub_bill.model_dump())
+                # Point 25: alert mall-ops so no failed WhatsApp bill sits unnoticed
+                asyncio.create_task(maybe_alert_admin(stub_bill.id, "manual_review",
+                                                     f"WhatsApp bill processing failed: {str(e)[:120]}"))
         except Exception as inner:
             logger.error(f"Failed to save fallback bill stub for {phone}: {inner}")
 
@@ -8094,8 +8298,51 @@ async def startup_seed():
     await ensure_db_indexes()
     # Point 16: Backfill bill_no_normalized on legacy bills (idempotent, one-off per doc)
     asyncio.create_task(_backfill_bill_no_normalized())
+    # Point 25: One-time backfill so the alert scanner doesn't flood ops with
+    # historical bills; only future bills entering an alert-worthy status
+    # will notify. Then start the scanner as a safety net for any creation
+    # path we didn't wire up explicitly.
+    asyncio.create_task(_backfill_admin_alerts_sent())
+    asyncio.create_task(_bill_alert_scanner_loop())
     # Point 13: Schedule nightly Fundle registration sync at 1 AM IST
     _start_scheduler()
+
+
+async def _backfill_admin_alerts_sent():
+    """One-off: mark all pre-existing bills as already-alerted so the scanner
+    only fires for bills that arrive after this deployment. Idempotent."""
+    try:
+        now = datetime.now(timezone.utc).isoformat()
+        res = await db.bills.update_many(
+            {"admin_alerts_sent": {"$exists": False}},
+            {"$set": {"admin_alerts_sent": {"backfill": now}}}
+        )
+        if getattr(res, "modified_count", 0):
+            logger.info(f"admin_alerts_sent backfilled on {res.modified_count} legacy bills")
+    except Exception as e:
+        logger.warning(f"admin_alerts_sent backfill skipped: {e}")
+
+
+async def _bill_alert_scanner_loop():
+    """Safety-net loop: every 60s finds bills in manual_review/pending_review/
+    rejected whose current status hasn't been alerted yet, and fires the alert
+    via maybe_alert_admin (which dedupes)."""
+    ALERT_STATUSES = ("manual_review", "pending_review", "rejected")
+    while True:
+        try:
+            for status in ALERT_STATUSES:
+                cursor = db.bills.find(
+                    {"status": status, f"admin_alerts_sent.{status}": {"$exists": False}},
+                    {"_id": 0, "id": 1, "rejection_reason": 1}
+                ).limit(50)
+                async for b in cursor:
+                    try:
+                        await maybe_alert_admin(b["id"], status, b.get("rejection_reason"))
+                    except Exception as _e:
+                        logger.warning(f"scanner alert failed: {_e}")
+        except Exception as e:
+            logger.warning(f"bill alert scanner error: {e}")
+        await asyncio.sleep(60)
 
 
 async def _backfill_bill_no_normalized():
