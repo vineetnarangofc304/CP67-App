@@ -20,9 +20,12 @@ export default function StaffIncentives() {
   const [redemptions, setRedemptions] = useState([]);
   const [showQR, setShowQR] = useState(null);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: '', phone: '', brand_name: '', store_location: '' });
+  const [form, setForm] = useState({ name: '', phone: '', brand_name: '', brand_category: '', store_location: '' });
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [managers, setManagers] = useState([]);
+  const [mgrForm, setMgrForm] = useState({ name: '', phone: '', brands: '', email: '' });
+  const [creatingMgr, setCreatingMgr] = useState(false);
 
   const api = (path, opts = {}) => fetch(`${API_URL}${path}`, {
     ...opts,
@@ -31,18 +34,20 @@ export default function StaffIncentives() {
 
   const loadAll = async () => {
     try {
-      const [s, c, m, l, r] = await Promise.all([
+      const [s, c, m, l, r, mg] = await Promise.all([
         api('/admin/staff').then(x => x.json()),
         api('/admin/staff/config/current').then(x => x.json()),
         api('/admin/staff/metrics/overview').then(x => x.json()),
         api('/admin/staff/leaderboard?period=monthly').then(x => x.json()),
         api('/admin/staff/redemptions').then(x => x.json()),
+        api('/admin/staff/retailer-managers').then(x => x.json()),
       ]);
       setStaffList(s.staff || []);
       setConfig(c.config || null);
       setMetrics(m);
       setLeaderboard(l.leaderboard || []);
       setRedemptions(r.redemptions || []);
+      setManagers(mg.managers || []);
     } catch (e) {
       toast.error('Failed to load staff data');
     }
@@ -60,7 +65,7 @@ export default function StaffIncentives() {
     if (r.ok) {
       toast.success(`Staff added: ${d.staff.staff_code}`);
       setCreating(false);
-      setForm({ name: '', phone: '', brand_name: '', store_location: '' });
+      setForm({ name: '', phone: '', brand_name: '', brand_category: '', store_location: '' });
       loadAll();
     } else {
       toast.error(d.detail || 'Failed to add staff');
@@ -132,6 +137,58 @@ export default function StaffIncentives() {
     }
   };
 
+  const downloadTemplate = async () => {
+    try {
+      const r = await fetch(`${API_URL}/admin/staff/bulk-import/template.csv`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) { toast.error('Template download failed'); return; }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'staff-upload-template.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Template downloaded');
+    } catch (e) {
+      toast.error('Download failed: ' + e.message);
+    }
+  };
+
+  // ---- Point 5: retailer manager admin ops ----
+  const submitCreateMgr = async () => {
+    const brands = mgrForm.brands.split(',').map(s => s.trim()).filter(Boolean);
+    if (!mgrForm.name || !mgrForm.phone || brands.length === 0) {
+      toast.error('Name, phone, and at least one brand are required');
+      return;
+    }
+    const body = { name: mgrForm.name, phone: mgrForm.phone, brands, email: mgrForm.email || undefined };
+    const r = await api('/admin/staff/retailer-managers', { method: 'POST', body: JSON.stringify(body) });
+    const d = await r.json();
+    if (r.ok) {
+      toast.success('Retailer manager added');
+      setCreatingMgr(false);
+      setMgrForm({ name: '', phone: '', brands: '', email: '' });
+      loadAll();
+    } else {
+      toast.error(d.detail || 'Failed to add manager');
+    }
+  };
+
+  const toggleMgrActive = async (m) => {
+    const r = await api(`/admin/staff/retailer-managers/${m.id}`, { method: 'PATCH', body: JSON.stringify({ is_active: !m.is_active }) });
+    if (r.ok) { toast.success(!m.is_active ? 'Activated' : 'Deactivated'); loadAll(); }
+    else { toast.error('Update failed'); }
+  };
+
+  const deleteMgr = async (m) => {
+    if (!window.confirm(`Remove retailer login for ${m.name}?`)) return;
+    const r = await api(`/admin/staff/retailer-managers/${m.id}`, { method: 'DELETE' });
+    if (r.ok) { toast.success('Removed'); loadAll(); }
+    else { toast.error('Delete failed'); }
+  };
+
   return (
     <DashboardLayout title="Staff Incentive Program">
       <div className="space-y-6" data-testid="staff-incentives-page">
@@ -148,6 +205,7 @@ export default function StaffIncentives() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
             <TabsTrigger value="staff" data-testid="tab-staff"><Users size={16} className="mr-1" /> Staff</TabsTrigger>
+            <TabsTrigger value="managers" data-testid="tab-managers"><Users size={16} className="mr-1" /> Retailer Logins</TabsTrigger>
             <TabsTrigger value="leaderboard" data-testid="tab-leaderboard"><Trophy size={16} className="mr-1" /> Leaderboard</TabsTrigger>
             <TabsTrigger value="redemptions" data-testid="tab-redemptions"><Wallet size={16} className="mr-1" /> Redemptions</TabsTrigger>
             <TabsTrigger value="config" data-testid="tab-config"><Settings size={16} className="mr-1" /> Slabs</TabsTrigger>
@@ -160,6 +218,9 @@ export default function StaffIncentives() {
                 <CardTitle>Retail Staff ({staffList.length})</CardTitle>
                 <div className="flex gap-2 items-center">
                   <QRCardsPDFButton token={token} API_URL={API_URL} brands={[...new Set(staffList.map(s => s.brand_name).filter(Boolean))].sort()} />
+                  <Button variant="outline" size="sm" onClick={downloadTemplate} data-testid="download-template-btn">
+                    <FileText size={14} className="mr-1" /> Template
+                  </Button>
                   <label className="cursor-pointer" data-testid="bulk-import-label">
                     <input
                       type="file"
@@ -192,6 +253,7 @@ export default function StaffIncentives() {
                         <div><Label>Name *</Label><Input data-testid="staff-form-name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
                         <div><Label>Phone (10 digits) *</Label><Input data-testid="staff-form-phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
                         <div><Label>Brand Name *</Label><Input data-testid="staff-form-brand" value={form.brand_name} onChange={e => setForm({ ...form, brand_name: e.target.value })} /></div>
+                        <div><Label>Brand Category</Label><Input data-testid="staff-form-brand-category" placeholder="e.g. Fashion, Food, Electronics" value={form.brand_category} onChange={e => setForm({ ...form, brand_category: e.target.value })} /></div>
                         <div><Label>Store Location</Label><Input data-testid="staff-form-store" value={form.store_location} onChange={e => setForm({ ...form, store_location: e.target.value })} /></div>
                       </div>
                       <DialogFooter>
@@ -313,6 +375,61 @@ export default function StaffIncentives() {
             </Card>
           </TabsContent>
 
+          {/* RETAILER MANAGERS (Point 5) */}
+          <TabsContent value="managers">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Retailer Logins ({managers.length})</CardTitle>
+                <Dialog open={creatingMgr} onOpenChange={setCreatingMgr}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" data-testid="add-manager-btn"><Plus size={16} className="mr-1" /> Add Retailer Login</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader><DialogTitle>Whitelist Retailer Manager</DialogTitle></DialogHeader>
+                    <div className="space-y-3">
+                      <div><Label>Name *</Label><Input data-testid="mgr-form-name" value={mgrForm.name} onChange={e => setMgrForm({ ...mgrForm, name: e.target.value })} /></div>
+                      <div><Label>Phone (10 digits) *</Label><Input data-testid="mgr-form-phone" value={mgrForm.phone} onChange={e => setMgrForm({ ...mgrForm, phone: e.target.value })} /></div>
+                      <div><Label>Brands (comma-separated) *</Label><Input data-testid="mgr-form-brands" placeholder="Zara, H&M" value={mgrForm.brands} onChange={e => setMgrForm({ ...mgrForm, brands: e.target.value })} /></div>
+                      <div><Label>Email</Label><Input data-testid="mgr-form-email" value={mgrForm.email} onChange={e => setMgrForm({ ...mgrForm, email: e.target.value })} /></div>
+                    </div>
+                    <DialogFooter>
+                      <Button onClick={submitCreateMgr} data-testid="mgr-form-submit">Save</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xs text-slate-500 mb-3">
+                  Whitelisted retailer managers can log in at <span className="font-mono">/staff-app/retailer</span> using OTP to view their brand&apos;s aggregate incentives (available &amp; redeemed) &mdash; no consumer PII is shown.
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left border-b">
+                      <tr><th className="py-2 pr-4">Name</th><th className="pr-4">Phone</th><th className="pr-4">Brands</th><th className="pr-4">Status</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody data-testid="managers-tbody">
+                      {managers.map(m => (
+                        <tr key={m.id} className="border-b hover:bg-slate-50">
+                          <td className="py-2 pr-4 font-medium">{m.name}</td>
+                          <td className="pr-4 font-mono">{m.phone}</td>
+                          <td className="pr-4">{(m.brands || []).join(', ')}</td>
+                          <td className="pr-4"><span className={m.is_active ? 'text-emerald-600' : 'text-slate-400'}>{m.is_active ? 'Active' : 'Inactive'}</span></td>
+                          <td className="py-2 flex gap-2">
+                            <Button size="sm" variant="ghost" onClick={() => toggleMgrActive(m)} data-testid={`mgr-toggle-${m.id}`}>{m.is_active ? 'Deactivate' : 'Activate'}</Button>
+                            <Button size="sm" variant="outline" onClick={() => deleteMgr(m)} data-testid={`mgr-delete-${m.id}`}>Remove</Button>
+                          </td>
+                        </tr>
+                      ))}
+                      {managers.length === 0 && (
+                        <tr><td colSpan={5} className="py-8 text-center text-slate-400">No retailer logins whitelisted yet.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           {/* CONFIG */}
           <TabsContent value="config">
             {config && (
@@ -320,7 +437,7 @@ export default function StaffIncentives() {
                 <CardHeader><CardTitle>Incentive Slabs</CardTitle></CardHeader>
                 <CardContent className="space-y-6">
                   <div>
-                    <div className="font-medium mb-2 flex items-center gap-2"><Award size={16} /> Registration Slabs</div>
+                    <div className="font-medium mb-2 flex items-center gap-2"><Award size={16} /> Default Registration Slabs</div>
                     {config.registration_slabs.map((s, i) => (
                       <div key={i} className="grid grid-cols-3 gap-2 mb-2 items-center">
                         <Input type="number" value={s.min} onChange={e => updateSlab('registration_slabs', i, 'min', e.target.value)} placeholder="Min" />
@@ -330,7 +447,7 @@ export default function StaffIncentives() {
                     ))}
                   </div>
                   <div>
-                    <div className="font-medium mb-2 flex items-center gap-2"><Award size={16} /> Bill Upload Slabs</div>
+                    <div className="font-medium mb-2 flex items-center gap-2"><Award size={16} /> Default Bill Upload Slabs</div>
                     {config.bill_upload_slabs.map((s, i) => (
                       <div key={i} className="grid grid-cols-3 gap-2 mb-2 items-center">
                         <Input type="number" value={s.min} onChange={e => updateSlab('bill_upload_slabs', i, 'min', e.target.value)} placeholder="Min" />
@@ -339,6 +456,23 @@ export default function StaffIncentives() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Point 3: Category-wise & Brand-wise overrides */}
+                  <OverrideEditor
+                    title="Category-wise Slabs"
+                    kind="category_slabs"
+                    config={config}
+                    setConfig={setConfig}
+                    placeholder="Category name (e.g. Fashion)"
+                  />
+                  <OverrideEditor
+                    title="Brand-wise Slabs"
+                    kind="brand_slabs"
+                    config={config}
+                    setConfig={setConfig}
+                    placeholder="Brand name (e.g. Zara)"
+                  />
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label>Attribution Window (minutes)</Label>
@@ -374,9 +508,98 @@ export default function StaffIncentives() {
   );
 }
 
+// Sub-component: Category / Brand-wise slab override editor
+function OverrideEditor({ title, kind, config, setConfig, placeholder }) {
+  const [newKey, setNewKey] = useState('');
+  const map = config[kind] || {};
+  const entries = Object.entries(map);
+
+  const setMap = (updater) => {
+    const next = { ...(config[kind] || {}) };
+    updater(next);
+    setConfig({ ...config, [kind]: next });
+  };
+
+  const addOverride = () => {
+    const k = newKey.trim();
+    if (!k) { toast.error('Enter a name'); return; }
+    if (map[k]) { toast.error('Already exists'); return; }
+    setMap(m => {
+      m[k] = {
+        registration_slabs: [{ min: 0, max: 999999, amount: 50 }],
+        bill_upload_slabs: [{ min: 0, max: 999999, amount: 20 }],
+      };
+    });
+    setNewKey('');
+  };
+  const removeOverride = (key) => {
+    if (!window.confirm(`Remove ${title} for "${key}"?`)) return;
+    setMap(m => { delete m[key]; });
+  };
+  const updateOverrideSlab = (key, slabKind, idx, field, value) => {
+    setMap(m => {
+      const arr = [...(m[key][slabKind] || [])];
+      arr[idx] = { ...arr[idx], [field]: Number(value) };
+      m[key] = { ...m[key], [slabKind]: arr };
+    });
+  };
+  const addSlabRow = (key, slabKind) => {
+    setMap(m => {
+      const arr = [...(m[key][slabKind] || [])];
+      arr.push({ min: 0, max: 999999, amount: 0 });
+      m[key] = { ...m[key], [slabKind]: arr };
+    });
+  };
+  const removeSlabRow = (key, slabKind, idx) => {
+    setMap(m => {
+      const arr = [...(m[key][slabKind] || [])];
+      arr.splice(idx, 1);
+      m[key] = { ...m[key], [slabKind]: arr };
+    });
+  };
+
+  return (
+    <div className="border rounded-lg p-4 bg-slate-50/40" data-testid={`override-editor-${kind}`}>
+      <div className="font-medium mb-2 flex items-center gap-2"><Award size={16} /> {title}</div>
+      <div className="text-xs text-slate-500 mb-3">
+        Override the default slabs for a specific {kind === 'category_slabs' ? 'brand category' : 'brand'}.
+        Priority: <span className="font-mono">brand → category → default</span>.
+      </div>
+      <div className="flex gap-2 mb-3">
+        <Input value={newKey} onChange={e => setNewKey(e.target.value)} placeholder={placeholder} data-testid={`override-new-key-${kind}`} />
+        <Button size="sm" onClick={addOverride} data-testid={`override-add-${kind}`}><Plus size={14} className="mr-1" /> Add</Button>
+      </div>
+      {entries.length === 0 && (
+        <div className="text-sm text-slate-400 py-3">No overrides — defaults will apply.</div>
+      )}
+      {entries.map(([key, val]) => (
+        <div key={key} className="mb-4 p-3 bg-white border rounded">
+          <div className="flex justify-between items-center mb-2">
+            <div className="font-semibold">{key}</div>
+            <Button size="sm" variant="outline" onClick={() => removeOverride(key)} data-testid={`override-remove-${kind}-${key}`}>Remove</Button>
+          </div>
+          {['registration_slabs', 'bill_upload_slabs'].map(sk => (
+            <div key={sk} className="mb-2">
+              <div className="text-xs text-slate-500 mb-1">{sk === 'registration_slabs' ? 'Registration' : 'Bill Upload'}</div>
+              {(val[sk] || []).map((s, i) => (
+                <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 mb-1 items-center">
+                  <Input type="number" value={s.min} onChange={e => updateOverrideSlab(key, sk, i, 'min', e.target.value)} placeholder="Min" />
+                  <Input type="number" value={s.max} onChange={e => updateOverrideSlab(key, sk, i, 'max', e.target.value)} placeholder="Max" />
+                  <div className="flex items-center gap-1">₹<Input type="number" value={s.amount} onChange={e => updateOverrideSlab(key, sk, i, 'amount', e.target.value)} placeholder="Amount" /></div>
+                  <Button size="sm" variant="ghost" onClick={() => removeSlabRow(key, sk, i)}>×</Button>
+                </div>
+              ))}
+              <Button size="sm" variant="outline" onClick={() => addSlabRow(key, sk)}><Plus size={12} className="mr-1" /> Add row</Button>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Sub-component: PDF QR cards download button + brand filter
-function QRCardsPDFButton({ token, API_URL, brands }) {
-  const [busy, setBusy] = useState(false);
+function QRCardsPDFButton({ token, API_URL, brands }) {  const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const [brand, setBrand] = useState('');   // '' = all
 

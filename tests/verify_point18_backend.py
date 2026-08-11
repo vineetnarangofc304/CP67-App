@@ -17,7 +17,7 @@ import httpx
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 
-PREVIEW_URL = os.environ.get("PREVIEW_URL", "https://mall-engage-preview.preview.emergentagent.com")
+PREVIEW_URL = os.environ.get("PREVIEW_URL", "https://cp67-engage-preview.preview.emergentagent.com")
 API = PREVIEW_URL.rstrip("/") + "/api"
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "CP67Admin@2025")

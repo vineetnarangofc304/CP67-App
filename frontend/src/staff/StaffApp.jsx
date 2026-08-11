@@ -7,6 +7,8 @@ import StaffDashboard from './pages/StaffDashboard';
 import StaffQR from './pages/StaffQR';
 import StaffIncentivesList from './pages/StaffIncentivesList';
 import StaffRedeem from './pages/StaffRedeem';
+import RetailerLogin from './pages/RetailerLogin';
+import RetailerDashboard from './pages/RetailerDashboard';
 import { LayoutDashboard, QrCode, Wallet, ListChecks, LogOut } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -20,6 +22,12 @@ const StaffAuthProvider = ({ children }) => {
     try { return JSON.parse(localStorage.getItem('sa_staff_profile') || 'null'); } catch { return null; }
   });
   const [loading, setLoading] = useState(!!token);
+
+  // Retailer (brand manager) session — separate from staff session
+  const [retailerToken, setRetailerToken] = useState(localStorage.getItem('sa_retailer_token'));
+  const [retailer, setRetailer] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('sa_retailer_profile') || 'null'); } catch { return null; }
+  });
 
   useEffect(() => {
     if (!token) { setLoading(false); return; }
@@ -48,8 +56,22 @@ const StaffAuthProvider = ({ children }) => {
     setToken(null); setStaff(null);
   };
 
+  const loginRetailer = (tk, mgr) => {
+    localStorage.setItem('sa_retailer_token', tk);
+    localStorage.setItem('sa_retailer_profile', JSON.stringify(mgr));
+    setRetailerToken(tk); setRetailer(mgr);
+  };
+  const logoutRetailer = () => {
+    localStorage.removeItem('sa_retailer_token');
+    localStorage.removeItem('sa_retailer_profile');
+    setRetailerToken(null); setRetailer(null);
+  };
+
   return (
-    <StaffAuthContext.Provider value={{ token, staff, login, logout, loading, API_URL }}>
+    <StaffAuthContext.Provider value={{
+      token, staff, login, logout, loading, API_URL,
+      retailerToken, retailer, loginRetailer, logoutRetailer,
+    }}>
       {children}
     </StaffAuthContext.Provider>
   );
@@ -59,6 +81,12 @@ const StaffProtected = ({ children }) => {
   const { token, loading } = useStaffAuth();
   if (loading) return <div className="staff-app-root sa-splash"><div className="sa-small">Loading…</div></div>;
   if (!token) return <Navigate to="/staff-app/login" replace />;
+  return children;
+};
+
+const RetailerProtected = ({ children }) => {
+  const { retailerToken } = useStaffAuth();
+  if (!retailerToken) return <Navigate to="/staff-app/retailer/login" replace />;
   return children;
 };
 
@@ -111,10 +139,44 @@ const StaffLayout = ({ children }) => (
   </div>
 );
 
+const RetailerTopBar = () => {
+  const { retailer, logoutRetailer } = useStaffAuth();
+  const navigate = useNavigate();
+  const doLogout = () => { logoutRetailer(); toast.success('Signed out'); navigate('/staff-app/retailer/login'); };
+  return (
+    <div className="sa-topbar">
+      <div className="sa-brand">Homeland <span>·</span> Retailer</div>
+      {retailer && (
+        <button onClick={doLogout} className="sa-btn ghost" data-testid="retailer-logout-btn" style={{ padding: '6px 10px', fontSize: 12 }}>
+          <LogOut size={14} /> {retailer.name}
+        </button>
+      )}
+    </div>
+  );
+};
+
+const RetailerLayout = ({ children }) => (
+  <div className="staff-app-root">
+    <RetailerTopBar />
+    <div className="container">{children}</div>
+    <Toaster position="top-center" theme="dark" />
+  </div>
+);
+
 export default function StaffApp() {
   return (
     <StaffAuthProvider>
       <Routes>
+        {/* Retailer manager routes (Point 5) */}
+        <Route path="/retailer/login" element={
+          <div className="staff-app-root">
+            <RetailerLogin />
+            <Toaster position="top-center" theme="dark" />
+          </div>
+        } />
+        <Route path="/retailer" element={<RetailerProtected><RetailerLayout><RetailerDashboard /></RetailerLayout></RetailerProtected>} />
+
+        {/* Staff routes */}
         <Route path="/login" element={
           <div className="staff-app-root">
             <StaffLogin />

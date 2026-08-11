@@ -70,6 +70,13 @@ DEFAULT_STAFF_CONFIG = {
         {"min": 21, "max": 50, "amount": 30},
         {"min": 51, "max": 999999, "amount": 50},
     ],
+    # Point 3: Category-wise & Brand-wise overrides.
+    # Structure:
+    #   category_slabs: { "<Category Name>": { "registration_slabs": [...], "bill_upload_slabs": [...] } }
+    #   brand_slabs:    { "<Brand Name>":    { "registration_slabs": [...], "bill_upload_slabs": [...] } }
+    # Lookup priority when awarding an incentive: brand override → category override → default.
+    "category_slabs": {},
+    "brand_slabs": {},
     "attribution_window_minutes": 15,
     "registration_validity_days": 60,
 }
@@ -82,6 +89,19 @@ async def get_staff_config() -> Dict:
         seed = dict(DEFAULT_STAFF_CONFIG)
         await _db.staff_config.insert_one(seed)
         return dict(DEFAULT_STAFF_CONFIG)
+    # Backfill new fields if config was created before category/brand slabs existed
+    changed = False
+    if "category_slabs" not in doc:
+        doc["category_slabs"] = {}
+        changed = True
+    if "brand_slabs" not in doc:
+        doc["brand_slabs"] = {}
+        changed = True
+    if changed:
+        await _db.staff_config.update_one(
+            {"id": "staff_config"},
+            {"$set": {"category_slabs": doc["category_slabs"], "brand_slabs": doc["brand_slabs"]}},
+        )
     return doc
 
 
@@ -90,6 +110,32 @@ def _amount_for_slab(count: int, slabs: List[Dict]) -> int:
         if s["min"] <= count <= s["max"]:
             return int(s["amount"])
     return int(slabs[-1]["amount"]) if slabs else 0
+
+
+async def _resolve_slabs_for_staff(cfg: Dict, staff: Dict, slab_kind: str) -> List[Dict]:
+    """Resolve which slab table to apply for a given staff member.
+
+    Priority: brand override → category override → default.
+    slab_kind: 'registration_slabs' or 'bill_upload_slabs'.
+    """
+    brand_name = (staff.get("brand_name") or "").strip()
+    # Brand-wise override
+    brand_slabs = (cfg.get("brand_slabs") or {}).get(brand_name)
+    if brand_slabs and brand_slabs.get(slab_kind):
+        return brand_slabs[slab_kind]
+    # Category-wise override — look up the brand's category
+    if brand_name:
+        brand_doc = await _db.brands.find_one(
+            {"brand_name": {"$regex": f"^{re.escape(brand_name)}$", "$options": "i"}},
+            {"_id": 0, "category": 1},
+        )
+        category = (brand_doc or {}).get("category") if brand_doc else None
+        if category:
+            cat_slabs = (cfg.get("category_slabs") or {}).get(category)
+            if cat_slabs and cat_slabs.get(slab_kind):
+                return cat_slabs[slab_kind]
+    # Fallback default
+    return cfg.get(slab_kind) or []
 
 
 # ==================== AUTH ====================
@@ -138,6 +184,7 @@ class StaffCreate(BaseModel):
     name: str
     phone: str  # 10 digits, will be normalised
     brand_name: str
+    brand_category: Optional[str] = None
     store_location: Optional[str] = None
     email: Optional[str] = None
 
@@ -145,6 +192,7 @@ class StaffCreate(BaseModel):
 class StaffUpdate(BaseModel):
     name: Optional[str] = None
     brand_name: Optional[str] = None
+    brand_category: Optional[str] = None
     store_location: Optional[str] = None
     email: Optional[str] = None
     is_active: Optional[bool] = None
@@ -178,6 +226,7 @@ async def admin_create_staff(payload: StaffCreate, auth=Depends(_verify_admin)):
         "name": payload.name.strip(),
         "phone": phone,
         "brand_name": payload.brand_name.strip(),
+        "brand_category": (payload.brand_category or "").strip(),
         "store_location": (payload.store_location or "").strip(),
         "email": (payload.email or "").strip(),
         "is_active": True,
@@ -253,7 +302,7 @@ async def admin_export_qr_cards_pdf(
 
     # Use the same WhatsApp phone + message format as the single-QR endpoint
     # so PDF cards + in-app cards decode to identical URLs.
-    wa_phone = os.environ.get("WA_BUSINESS_PHONE") or "917988077663"
+    wa_phone = os.environ.get("WA_BUSINESS_PHONE") or os.environ.get("WHATSAPP_NUMBER") or "917347576767"
 
     # ---- Layout constants (A4 = 210 × 297 mm) ----
     PAGE_W, PAGE_H = A4
@@ -358,6 +407,29 @@ async def admin_export_qr_cards_pdf(
 
 
 
+@staff_admin_router.get("/bulk-import/template.csv")
+async def admin_bulk_import_template(auth=Depends(_verify_admin)):
+    """Point 4: Download a ready-to-fill CSV template with the exact column
+    headers the bulk-import endpoint expects."""
+    from fastapi.responses import Response
+    header = "Mob No,Name of Employee,Brand Name,Brand Category\n"
+    sample = (
+        "9876543210,Rahul Sharma,Zara,Fashion\n"
+        "9876543211,Priya Verma,Zara,Fashion\n"
+        "9876543212,Aman Khan,Croma,Electronics\n"
+    )
+    body = header + sample
+    return Response(
+        content=body,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="staff-upload-template.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@staff_admin_router.post("/bulk-import")
 async def admin_bulk_import_staff(
     file: UploadFile = File(...),
     dry_run: bool = Form(False),
@@ -400,8 +472,9 @@ async def admin_bulk_import_staff(
         return norm_headers.get(key)
 
     col_brand = h("brand name") or h("brand")
-    col_name = h("staff name") or h("name")
-    col_phone = h("contact no.") or h("contact") or h("phone")
+    col_category = h("brand category") or h("category")
+    col_name = h("staff name") or h("name of employee") or h("name")
+    col_phone = h("mob no") or h("mob no.") or h("mobile no") or h("mobile no.") or h("mobile") or h("contact no.") or h("contact") or h("phone")
     col_desig = h("designation") or h("role")
     col_store = h("store location") or h("store")
     col_email = h("email")
@@ -409,18 +482,23 @@ async def admin_bulk_import_staff(
     if not (col_brand and col_name and col_phone):
         raise HTTPException(
             status_code=400,
-            detail="CSV missing required columns. Need: Brand Name, Staff Name, Contact No.",
+            detail="CSV missing required columns. Need: Mob No, Name of Employee, Brand Name, Brand Category",
         )
 
     # Parse + ffill brand name
     parsed = []
     last_brand = ""
+    last_category = ""
     for row in reader:
         brand_cell = (row.get(col_brand) or "").strip()
         if brand_cell:
             last_brand = brand_cell
+        cat_cell = (row.get(col_category) or "").strip() if col_category else ""
+        if cat_cell:
+            last_category = cat_cell
         parsed.append({
             "brand": last_brand,
+            "brand_category": last_category,
             "name": (row.get(col_name) or "").strip(),
             "phone_raw": (row.get(col_phone) or "").strip(),
             "designation": (row.get(col_desig) or "").strip() if col_desig else "",
@@ -464,6 +542,7 @@ async def admin_bulk_import_staff(
             "name": r["name"],
             "phone": phone,
             "brand_name": r["brand"],
+            "brand_category": r.get("brand_category") or "",
             "store_location": r["store"] or "",
             "designation": r["designation"] or "",
             "email": r["email"] or "",
@@ -478,6 +557,35 @@ async def admin_bulk_import_staff(
 
     if not dry_run and to_insert:
         await _db.retail_staff.insert_many([dict(d) for d in to_insert])
+        # Auto-upsert brand category into the brands collection so category
+        # taxonomy stays consistent with staff imports.
+        seen_brands: Dict[str, str] = {}
+        for d in to_insert:
+            b = (d.get("brand_name") or "").strip()
+            c = (d.get("brand_category") or "").strip()
+            if b and c and b not in seen_brands:
+                seen_brands[b] = c
+        for bname, cat in seen_brands.items():
+            existing_brand = await _db.brands.find_one(
+                {"brand_name": {"$regex": f"^{re.escape(bname)}$", "$options": "i"}},
+                {"_id": 0, "id": 1, "category": 1},
+            )
+            if existing_brand:
+                if not (existing_brand.get("category") or "").strip():
+                    await _db.brands.update_one(
+                        {"id": existing_brand["id"]},
+                        {"$set": {"category": cat, "updated_at": datetime.now(timezone.utc).isoformat()}},
+                    )
+            else:
+                await _db.brands.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "brand_name": bname,
+                    "atv": 0.0,
+                    "category": cat,
+                    "is_active": True,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "import_source": "staff_csv_bulk",
+                })
 
     return {
         "success": True,
@@ -514,7 +622,7 @@ async def admin_get_staff_qr(staff_id: str, auth=Depends(_verify_admin)):
     staff = await _db.retail_staff.find_one({"id": staff_id}, {"_id": 0})
     if not staff:
         raise HTTPException(status_code=404, detail="Staff not found")
-    wa_phone = os.environ.get("WA_BUSINESS_PHONE") or "917988077663"
+    wa_phone = os.environ.get("WA_BUSINESS_PHONE") or os.environ.get("WHATSAPP_NUMBER") or "917347576767"
     msg = f"Hi CP67! I'm registering via staff {staff['staff_code']} ({staff['brand_name']}). #STAFF:{staff['qr_token']}"
     wa_url = f"https://wa.me/{wa_phone}?text={_url_encode(msg)}"
 
@@ -544,6 +652,8 @@ def _url_encode(s: str) -> str:
 class StaffConfigUpdate(BaseModel):
     registration_slabs: Optional[List[Dict]] = None
     bill_upload_slabs: Optional[List[Dict]] = None
+    category_slabs: Optional[Dict[str, Dict[str, List[Dict]]]] = None
+    brand_slabs: Optional[Dict[str, Dict[str, List[Dict]]]] = None
     attribution_window_minutes: Optional[int] = None
     registration_validity_days: Optional[int] = None
 
@@ -764,8 +874,10 @@ async def staff_dashboard(staff=Depends(_verify_staff)):
     upload_count = await _db.staff_incentives.count_documents({"staff_id": sid, "type": "bill_upload"})
 
     cfg = await get_staff_config()
-    current_reg_slab = _amount_for_slab(reg_count, cfg["registration_slabs"])
-    current_upload_slab = _amount_for_slab(upload_count, cfg["bill_upload_slabs"])
+    reg_slabs = await _resolve_slabs_for_staff(cfg, staff, "registration_slabs")
+    upl_slabs = await _resolve_slabs_for_staff(cfg, staff, "bill_upload_slabs")
+    current_reg_slab = _amount_for_slab(reg_count, reg_slabs)
+    current_upload_slab = _amount_for_slab(upload_count, upl_slabs)
 
     return {
         "summary": {
@@ -781,8 +893,8 @@ async def staff_dashboard(staff=Depends(_verify_staff)):
             "current_upload_rate": current_upload_slab,
         },
         "config_snapshot": {
-            "registration_slabs": cfg["registration_slabs"],
-            "bill_upload_slabs": cfg["bill_upload_slabs"],
+            "registration_slabs": reg_slabs,
+            "bill_upload_slabs": upl_slabs,
             "attribution_window_minutes": cfg["attribution_window_minutes"],
         },
     }
@@ -811,7 +923,7 @@ async def staff_incentives_list(limit: int = 50, staff=Depends(_verify_staff)):
 
 @staff_router.get("/qr")
 async def staff_own_qr(staff=Depends(_verify_staff)):
-    wa_phone = os.environ.get("WA_BUSINESS_PHONE") or "917988077663"
+    wa_phone = os.environ.get("WA_BUSINESS_PHONE") or os.environ.get("WHATSAPP_NUMBER") or "917347576767"
     msg = f"Hi CP67! I'm registering via staff {staff['staff_code']} ({staff['brand_name']}). #STAFF:{staff['qr_token']}"
     wa_url = f"https://wa.me/{wa_phone}?text={_url_encode(msg)}"
     qr_b64 = None
@@ -886,7 +998,8 @@ async def create_registration_incentive(customer_phone: str, staff: Dict):
     redeemable only after the customer uploads a bill."""
     cfg = await get_staff_config()
     count_so_far = await _db.staff_incentives.count_documents({"staff_id": staff["id"], "type": "registration"})
-    amount = _amount_for_slab(count_so_far, cfg["registration_slabs"])
+    slabs = await _resolve_slabs_for_staff(cfg, staff, "registration_slabs")
+    amount = _amount_for_slab(count_so_far, slabs)
     validity_days = int(cfg.get("registration_validity_days") or 60)
     expires_at = (datetime.now(timezone.utc) + timedelta(days=validity_days)).isoformat()
     doc = {
@@ -920,8 +1033,10 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
         }, {"_id": 0, "id": 1})
         if not already:
             staff_id = attribution["staff_id"]
+            attributed_staff = await _db.retail_staff.find_one({"id": staff_id}, {"_id": 0}) or attribution
             count_so_far = await _db.staff_incentives.count_documents({"staff_id": staff_id, "type": "bill_upload"})
-            amount = _amount_for_slab(count_so_far, cfg["bill_upload_slabs"])
+            slabs = await _resolve_slabs_for_staff(cfg, attributed_staff, "bill_upload_slabs")
+            amount = _amount_for_slab(count_so_far, slabs)
             status = _status_from_bill(bill_status)
             await _db.staff_incentives.insert_one({
                 "id": str(uuid.uuid4()),
@@ -1028,3 +1143,253 @@ async def staff_redemption_history(staff=Depends(_verify_staff)):
     async for r in _db.staff_redemptions.find({"staff_id": staff["id"]}, {"_id": 0}).sort("requested_at", -1):
         rows.append(r)
     return {"redemptions": rows}
+
+
+
+# ==================== POINT 5: RETAILER MANAGER LOGIN ====================
+# Whitelisted brand-manager accounts can log in with OTP and view aggregate
+# incentives for the brand(s) they own — WITHOUT seeing customer PII.
+
+class RetailerManagerCreate(BaseModel):
+    name: str
+    phone: str
+    brands: List[str]                # brand names the manager can view
+    email: Optional[str] = None
+    is_active: Optional[bool] = True
+
+
+class RetailerManagerUpdate(BaseModel):
+    name: Optional[str] = None
+    brands: Optional[List[str]] = None
+    email: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+def _make_retailer_token(manager: Dict) -> str:
+    return jwt.encode({
+        "sub": manager["id"],
+        "phone": manager["phone"],
+        "role": "retailer_manager",
+        "exp": datetime.now(timezone.utc) + timedelta(days=30),
+    }, JWT_SECRET, algorithm="HS256")
+
+
+async def _verify_retailer_manager(auth: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
+    if not auth:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(auth.credentials, JWT_SECRET, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if payload.get("role") != "retailer_manager":
+        raise HTTPException(status_code=403, detail="Retailer manager only")
+    mgr = await _db.retailer_managers.find_one({"id": payload["sub"]}, {"_id": 0})
+    if not mgr or not mgr.get("is_active"):
+        raise HTTPException(status_code=403, detail="Retailer manager inactive or not found")
+    return mgr
+
+
+# -------- Admin CRUD for retailer managers --------
+
+@staff_admin_router.get("/retailer-managers")
+async def admin_list_retailer_managers(auth=Depends(_verify_admin)):
+    rows = []
+    async for m in _db.retailer_managers.find({}, {"_id": 0}).sort("created_at", -1):
+        rows.append(m)
+    return {"managers": rows, "total": len(rows)}
+
+
+@staff_admin_router.post("/retailer-managers")
+async def admin_create_retailer_manager(payload: RetailerManagerCreate, auth=Depends(_verify_admin)):
+    phone = _normalise_phone(payload.phone)
+    if len(phone) != 10:
+        raise HTTPException(status_code=400, detail="Phone must be 10 digits")
+    if not payload.brands:
+        raise HTTPException(status_code=400, detail="At least one brand is required")
+    existing = await _db.retailer_managers.find_one({"phone": phone}, {"_id": 0, "id": 1})
+    if existing:
+        raise HTTPException(status_code=400, detail="Retailer manager with this phone already exists")
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": payload.name.strip(),
+        "phone": phone,
+        "brands": [b.strip() for b in payload.brands if b.strip()],
+        "email": (payload.email or "").strip(),
+        "is_active": True if payload.is_active is None else bool(payload.is_active),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await _db.retailer_managers.insert_one(dict(doc))
+    return {"success": True, "manager": doc}
+
+
+@staff_admin_router.patch("/retailer-managers/{manager_id}")
+async def admin_update_retailer_manager(manager_id: str, patch: RetailerManagerUpdate,
+                                          auth=Depends(_verify_admin)):
+    updates = {k: v for k, v in patch.model_dump().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    if "brands" in updates:
+        updates["brands"] = [b.strip() for b in updates["brands"] if b.strip()]
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    r = await _db.retailer_managers.update_one({"id": manager_id}, {"$set": updates})
+    if r.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Manager not found")
+    doc = await _db.retailer_managers.find_one({"id": manager_id}, {"_id": 0})
+    return {"success": True, "manager": doc}
+
+
+@staff_admin_router.delete("/retailer-managers/{manager_id}")
+async def admin_delete_retailer_manager(manager_id: str, auth=Depends(_verify_admin)):
+    r = await _db.retailer_managers.delete_one({"id": manager_id})
+    if r.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Manager not found")
+    return {"success": True}
+
+
+# -------- Retailer manager auth (OTP) --------
+
+@staff_router.post("/retailer/auth/send-otp")
+async def retailer_send_otp(payload: StaffOTPRequest):
+    phone = _normalise_phone(payload.phone)
+    mgr = await _db.retailer_managers.find_one({"phone": phone, "is_active": True}, {"_id": 0})
+    if not mgr:
+        return {"success": True, "message": "OTP sent if number is registered"}
+
+    import random
+    otp = f"{random.randint(0, 999999):06d}"
+    if _store_otp is not None:
+        try:
+            await _store_otp(phone, otp)
+        except Exception as e:
+            logger.error(f"retailer store_otp failed: {e}")
+    else:
+        await _db.staff_otps.update_one(
+            {"phone": phone},
+            {"$set": {"otp": otp, "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=10)).isoformat()}},
+            upsert=True,
+        )
+
+    if _send_sms_otp is not None:
+        try:
+            await _send_sms_otp(phone, otp)
+        except Exception as e:
+            logger.error(f"retailer SMS send failed for {phone}: {e}")
+
+    logger.info(f"Retailer OTP generated for {phone}: {otp}")
+    return {"success": True, "message": "OTP sent"}
+
+
+@staff_router.post("/retailer/auth/verify-otp")
+async def retailer_verify_otp(payload: StaffOTPVerify):
+    phone = _normalise_phone(payload.phone)
+    ok = False
+    if OTP_DEV_BYPASS and payload.otp == OTP_DEV_BYPASS:
+        ok = True
+    elif _verify_stored_otp is not None:
+        try:
+            ok = await _verify_stored_otp(phone, payload.otp)
+        except Exception as e:
+            logger.error(f"retailer verify_stored_otp failed: {e}")
+            ok = False
+    else:
+        rec = await _db.staff_otps.find_one({"phone": phone}, {"_id": 0})
+        if rec and rec.get("otp") == payload.otp:
+            ok = True
+
+    if not ok:
+        raise HTTPException(status_code=401, detail="Invalid OTP")
+
+    mgr = await _db.retailer_managers.find_one({"phone": phone, "is_active": True}, {"_id": 0})
+    if not mgr:
+        raise HTTPException(status_code=401, detail="Retailer manager not registered or inactive")
+    token = _make_retailer_token(mgr)
+    return {
+        "success": True,
+        "token": token,
+        "manager": {
+            "id": mgr["id"], "name": mgr["name"], "phone": mgr["phone"],
+            "brands": mgr.get("brands") or [],
+        },
+    }
+
+
+# -------- Retailer dashboard --------
+
+@staff_router.get("/retailer/dashboard")
+async def retailer_dashboard(mgr=Depends(_verify_retailer_manager)):
+    brands = mgr.get("brands") or []
+    if not brands:
+        return {"brands": [], "summary": {}, "staff": []}
+
+    # Fetch staff members for these brands (case-insensitive on brand name)
+    lowered = {b.lower() for b in brands}
+    staff_docs: List[Dict] = []
+    async for s in _db.retail_staff.find({}, {"_id": 0}):
+        if (s.get("brand_name") or "").strip().lower() in lowered:
+            staff_docs.append(s)
+
+    staff_ids = [s["id"] for s in staff_docs]
+    # Aggregate incentives grouped by staff & status
+    by_staff: Dict[str, Dict[str, float]] = {}
+    if staff_ids:
+        pipe = [
+            {"$match": {"staff_id": {"$in": staff_ids}}},
+            {"$group": {"_id": {"staff_id": "$staff_id", "status": "$status"},
+                        "amount": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        ]
+        async for row in _db.staff_incentives.aggregate(pipe):
+            sid = row["_id"]["staff_id"]
+            status = row["_id"]["status"]
+            by_staff.setdefault(sid, {})[status] = row["amount"]
+
+    def _redeemable(d: Dict) -> float: return float(d.get("redeemable") or 0)
+    def _redeemed(d: Dict) -> float: return float(d.get("redeemed") or 0)
+    def _pending(d: Dict) -> float: return float(d.get("pending") or 0) + float(d.get("pending_verification") or 0)
+
+    staff_view = []
+    total_redeemable = total_redeemed = total_pending = 0.0
+    for s in staff_docs:
+        d = by_staff.get(s["id"], {})
+        r = _redeemable(d); rd = _redeemed(d); p = _pending(d)
+        total_redeemable += r; total_redeemed += rd; total_pending += p
+        staff_view.append({
+            "staff_code": s.get("staff_code"),
+            "name": s.get("name"),
+            "brand_name": s.get("brand_name"),
+            "brand_category": s.get("brand_category") or "",
+            "store_location": s.get("store_location") or "",
+            "is_active": s.get("is_active", True),
+            "redeemable": r,
+            "redeemed": rd,
+            "pending": p,
+        })
+
+    # Redemption history (across all brand staff)
+    redemptions: List[Dict] = []
+    if staff_ids:
+        async for rr in _db.staff_redemptions.find(
+            {"staff_id": {"$in": staff_ids}}, {"_id": 0}
+        ).sort("requested_at", -1).limit(200):
+            s = next((x for x in staff_docs if x["id"] == rr.get("staff_id")), None)
+            redemptions.append({
+                "reference": rr.get("reference"),
+                "amount": rr.get("amount"),
+                "status": rr.get("status"),
+                "requested_at": rr.get("requested_at"),
+                "staff_name": (s or {}).get("name"),
+                "staff_code": (s or {}).get("staff_code"),
+            })
+
+    return {
+        "manager": {"name": mgr.get("name"), "phone": mgr.get("phone"), "brands": brands},
+        "summary": {
+            "total_staff": len(staff_docs),
+            "active_staff": sum(1 for s in staff_docs if s.get("is_active")),
+            "redeemable": total_redeemable,
+            "redeemed": total_redeemed,
+            "pending": total_pending,
+        },
+        "staff": staff_view,
+        "redemptions": redemptions,
+    }

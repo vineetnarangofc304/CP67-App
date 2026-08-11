@@ -442,3 +442,27 @@ Fixed the three critical items from the client's Google Doc (Points 19, 24, 25):
     ├── PRD.md
     └── test_credentials.md
 ```
+
+
+## Feb 2026 — Client Feedback Points 2, 3, 4, 5 Completed
+
+### Point 2 — Staff QR opens correct WhatsApp number
+- Bug: Staff QR used hard-coded fallback `917988077663` (non-existent) making scans show "invalid number" in WhatsApp
+- Fix: `WA_BUSINESS_PHONE → WHATSAPP_NUMBER (917347576767) → hard-code` fallback chain in `/api/admin/staff/{id}/qr` and `/api/admin/staff/qr-cards.pdf` and `/api/staff/qr`
+
+### Point 3 — Category-wise & Brand-wise slab config
+- Extended `staff_config` schema with `category_slabs` and `brand_slabs` dicts
+- Awarding priority: brand override → category (via brands.category lookup) → default
+- Admin `/staff-incentives` → Slabs tab now has "Category-wise Slabs" and "Brand-wise Slabs" editors
+
+### Point 4 — Bulk-upload template + Brand Category column
+- New endpoint: `GET /api/admin/staff/bulk-import/template.csv` returns CSV with `Mob No, Name of Employee, Brand Name, Brand Category`
+- Bulk-import CSV now accepts and forward-fills `Brand Category`. Also auto-upserts new brands into `brands` collection with the given category.
+- Admin UI: "Template" button next to "Bulk Import CSV", plus `Brand Category` field in Add Staff dialog
+
+### Point 5 — Retailer / Brand Manager login
+- New `retailer_managers` collection (name, phone, brands[], is_active) with admin CRUD at `/api/admin/staff/retailer-managers`
+- OTP-based login at `POST /api/staff/retailer/auth/{send-otp,verify-otp}` (issues JWT with role `retailer_manager`)
+- `GET /api/staff/retailer/dashboard` returns brand-scoped aggregate (redeemable / redeemed / pending) + staff table + recent redemptions with **zero consumer PII**
+- New PWA routes at `/staff-app/retailer/login` and `/staff-app/retailer`
+- Admin UI: new "Retailer Logins" tab to whitelist manager phones
