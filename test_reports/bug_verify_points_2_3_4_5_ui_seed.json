@@ -1,0 +1,19 @@
+{
+  "base": "https://cp67-engage-preview.preview.emergentagent.com",
+  "api": "https://cp67-engage-preview.preview.emergentagent.com/api",
+  "brand": "QA-UI-Retailer-432505",
+  "category": "QA-UI-Category-432505",
+  "staff_name": "QA UI Staff 432505",
+  "staff_id": "d0fdf0d5-eb77-4570-94ac-8808c65d2937",
+  "staff_phone": "9020432505",
+  "manager_id": "e15078b9-a121-4a2b-9d6a-9a9bc7b6181a",
+  "manager_name": "QA UI Manager 432505",
+  "manager_phone": "9021432505",
+  "incentive_ids": [
+    "962602b8-2b8e-4d90-b46e-bf023fa767b6",
+    "3b839f45-c50a-48c4-84ea-44e618f227ba"
+  ],
+  "redemption_ids": [
+    "fce3cd7a-edee-484e-827d-458ff7d42649"
+  ]
+}

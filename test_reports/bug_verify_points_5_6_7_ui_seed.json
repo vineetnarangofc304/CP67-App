@@ -1,0 +1,17 @@
+{
+  "run_id": "1f005e68",
+  "api": "https://cp67-engage-preview.preview.emergentagent.com/api",
+  "brand": "TEST_UI_P567_1f005e68_Brand",
+  "category": "TEST_UI_P567_1f005e68_Category",
+  "staff_id": "1145bddc-25d3-4810-aa3e-0fa4e56c6cee",
+  "staff_phone": "8953678511",
+  "staff_code": "HL-0758",
+  "manager_phone": "8853678512",
+  "manager_name": "UI P567 Manager 1f005e68",
+  "non_whitelisted_phone": "8753678513",
+  "expected": {
+    "redeemable": 111,
+    "redeemed": 44,
+    "pending": 33
+  }
+}

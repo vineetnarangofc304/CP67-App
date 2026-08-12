@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { Users, QrCode, Award, Wallet, Settings, Plus, Trophy, RefreshCw, Upload, FileText } from 'lucide-react';
 
 export default function StaffIncentives() {
-  const { token, API_URL } = useAuth();
+  const { token, API_URL, logout } = useAuth();
   const [tab, setTab] = useState('staff');
   const [staffList, setStaffList] = useState([]);
   const [config, setConfig] = useState(null);
@@ -26,6 +26,9 @@ export default function StaffIncentives() {
   const [managers, setManagers] = useState([]);
   const [mgrForm, setMgrForm] = useState({ name: '', phone: '', brands: '', email: '' });
   const [creatingMgr, setCreatingMgr] = useState(false);
+  const [catalog, setCatalog] = useState({ brands: [], categories: [] });   // Point 7: dropdown source
+  const [uploadingMapping, setUploadingMapping] = useState(false);
+  const [mappingResult, setMappingResult] = useState(null);
 
   const api = (path, opts = {}) => fetch(`${API_URL}${path}`, {
     ...opts,
@@ -34,13 +37,14 @@ export default function StaffIncentives() {
 
   const loadAll = async () => {
     try {
-      const [s, c, m, l, r, mg] = await Promise.all([
+      const [s, c, m, l, r, mg, cat] = await Promise.all([
         api('/admin/staff').then(x => x.json()),
         api('/admin/staff/config/current').then(x => x.json()),
         api('/admin/staff/metrics/overview').then(x => x.json()),
         api('/admin/staff/leaderboard?period=monthly').then(x => x.json()),
         api('/admin/staff/redemptions').then(x => x.json()),
         api('/admin/staff/retailer-managers').then(x => x.json()),
+        api('/admin/staff/catalog/brands-categories').then(x => x.json()),
       ]);
       setStaffList(s.staff || []);
       setConfig(c.config || null);
@@ -48,6 +52,7 @@ export default function StaffIncentives() {
       setLeaderboard(l.leaderboard || []);
       setRedemptions(r.redemptions || []);
       setManagers(mg.managers || []);
+      setCatalog({ brands: cat.brands || [], categories: cat.categories || [] });
     } catch (e) {
       toast.error('Failed to load staff data');
     }
@@ -108,6 +113,17 @@ export default function StaffIncentives() {
     else { toast.error('Update failed'); }
   };
 
+  const handle401 = (status) => {
+    // Point 6: friendly handling of expired admin JWT instead of raw "Invalid token" toast.
+    if (status === 401) {
+      toast.error('Session expired — please sign in again');
+      logout();
+      setTimeout(() => { window.location.href = '/'; }, 800);
+      return true;
+    }
+    return false;
+  };
+
   const doBulkImport = async (file, dryRun) => {
     if (!file) return;
     setImporting(true);
@@ -121,6 +137,7 @@ export default function StaffIncentives() {
         headers: { Authorization: `Bearer ${token}` },
         body: fd,
       });
+      if (handle401(r.status)) return;
       const data = await r.json();
       if (!r.ok) { toast.error(data.detail || 'Import failed'); return; }
       setImportResult(data);
@@ -142,12 +159,61 @@ export default function StaffIncentives() {
       const r = await fetch(`${API_URL}/admin/staff/bulk-import/template.csv`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (handle401(r.status)) return;
       if (!r.ok) { toast.error('Template download failed'); return; }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = 'staff-upload-template.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Template downloaded');
+    } catch (e) {
+      toast.error('Download failed: ' + e.message);
+    }
+  };
+
+  // Point 7: brand-category mapping CSV upload
+  const uploadBrandCategoryMapping = async (file, dryRun) => {
+    if (!file) return;
+    setUploadingMapping(true);
+    setMappingResult(null);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('dry_run', dryRun ? 'true' : 'false');
+    try {
+      const r = await fetch(`${API_URL}/admin/staff/catalog/brand-category-mapping`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+      });
+      if (handle401(r.status)) return;
+      const data = await r.json();
+      if (!r.ok) { toast.error(data.detail || 'Upload failed'); return; }
+      setMappingResult(data);
+      if (dryRun) {
+        toast.info(`Dry run: ${data.summary.updated} update(s), ${data.summary.created} new brand(s), ${data.summary.invalid} invalid.`);
+      } else {
+        toast.success(`Mapping applied: ${data.summary.updated} updated, ${data.summary.created} created.`);
+        loadAll();
+      }
+    } catch (e) {
+      toast.error('Upload failed: ' + e.message);
+    } finally {
+      setUploadingMapping(false);
+    }
+  };
+
+  const downloadMappingTemplate = async () => {
+    try {
+      const r = await fetch(`${API_URL}/admin/staff/catalog/brand-category-mapping/template.csv`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (handle401(r.status)) return;
+      if (!r.ok) { toast.error('Template download failed'); return; }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'brand-category-mapping-template.csv';
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
       toast.success('Template downloaded');
@@ -399,8 +465,28 @@ export default function StaffIncentives() {
                 </Dialog>
               </CardHeader>
               <CardContent>
-                <div className="text-xs text-slate-500 mb-3">
-                  Whitelisted retailer managers can log in at <span className="font-mono">/staff-app/retailer</span> using OTP to view their brand&apos;s aggregate incentives (available &amp; redeemed) &mdash; no consumer PII is shown.
+                <div className="flex flex-wrap items-center gap-2 mb-3 p-3 rounded-lg bg-slate-50 border">
+                  <div className="text-xs text-slate-600 flex-1">
+                    <div>Retailer portal URL:</div>
+                    <div className="font-mono text-[13px] text-slate-800">{window.location.origin}/staff-app/retailer/login</div>
+                    <div className="mt-1">Only whitelisted phones can sign in with OTP. No consumer PII is shown.</div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/staff-app/retailer/login`); toast.success('Portal URL copied'); }}
+                    data-testid="copy-portal-url-btn"
+                  >
+                    Copy URL
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => window.open('/staff-app/retailer/login', '_blank')}
+                    data-testid="open-portal-btn"
+                  >
+                    Open Portal
+                  </Button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -415,6 +501,19 @@ export default function StaffIncentives() {
                           <td className="pr-4">{(m.brands || []).join(', ')}</td>
                           <td className="pr-4"><span className={m.is_active ? 'text-emerald-600' : 'text-slate-400'}>{m.is_active ? 'Active' : 'Inactive'}</span></td>
                           <td className="py-2 flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              data-testid={`mgr-invite-${m.id}`}
+                              onClick={() => {
+                                const portal = `${window.location.origin}/staff-app/retailer/login`;
+                                const msg = `Hi ${m.name}, your Homeland Advantage retailer portal access is ready.\n\nLogin with your registered phone (${m.phone}) at:\n${portal}\n\nYou'll receive an OTP to sign in.`;
+                                const url = `https://wa.me/91${m.phone}?text=${encodeURIComponent(msg)}`;
+                                window.open(url, '_blank');
+                              }}
+                            >
+                              WhatsApp Invite
+                            </Button>
                             <Button size="sm" variant="ghost" onClick={() => toggleMgrActive(m)} data-testid={`mgr-toggle-${m.id}`}>{m.is_active ? 'Deactivate' : 'Activate'}</Button>
                             <Button size="sm" variant="outline" onClick={() => deleteMgr(m)} data-testid={`mgr-delete-${m.id}`}>Remove</Button>
                           </td>
@@ -457,21 +556,67 @@ export default function StaffIncentives() {
                     ))}
                   </div>
 
-                  {/* Point 3: Category-wise & Brand-wise overrides */}
+                  {/* Point 3 / 7: Category-wise & Brand-wise overrides — populated from live brand catalog */}
                   <OverrideEditor
                     title="Category-wise Slabs"
                     kind="category_slabs"
                     config={config}
                     setConfig={setConfig}
-                    placeholder="Category name (e.g. Fashion)"
+                    options={catalog.categories}
+                    allowAll={true}
+                    placeholder="Pick a category"
                   />
                   <OverrideEditor
                     title="Brand-wise Slabs"
                     kind="brand_slabs"
                     config={config}
                     setConfig={setConfig}
-                    placeholder="Brand name (e.g. Zara)"
+                    options={catalog.brands.map(b => b.brand_name)}
+                    placeholder="Pick a brand"
                   />
+
+                  {/* Point 7: Brand ↔ Category mapping bulk upload */}
+                  <div className="border rounded-lg p-4 bg-slate-50/40" data-testid="brand-category-mapping-block">
+                    <div className="font-medium mb-2 flex items-center gap-2"><Upload size={16} /> Brand ↔ Category Mapping</div>
+                    <div className="text-xs text-slate-500 mb-3">
+                      Upload a CSV (columns: <span className="font-mono">Brand Name, Brand Category</span>) to bulk-set the category for many brands at once. The dropdowns above will refresh from this mapping.
+                    </div>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <Button size="sm" variant="outline" onClick={downloadMappingTemplate} data-testid="mapping-template-btn">
+                        <FileText size={14} className="mr-1" /> Template
+                      </Button>
+                      <label className="cursor-pointer" data-testid="mapping-upload-label">
+                        <input
+                          type="file"
+                          accept=".csv,text/csv"
+                          className="hidden"
+                          data-testid="mapping-upload-input"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (!f) return;
+                            if (window.confirm(`Upload mapping from "${f.name}"?\n\nOK = Dry run first (preview only). Cancel = Live import.`)) {
+                              uploadBrandCategoryMapping(f, true);
+                            } else {
+                              uploadBrandCategoryMapping(f, false);
+                            }
+                            e.target.value = '';
+                          }}
+                        />
+                        <span className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border hover:bg-slate-50">
+                          <Upload size={14} /> {uploadingMapping ? 'Uploading…' : 'Upload Mapping CSV'}
+                        </span>
+                      </label>
+                    </div>
+                    {mappingResult && (
+                      <div className="mt-3 p-3 rounded-md bg-amber-50 border border-amber-200 text-xs" data-testid="mapping-result-banner">
+                        <div className="font-medium">
+                          {mappingResult.dry_run ? 'Dry-run result:' : 'Last upload:'}
+                          &nbsp;{mappingResult.summary.updated} updated · {mappingResult.summary.created} new · {mappingResult.summary.invalid} invalid
+                        </div>
+                        <button className="mt-1 text-slate-500 underline" onClick={() => setMappingResult(null)}>dismiss</button>
+                      </div>
+                    )}
+                  </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -509,10 +654,12 @@ export default function StaffIncentives() {
 }
 
 // Sub-component: Category / Brand-wise slab override editor
-function OverrideEditor({ title, kind, config, setConfig, placeholder }) {
+// Point 7: uses a <select> populated from the actual catalog + optional "ALL" scope
+function OverrideEditor({ title, kind, config, setConfig, placeholder, options = [], allowAll = false }) {
   const [newKey, setNewKey] = useState('');
   const map = config[kind] || {};
   const entries = Object.entries(map);
+  const usedKeys = new Set(Object.keys(map));
 
   const setMap = (updater) => {
     const next = { ...(config[kind] || {}) };
@@ -522,7 +669,7 @@ function OverrideEditor({ title, kind, config, setConfig, placeholder }) {
 
   const addOverride = () => {
     const k = newKey.trim();
-    if (!k) { toast.error('Enter a name'); return; }
+    if (!k) { toast.error('Please pick a value'); return; }
     if (map[k]) { toast.error('Already exists'); return; }
     setMap(m => {
       m[k] = {
@@ -533,7 +680,7 @@ function OverrideEditor({ title, kind, config, setConfig, placeholder }) {
     setNewKey('');
   };
   const removeOverride = (key) => {
-    if (!window.confirm(`Remove ${title} for "${key}"?`)) return;
+    if (!window.confirm(`Remove ${title} for "${key === '__ALL__' ? 'ALL' : key}"?`)) return;
     setMap(m => { delete m[key]; });
   };
   const updateOverrideSlab = (key, slabKind, idx, field, value) => {
@@ -558,24 +705,45 @@ function OverrideEditor({ title, kind, config, setConfig, placeholder }) {
     });
   };
 
+  // Available options for the picker (exclude already-added)
+  const availableOptions = options.filter(o => !usedKeys.has(o));
+
   return (
     <div className="border rounded-lg p-4 bg-slate-50/40" data-testid={`override-editor-${kind}`}>
       <div className="font-medium mb-2 flex items-center gap-2"><Award size={16} /> {title}</div>
       <div className="text-xs text-slate-500 mb-3">
         Override the default slabs for a specific {kind === 'category_slabs' ? 'brand category' : 'brand'}.
-        Priority: <span className="font-mono">brand → category → default</span>.
+        Priority: <span className="font-mono">brand → category → all → default</span>.
       </div>
       <div className="flex gap-2 mb-3">
-        <Input value={newKey} onChange={e => setNewKey(e.target.value)} placeholder={placeholder} data-testid={`override-new-key-${kind}`} />
+        <select
+          value={newKey}
+          onChange={e => setNewKey(e.target.value)}
+          className="flex-1 h-10 px-3 rounded-md border border-slate-200 bg-white text-sm"
+          data-testid={`override-new-key-${kind}`}
+        >
+          <option value="">{placeholder}</option>
+          {allowAll && !usedKeys.has('__ALL__') && (
+            <option value="__ALL__">All ({kind === 'category_slabs' ? 'categories & brands' : 'brands'})</option>
+          )}
+          {availableOptions.map(o => (
+            <option key={o} value={o}>{o}</option>
+          ))}
+        </select>
         <Button size="sm" onClick={addOverride} data-testid={`override-add-${kind}`}><Plus size={14} className="mr-1" /> Add</Button>
       </div>
+      {options.length === 0 && (
+        <div className="text-xs text-amber-600 mb-2">
+          No {kind === 'category_slabs' ? 'categories' : 'brands'} configured yet. Add brands (with categories) first.
+        </div>
+      )}
       {entries.length === 0 && (
         <div className="text-sm text-slate-400 py-3">No overrides — defaults will apply.</div>
       )}
       {entries.map(([key, val]) => (
         <div key={key} className="mb-4 p-3 bg-white border rounded">
           <div className="flex justify-between items-center mb-2">
-            <div className="font-semibold">{key}</div>
+            <div className="font-semibold">{key === '__ALL__' ? 'ALL (default fallback)' : key}</div>
             <Button size="sm" variant="outline" onClick={() => removeOverride(key)} data-testid={`override-remove-${kind}-${key}`}>Remove</Button>
           </div>
           {['registration_slabs', 'bill_upload_slabs'].map(sk => (

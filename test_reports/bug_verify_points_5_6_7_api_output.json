@@ -1,0 +1,109 @@
+{
+  "ok": true,
+  "api": "https://cp67-engage-preview.preview.emergentagent.com/api",
+  "evidence": [
+    {
+      "step": "admin_login",
+      "status": 200
+    },
+    {
+      "step": "catalog_initial",
+      "brand_count": 190,
+      "category_count": 22
+    },
+    {
+      "step": "mapping_template",
+      "status": 200,
+      "content_disposition": "attachment; filename=\"brand-category-mapping-template.csv\""
+    },
+    {
+      "step": "mapping_dry_run",
+      "summary": {
+        "updated": 0,
+        "created": 1,
+        "invalid": 0
+      }
+    },
+    {
+      "step": "mapping_live_create",
+      "summary": {
+        "updated": 0,
+        "created": 1,
+        "invalid": 0
+      }
+    },
+    {
+      "step": "catalog_after_mapping",
+      "new_brand_present": true,
+      "new_category_present": true
+    },
+    {
+      "step": "mapping_live_update",
+      "summary": {
+        "updated": 1,
+        "created": 0,
+        "invalid": 0
+      }
+    },
+    {
+      "step": "config_all_and_brand_roundtrip",
+      "all_key": "__ALL__",
+      "brand_key": "TEST_P567_d9f5058e_Brand"
+    },
+    {
+      "step": "manager_whitelisted",
+      "manager_id": "354ae885-c425-4e92-b1ec-446a0b0e7432",
+      "phone": "9753674202",
+      "brands": [
+        "TEST_P567_d9f5058e_Brand"
+      ]
+    },
+    {
+      "step": "retailer_dashboard",
+      "summary": {
+        "total_staff": 1,
+        "active_staff": 1,
+        "redeemable": 100.0,
+        "redeemed": 40.0,
+        "pending": 40.0
+      },
+      "staff_rows": 1,
+      "redemption_rows": 1
+    },
+    {
+      "step": "non_whitelisted_verify",
+      "status": 401,
+      "detail": "Retailer manager not registered or inactive"
+    },
+    {
+      "step": "invalid_token_api_statuses",
+      "checks": [
+        {
+          "endpoint": "GET /admin/me",
+          "status": 401,
+          "detail": "Invalid token"
+        },
+        {
+          "endpoint": "GET /admin/staff/bulk-import/template.csv",
+          "status": 401,
+          "detail": "Invalid token"
+        },
+        {
+          "endpoint": "POST /admin/staff/bulk-import",
+          "status": 401,
+          "detail": "Invalid token"
+        },
+        {
+          "endpoint": "GET /admin/staff/catalog/brand-category-mapping/template.csv",
+          "status": 401,
+          "detail": "Invalid token"
+        },
+        {
+          "endpoint": "POST /admin/staff/catalog/brand-category-mapping",
+          "status": 401,
+          "detail": "Invalid token"
+        }
+      ]
+    }
+  ]
+}

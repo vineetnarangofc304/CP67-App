@@ -1,0 +1,27 @@
+{
+  "summary": "Iteration 38 — verified Points 5, 6, 7 for CP67 Staff Incentives. Backend: 9/9 pytest cases pass covering the new /catalog/brands-categories, /catalog/brand-category-mapping (dry-run + live), template CSV, __ALL__ scope round-trip in staff_config, and 401 semantics on 3 admin endpoints. Frontend: Retailer Logins tab exposes Copy URL, Open Portal, WhatsApp Invite; Slabs tab shows Category dropdown (23 opts incl. __ALL__) and Brand dropdown (190 opts) populated from live catalog; Brand↔Category Mapping block has Template button and CSV uploader that displays a dry-run banner ('0 updated · 1 new · 0 invalid'). Point 6 verified: reload with garbage cp67_token → App-level /me returns 401 → user is auto-logged out and redirected to /login (no raw 'Invalid token' toast surfaced). In-session handle401 helper is wired to every admin fetch (downloadTemplate, doBulkImport, uploadBrandCategoryMapping, downloadMappingTemplate).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_points_5_6_7.py",
+    "/app/test_reports/pytest/iteration38_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Point 6 defensive design is solid: App.js drops invalid token on /me 401 and handle401 in StaffIncentives.jsx also intercepts every admin fetch. Live simulation only via localStorage patch does not reproduce 401 (in-memory React `token` still valid); a reload is needed. Consider having handle401 also listen for a 'auth:expired' event so mid-session token expiry from ANY page shows a consistent toast — currently each page that uses admin APIs must wire its own handle401.",
+    "In routes/staff.py admin_upload_brand_category_mapping accepts a CSV up to whatever FastAPI default; no explicit size cap. Consider max_size check to avoid abusive uploads.",
+    "Category dropdown correctly sorts case-insensitive but the empty string '' appears as first option in the <select> (used as placeholder). Fine, but ensure the Add button validates non-empty selection (verified via 'if (!newKey.trim()) return' in OverrideEditor)."
+  ],
+  "updated_files": ["/app/backend/tests/test_points_5_6_7.py"],
+  "success_rate": { "backend": "100% (9/9)", "frontend": "100% of scripted checks" },
+  "test_credentials": "admin / CP67Admin@2025",
+  "seed_data_creation": "One test brand row inserted per run with prefix TEST_<hex>_BrandX / category=TestCategory via live mapping upload; cleanup step attempts deletion via /api/admin/brands/{id} best-effort.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New pytest file /app/backend/tests/test_points_5_6_7.py covers points 5/6/7 API. Frontend Slabs tab dropdowns are populated from /api/admin/staff/catalog/brands-categories; check that live changes to /api/admin/brands are reflected. Point 6 UI test requires a page RELOAD after setting localStorage garbage token to actually reproduce the 401 (in-memory React state holds the last valid token otherwise).",
+  "rca of the issue": "N/A — no bugs found; all requested behaviors are working."
+}

@@ -115,7 +115,7 @@ def _amount_for_slab(count: int, slabs: List[Dict]) -> int:
 async def _resolve_slabs_for_staff(cfg: Dict, staff: Dict, slab_kind: str) -> List[Dict]:
     """Resolve which slab table to apply for a given staff member.
 
-    Priority: brand override → category override → default.
+    Priority: brand override → category override → "ALL" override → default.
     slab_kind: 'registration_slabs' or 'bill_upload_slabs'.
     """
     brand_name = (staff.get("brand_name") or "").strip()
@@ -134,6 +134,10 @@ async def _resolve_slabs_for_staff(cfg: Dict, staff: Dict, slab_kind: str) -> Li
             cat_slabs = (cfg.get("category_slabs") or {}).get(category)
             if cat_slabs and cat_slabs.get(slab_kind):
                 return cat_slabs[slab_kind]
+    # "ALL" scope override — Point 7: configure once for everyone
+    all_override = (cfg.get("category_slabs") or {}).get("__ALL__")
+    if all_override and all_override.get(slab_kind):
+        return all_override[slab_kind]
     # Fallback default
     return cfg.get(slab_kind) or []
 
@@ -203,6 +207,131 @@ def _normalise_phone(p: str) -> str:
     if len(d) >= 10:
         return d[-10:]
     return d
+
+
+# ==================== POINT 7: BRAND & CATEGORY CATALOG ====================
+
+@staff_admin_router.get("/catalog/brands-categories")
+async def admin_list_brand_catalog(auth=Depends(_verify_admin)):
+    """Return distinct brand names and category names from the brands
+    collection so the Admin UI can render dropdowns for slab overrides,
+    instead of free-text inputs (Point 7)."""
+    brands = []
+    categories = set()
+    async for b in _db.brands.find({}, {"_id": 0, "brand_name": 1, "category": 1}):
+        bn = (b.get("brand_name") or "").strip()
+        cat = (b.get("category") or "").strip()
+        if bn:
+            brands.append({"brand_name": bn, "category": cat})
+        if cat:
+            categories.add(cat)
+    # Sort + de-duplicate brand list
+    seen = set()
+    uniq = []
+    for x in sorted(brands, key=lambda r: r["brand_name"].lower()):
+        key = x["brand_name"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(x)
+    return {"brands": uniq, "categories": sorted(categories, key=str.lower)}
+
+
+@staff_admin_router.post("/catalog/brand-category-mapping")
+async def admin_upload_brand_category_mapping(
+    file: UploadFile = File(...),
+    dry_run: bool = Form(False),
+    auth=Depends(_verify_admin),
+):
+    """Point 7: Bulk upload / update the brand → category mapping.
+
+    Accepted CSV headers (case-insensitive):
+        Brand Name, Brand Category
+    Behavior:
+      - If brand exists: update its `category`.
+      - If brand doesn't exist: create a minimal brand doc with the category.
+      - Empty category rows are treated as invalid.
+      - `dry_run=true` parses but doesn't write.
+    """
+    import csv, io as _io
+    try:
+        raw = await file.read()
+        text = raw.decode("utf-8-sig")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Failed to read CSV — expected UTF-8 text")
+
+    reader = csv.DictReader(_io.StringIO(text))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="CSV appears empty or missing header row")
+    norm = {h.strip().lower(): h for h in reader.fieldnames if h}
+    col_brand = norm.get("brand name") or norm.get("brand")
+    col_cat = norm.get("brand category") or norm.get("category")
+    if not (col_brand and col_cat):
+        raise HTTPException(status_code=400,
+            detail="CSV missing required columns. Need: Brand Name, Brand Category")
+
+    updates = []
+    creates = []
+    invalid = []
+    idx = 1
+    for row in reader:
+        idx += 1
+        b = (row.get(col_brand) or "").strip()
+        c = (row.get(col_cat) or "").strip()
+        if not b or not c:
+            invalid.append({"row": idx, "brand": b, "category": c, "reason": "missing brand or category"})
+            continue
+        existing = await _db.brands.find_one(
+            {"brand_name": {"$regex": f"^{re.escape(b)}$", "$options": "i"}},
+            {"_id": 0, "id": 1, "brand_name": 1, "category": 1},
+        )
+        if existing:
+            if (existing.get("category") or "").strip().lower() != c.lower():
+                updates.append({"id": existing["id"], "brand_name": existing["brand_name"], "old": existing.get("category") or "", "new": c})
+        else:
+            creates.append({"brand_name": b, "category": c})
+
+    if not dry_run:
+        now = datetime.now(timezone.utc).isoformat()
+        for u in updates:
+            await _db.brands.update_one({"id": u["id"]}, {"$set": {"category": u["new"], "updated_at": now}})
+        for cr in creates:
+            await _db.brands.insert_one({
+                "id": str(uuid.uuid4()),
+                "brand_name": cr["brand_name"],
+                "atv": 0.0,
+                "category": cr["category"],
+                "is_active": True,
+                "created_at": now,
+                "import_source": "brand_category_mapping",
+            })
+
+    return {
+        "success": True,
+        "dry_run": dry_run,
+        "summary": {
+            "updated": len(updates),
+            "created": len(creates),
+            "invalid": len(invalid),
+        },
+        "updates_preview": updates[:30],
+        "creates_preview": creates[:30],
+        "invalid_preview": invalid[:30],
+    }
+
+
+@staff_admin_router.get("/catalog/brand-category-mapping/template.csv")
+async def admin_brand_category_mapping_template(auth=Depends(_verify_admin)):
+    from fastapi.responses import Response
+    body = "Brand Name,Brand Category\nZara,Fashion\nCroma,Electronics\nHaldiram,Food\n"
+    return Response(
+        content=body,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": 'attachment; filename="brand-category-mapping-template.csv"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @staff_admin_router.post("")

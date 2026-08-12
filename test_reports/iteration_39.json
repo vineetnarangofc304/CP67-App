@@ -1,0 +1,46 @@
+{
+  "verdict": "fixed",
+  "user_reported_bug": "https://docs.google.com/document/d/1KSDUEMHGy-dTNEooWmEmYMJKp4WtrLAe260FSjmCSDk/edit?usp=sharing\n\n5,6,7 to be done\n\nPoint 5: Retailer login scope \u2014 whitelisted contacts can log in and view their incentives (available, redeemed).\nPoint 6: Showing invalid token when uploading retailer staff file.\nPoint 7: Category slab & Brand slab should show dropdown of category/brand added in backend. Also allow bulk-uploading brandwise category mapping. Add 'All' scope so admin can configure for all in same way. Needed for both Bill Upload Slabs & Registration Slabs.",
+  "summary": "Focused verification of Points 5/6/7 passed on preview. No relevant testing skill found. API + browser tests confirmed retailer manager whitelisting/login/dashboard with brand-scoped totals and non-whitelisted verify-OTP 401, friendly expired-session handling for staff import/template and mapping template/upload flows, and category/brand slab dropdowns with __ALL__ plus brand-category mapping dry-run/live refresh.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/bug_verify_points_5_6_7_api.py",
+    "/app/test_reports/bug_verify_points_5_6_7_api_output.json",
+    "/app/test_reports/bug_verify_points_5_6_7_ui_seed.py",
+    "/app/backend/tests/test_points_5_6_7.py",
+    "/app/test_reports/pytest/bug_verification_39_points_5_6_7.xml",
+    "/app/test_reports/browser_point_5_6_7_point6/"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "No relevant testing skill found for the retailer-login/invalid-token/category-brand-slab flow; auth playbook was consulted for JWT/OTP checks.",
+    "Code review confirmed StaffIncentives.jsx wires handle401 to the four reported admin fetches: staff bulk import CSV, staff template download, mapping template download, and mapping upload. Runtime UI verification used real short-lived JWTs, not mocked APIs, to trigger 401s after /admin/me had already accepted the session.",
+    "Initial browser automation attempts had test-harness mistakes (unsupported locator method and wait_for_function argument shape); reruns completed the product checks successfully. These were not product defects."
+  ],
+  "updated_files": [
+    "/app/test_reports/bug_verify_points_5_6_7_api.py",
+    "/app/test_reports/bug_verify_points_5_6_7_api_output.json",
+    "/app/test_reports/bug_verify_points_5_6_7_ui_seed.py",
+    "/app/test_reports/bug_verify_points_5_6_7_ui_seed.json",
+    "/app/test_reports/pytest/bug_verification_39_points_5_6_7.xml",
+    "/app/test_reports/bug_verification_39.json",
+    "/app/test_reports/iteration_39.json"
+  ],
+  "success_rate": {
+    "backend": "100% (API script passed + 9/9 pytest)",
+    "frontend": "100% of final focused browser checks passed"
+  },
+  "seed_data_creation": "Created temporary TEST_P567_* and TEST_UI_P567_* brands/categories, one staff row, one retailer-manager row, incentives, and a redemption for verification. Cleanup was run and confirmed zero remaining UI seed staff/manager/brand-prefix records.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Preview URL used from /app/frontend/.env. Admin credentials admin / CP67Admin@2025. Retailer OTP bypass 1234. Final UI evidence includes successful browser run in /app/test_reports/browser_point_5_6_7_point6/ and API evidence in bug_verify_points_5_6_7_api_output.json. Earlier browser_point_5_6_7* runs include harness errors but also partial pass evidence; final point6 run completed remaining checks.",
+  "rca_of_the_issue": "Verification result only: no remaining user-visible reproduction. Point 6 was reproduced using corrupted localStorage token for App-level /admin/me redirect and real short-lived JWTs for in-session fetch 401s; the UI showed 'Session expired' and redirected to /login without raw 'Invalid token'."
+}

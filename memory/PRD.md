@@ -466,3 +466,21 @@ Fixed the three critical items from the client's Google Doc (Points 19, 24, 25):
 - `GET /api/staff/retailer/dashboard` returns brand-scoped aggregate (redeemable / redeemed / pending) + staff table + recent redemptions with **zero consumer PII**
 - New PWA routes at `/staff-app/retailer/login` and `/staff-app/retailer`
 - Admin UI: new "Retailer Logins" tab to whitelist manager phones
+
+## Feb 2026 — Client Feedback Points 5, 6, 7 Completed
+
+### Point 5 — Retailer login (discoverability polish)
+- Base flow (whitelist + OTP + brand-scoped dashboard) already shipped in Feb 2026 pass 1.
+- Added on top: `/staff-incentives` → Retailer Logins tab now shows the retailer portal URL with **Copy URL** and **Open Portal** buttons, plus a per-row **WhatsApp Invite** button that opens `wa.me/91<phone>` with the portal link pre-filled.
+
+### Point 6 — Friendly "session expired" handling
+- Bug: Admin JWT expires after 24h → backend legitimately returned 401 `{detail:"Invalid token"}`. Frontend surfaced that raw detail as a scary toast on bulk-upload.
+- Fix: `handle401()` helper in `StaffIncentives.jsx` wired to `doBulkImport`, `downloadTemplate`, `uploadBrandCategoryMapping`, `downloadMappingTemplate` — displays "Session expired — please sign in again" and redirects to `/`.
+
+### Point 7 — Live dropdowns + Brand↔Category mapping upload + "All" scope
+- New endpoint `GET /api/admin/staff/catalog/brands-categories` returns distinct brands + categories from the brands collection.
+- New endpoints `GET /api/admin/staff/catalog/brand-category-mapping/template.csv` and `POST /api/admin/staff/catalog/brand-category-mapping` (with `dry_run` support) — upload a CSV (`Brand Name, Brand Category`) to bulk update/insert brand→category mappings.
+- `OverrideEditor` now uses `<select>` populated from the live catalog instead of free-text; the Category-wise picker includes an **"All (categories & brands)"** option that persists as `__ALL__` in `staff_config.category_slabs`.
+- `_resolve_slabs_for_staff()` priority updated: **brand → category → __ALL__ → default**.
+- Slabs tab now includes a "Brand ↔ Category Mapping" upload block with Template + Upload buttons, and applies to both Registration Slabs and Bill Upload Slabs.
+
