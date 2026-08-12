@@ -1,0 +1,18 @@
+{
+  "seeded_manager": {
+    "id": "0e91a5df-41c1-4c2c-a2bc-82f147534e36",
+    "name": "Bug Test Retailer Manager",
+    "phone": "9100011122",
+    "brands": [
+      "Zara"
+    ],
+    "email": "qa@example.test",
+    "is_active": true,
+    "created_at": "2026-08-12T12:29:59.259539+00:00"
+  },
+  "pre_cleanup": {
+    "retailer_managers_deleted": 1,
+    "brands_deleted": 0
+  },
+  "base": "https://cp67-engage-preview.preview.emergentagent.com/api"
+}

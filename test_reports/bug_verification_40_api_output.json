@@ -1,0 +1,139 @@
+{
+  "base": "https://cp67-engage-preview.preview.emergentagent.com/api",
+  "checks": [
+    {
+      "name": "admin_login",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "name": "create_retailer_manager",
+      "status": "passed",
+      "details": {
+        "id": "a7691b48-faba-463a-8f14-9160681efb65",
+        "phone": "9100011122",
+        "brands": [
+          "Zara"
+        ]
+      }
+    },
+    {
+      "name": "retailer_send_otp",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "name": "retailer_verify_otp_role",
+      "status": "passed",
+      "details": {
+        "role": "retailer_manager"
+      }
+    },
+    {
+      "name": "retailer_dashboard_no_pii_brand_scoped",
+      "status": "passed",
+      "details": {
+        "staff_count": 1,
+        "summary": {
+          "total_staff": 1,
+          "active_staff": 1,
+          "redeemable": 0.0,
+          "redeemed": 0.0,
+          "pending": 0.0
+        }
+      }
+    },
+    {
+      "name": "non_whitelisted_retailer_verify_rejected",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "name": "bad_token_api_returns_401_for_ui_handling",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "name": "catalog_dropdown_sources",
+      "status": "passed",
+      "details": {
+        "category_count": 22,
+        "brand_count": 190
+      }
+    },
+    {
+      "name": "brand_category_mapping_template_header",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "name": "brand_category_mapping_live_upload",
+      "status": "passed",
+      "details": {
+        "summary": {
+          "updated": 0,
+          "created": 1,
+          "invalid": 0
+        }
+      }
+    },
+    {
+      "name": "uploaded_brand_visible_in_catalog",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "name": "__ALL___slabs_persist_exactly",
+      "status": "passed",
+      "details": {
+        "registration_slabs": [
+          {
+            "min": 0,
+            "max": 3,
+            "amount": 67
+          },
+          {
+            "min": 4,
+            "max": 999999,
+            "amount": 77
+          }
+        ],
+        "bill_upload_slabs": [
+          {
+            "min": 0,
+            "max": 5,
+            "amount": 57
+          },
+          {
+            "min": 6,
+            "max": 999999,
+            "amount": 87
+          }
+        ]
+      }
+    },
+    {
+      "name": "staff_qr_url_whatsapp_number",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "name": "bulk_import_template_header",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "name": "cleanup_manager_api",
+      "status": "passed",
+      "details": {}
+    },
+    {
+      "name": "cleanup_restore_config",
+      "status": "passed",
+      "details": {}
+    }
+  ],
+  "manager_id": "a7691b48-faba-463a-8f14-9160681efb65",
+  "cleanup_db_attempted": true,
+  "status": "passed"
+}

@@ -1,0 +1,64 @@
+{
+  "id": "staff_config",
+  "registration_slabs": [
+    {
+      "min": 0,
+      "max": 10,
+      "amount": 50
+    },
+    {
+      "min": 11,
+      "max": 25,
+      "amount": 75
+    },
+    {
+      "min": 26,
+      "max": 50,
+      "amount": 100
+    },
+    {
+      "min": 51,
+      "max": 999999,
+      "amount": 150
+    }
+  ],
+  "bill_upload_slabs": [
+    {
+      "min": 0,
+      "max": 20,
+      "amount": 20
+    },
+    {
+      "min": 21,
+      "max": 50,
+      "amount": 30
+    },
+    {
+      "min": 51,
+      "max": 999999,
+      "amount": 50
+    }
+  ],
+  "attribution_window_minutes": 15,
+  "registration_validity_days": 60,
+  "updated_at": "2026-08-12T12:27:21.240154+00:00",
+  "brand_slabs": {},
+  "category_slabs": {
+    "__ALL__": {
+      "registration_slabs": [
+        {
+          "min": 0,
+          "max": 999,
+          "amount": 25
+        }
+      ],
+      "bill_upload_slabs": [
+        {
+          "min": 0,
+          "max": 999,
+          "amount": 10
+        }
+      ]
+    }
+  }
+}
