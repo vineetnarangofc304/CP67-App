@@ -1,0 +1,312 @@
+{
+  "marker": "652324181",
+  "source": "SRC_STRICT_TEST_BV43_652324181",
+  "skill_lookup": "No relevant testing skill found.",
+  "checks": [
+    {
+      "name": "strict 6-row bulk upload returns HTTP 200",
+      "passed": true,
+      "details": {
+        "status": 200,
+        "body": {
+          "success": true,
+          "dry_run": false,
+          "source_code": "SRC_STRICT_TEST_BV43_652324181",
+          "summary": {
+            "total_rows": 6,
+            "imported": 2,
+            "skipped_duplicates": 0,
+            "invalid": 4
+          },
+          "imported_preview": [
+            {
+              "brand": "BV43_652324181_BrandValidA",
+              "code": "BV43_652324181_VALID_A",
+              "value": 101.0,
+              "expiry": "2026-12-31"
+            },
+            {
+              "brand": "BV43_652324181_BrandValidB",
+              "code": "BV43_652324181_VALID_B",
+              "value": 404.0,
+              "expiry": "2027-06-30"
+            }
+          ],
+          "skipped_preview": [],
+          "invalid_preview": [
+            {
+              "row": 3,
+              "reason": "invalid expiry date (need YYYY-MM-DD)",
+              "brand": "BV43_652324181_BrandCompact",
+              "code": "BV43_652324181_COMPACT_1",
+              "raw_expiry": "20281231"
+            },
+            {
+              "row": 4,
+              "reason": "invalid expiry date (need YYYY-MM-DD)",
+              "brand": "BV43_652324181_BrandWeek",
+              "code": "BV43_652324181_WEEK_1",
+              "raw_expiry": "2028-W01-1"
+            },
+            {
+              "row": 6,
+              "reason": "invalid expiry date (need YYYY-MM-DD)",
+              "brand": "BV43_652324181_BrandBad",
+              "code": "BV43_652324181_BAD_1",
+              "raw_expiry": "not-a-date"
+            },
+            {
+              "row": 7,
+              "reason": "missing expiry date",
+              "brand": "BV43_652324181_BrandEmpty",
+              "code": "BV43_652324181_EMPTY_1"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "strict upload summary imported=2 invalid=4",
+      "passed": true,
+      "details": {
+        "total_rows": 6,
+        "imported": 2,
+        "skipped_duplicates": 0,
+        "invalid": 4
+      }
+    },
+    {
+      "name": "invalid_preview includes compact ISO, week date, garbage, and empty-expiry codes",
+      "passed": true,
+      "details": [
+        "BV43_652324181_BAD_1",
+        "BV43_652324181_COMPACT_1",
+        "BV43_652324181_EMPTY_1",
+        "BV43_652324181_WEEK_1"
+      ]
+    },
+    {
+      "name": "list endpoint persisted only 2 valid strict-date rows",
+      "passed": true,
+      "details": [
+        "BV43_652324181_VALID_A",
+        "BV43_652324181_VALID_B"
+      ]
+    },
+    {
+      "name": "MongoDB has no compact/week/garbage/empty invalid rows",
+      "passed": true,
+      "details": [
+        "BV43_652324181_VALID_A",
+        "BV43_652324181_VALID_B"
+      ]
+    },
+    {
+      "name": "atomic issuance returns two distinct coupons then None",
+      "passed": true,
+      "details": {
+        "issued_codes": [
+          "BV43_652324181_VALID_A",
+          "BV43_652324181_VALID_B"
+        ],
+        "third_result": null
+      }
+    },
+    {
+      "name": "inventory endpoint reports available=0 issued=2 after issuance",
+      "passed": true,
+      "details": {
+        "inventory": [
+          {
+            "source_code": "SRC_STRICT_TEST_BV43_652324181",
+            "brand_name": "BV43_652324181_BrandValidA",
+            "status": "issued",
+            "count": 1,
+            "total_value": 101.0
+          },
+          {
+            "source_code": "SRC_STRICT_TEST_BV43_652324181",
+            "brand_name": "BV43_652324181_BrandValidB",
+            "status": "issued",
+            "count": 1,
+            "total_value": 404.0
+          }
+        ],
+        "totals": {
+          "available": 0,
+          "issued": 2,
+          "expired": 0,
+          "void": 0
+        }
+      }
+    },
+    {
+      "name": "issued endpoint returns exactly the two issued coupon codes",
+      "passed": true,
+      "details": {
+        "issued": [
+          {
+            "id": "63332079-fb87-44f8-9b9d-d1d8c0ce1f74",
+            "source_code": "SRC_STRICT_TEST_BV43_652324181",
+            "brand_name": "BV43_652324181_BrandValidB",
+            "code": "BV43_652324181_VALID_B",
+            "value": 404.0,
+            "expiry": "2027-06-30",
+            "status": "issued",
+            "issued_to_phone": "9188433241811",
+            "issued_at": "2026-08-13T20:18:44.292996+00:00",
+            "created_at": "2026-08-13T20:18:44.139759+00:00"
+          },
+          {
+            "id": "1118c68f-14a5-4fce-a4d7-1d44b0f0d089",
+            "source_code": "SRC_STRICT_TEST_BV43_652324181",
+            "brand_name": "BV43_652324181_BrandValidA",
+            "code": "BV43_652324181_VALID_A",
+            "value": 101.0,
+            "expiry": "2026-12-31",
+            "status": "issued",
+            "issued_to_phone": "9188433241810",
+            "issued_at": "2026-08-13T20:18:44.291497+00:00",
+            "created_at": "2026-08-13T20:18:44.139738+00:00"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "name": "seeded one SRC_RWA coupon for WhatsApp webhook",
+      "passed": true,
+      "details": {
+        "success": true,
+        "dry_run": false,
+        "source_code": "SRC_RWA",
+        "summary": {
+          "total_rows": 1,
+          "imported": 1,
+          "skipped_duplicates": 0,
+          "invalid": 0
+        },
+        "imported_preview": [
+          {
+            "brand": "BV43_652324181_WABrand",
+            "code": "BV43_652324181_WA_CODE",
+            "value": 777.0,
+            "expiry": "2028-12-31"
+          }
+        ],
+        "skipped_preview": [],
+        "invalid_preview": []
+      }
+    },
+    {
+      "name": "WhatsApp webhook accepts new SRC_RWA registration",
+      "passed": true,
+      "details": {
+        "status": 200,
+        "body": {
+          "status": "ok",
+          "message": "Webhook processed"
+        }
+      }
+    },
+    {
+      "name": "WhatsApp welcome_msg log appends coupon brand/code/value",
+      "passed": true,
+      "details": {
+        "id": "45ef97d1-ba6a-4390-bc4a-127e7e0426bd",
+        "user_id": "472dae30-08db-4045-8f90-90a0305b56f6",
+        "user_phone": "918811940023",
+        "direction": "outbound",
+        "message_type": "interactive",
+        "content": "Hi BV43 User 652324181! Congratulations on joining Homeland Advantage.\n\nYou are now part of CP67 Mall's exclusive loyalty program, and your 1000 joining bonus points have been credited.\n\nEnjoy exclusive rewards, special benefits, and personalized offers every time you shop.\n\nShop - Earn - Redeem - Repeat\n\n\ud83c\udf81 Welcome Coupon Unlocked!\nBrand: BV43_652324181_WABrand\nCode:  BV43_652324181_WA_CODE\nValue: \u20b9777\nValid till: 2028-12-31",
+        "source_code": null,
+        "timestamp": "2026-08-13T20:18:54.850479+00:00"
+      }
+    },
+    {
+      "name": "WhatsApp webhook issued the seeded SRC_RWA coupon to the new phone",
+      "passed": true,
+      "details": {
+        "id": "13730fa4-185f-404f-8776-41d81f05640e",
+        "source_code": "SRC_RWA",
+        "brand_name": "BV43_652324181_WABrand",
+        "code": "BV43_652324181_WA_CODE",
+        "value": 777.0,
+        "expiry": "2028-12-31",
+        "status": "issued",
+        "issued_to_phone": "918811940023",
+        "issued_at": "2026-08-13T20:18:54.848626+00:00",
+        "created_at": "2000-01-01T00:00:00+00:00"
+      }
+    }
+  ],
+  "failures": [],
+  "strict_bulk_upload_response": {
+    "success": true,
+    "dry_run": false,
+    "source_code": "SRC_STRICT_TEST_BV43_652324181",
+    "summary": {
+      "total_rows": 6,
+      "imported": 2,
+      "skipped_duplicates": 0,
+      "invalid": 4
+    },
+    "imported_preview": [
+      {
+        "brand": "BV43_652324181_BrandValidA",
+        "code": "BV43_652324181_VALID_A",
+        "value": 101.0,
+        "expiry": "2026-12-31"
+      },
+      {
+        "brand": "BV43_652324181_BrandValidB",
+        "code": "BV43_652324181_VALID_B",
+        "value": 404.0,
+        "expiry": "2027-06-30"
+      }
+    ],
+    "skipped_preview": [],
+    "invalid_preview": [
+      {
+        "row": 3,
+        "reason": "invalid expiry date (need YYYY-MM-DD)",
+        "brand": "BV43_652324181_BrandCompact",
+        "code": "BV43_652324181_COMPACT_1",
+        "raw_expiry": "20281231"
+      },
+      {
+        "row": 4,
+        "reason": "invalid expiry date (need YYYY-MM-DD)",
+        "brand": "BV43_652324181_BrandWeek",
+        "code": "BV43_652324181_WEEK_1",
+        "raw_expiry": "2028-W01-1"
+      },
+      {
+        "row": 6,
+        "reason": "invalid expiry date (need YYYY-MM-DD)",
+        "brand": "BV43_652324181_BrandBad",
+        "code": "BV43_652324181_BAD_1",
+        "raw_expiry": "not-a-date"
+      },
+      {
+        "row": 7,
+        "reason": "missing expiry date",
+        "brand": "BV43_652324181_BrandEmpty",
+        "code": "BV43_652324181_EMPTY_1"
+      }
+    ]
+  },
+  "webhook_response": {
+    "status": 200,
+    "body": {
+      "status": "ok",
+      "message": "Webhook processed"
+    }
+  },
+  "cleanup": {
+    "remaining_coupons": 0,
+    "remaining_whatsapp_logs": 0,
+    "remaining_users": 0
+  },
+  "passed": true
+}

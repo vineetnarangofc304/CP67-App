@@ -1,0 +1,312 @@
+{
+  "marker": "651873348",
+  "source": "SRC_RETEST_42_651873348",
+  "wa_source": "SRC_RETEST_42_651873348_WA",
+  "checks": [
+    {
+      "name": "bulk upload returned 200",
+      "passed": true,
+      "details": {
+        "success": true,
+        "dry_run": false,
+        "source_code": "SRC_RETEST_42_651873348",
+        "summary": {
+          "total_rows": 4,
+          "imported": 2,
+          "skipped_duplicates": 0,
+          "invalid": 2
+        },
+        "imported_preview": [
+          {
+            "brand": "BV42_651873348_BrandA",
+            "code": "BV42_651873348_VALID_A",
+            "value": 111.0,
+            "expiry": "2027-12-31"
+          },
+          {
+            "brand": "BV42_651873348_BrandB",
+            "code": "BV42_651873348_VALID_B",
+            "value": 444.0,
+            "expiry": "2028-01-15"
+          }
+        ],
+        "skipped_preview": [],
+        "invalid_preview": [
+          {
+            "row": 3,
+            "reason": "invalid expiry date (need YYYY-MM-DD)",
+            "brand": "BV42_651873348_BrandBad",
+            "code": "BV42_651873348_BAD_DATE",
+            "raw_expiry": "not-a-date"
+          },
+          {
+            "row": 4,
+            "reason": "missing expiry date",
+            "brand": "BV42_651873348_BrandMissing",
+            "code": "BV42_651873348_MISSING_EXP"
+          }
+        ]
+      }
+    },
+    {
+      "name": "summary imported=2 invalid=2",
+      "passed": true,
+      "details": {
+        "total_rows": 4,
+        "imported": 2,
+        "skipped_duplicates": 0,
+        "invalid": 2
+      }
+    },
+    {
+      "name": "invalid_preview has exact expiry reasons",
+      "passed": true,
+      "details": [
+        {
+          "row": 3,
+          "reason": "invalid expiry date (need YYYY-MM-DD)",
+          "brand": "BV42_651873348_BrandBad",
+          "code": "BV42_651873348_BAD_DATE",
+          "raw_expiry": "not-a-date"
+        },
+        {
+          "row": 4,
+          "reason": "missing expiry date",
+          "brand": "BV42_651873348_BrandMissing",
+          "code": "BV42_651873348_MISSING_EXP"
+        }
+      ]
+    },
+    {
+      "name": "only valid rows persisted via API list",
+      "passed": true,
+      "details": [
+        "BV42_651873348_VALID_A",
+        "BV42_651873348_VALID_B"
+      ]
+    },
+    {
+      "name": "invalid rows not present in MongoDB",
+      "passed": true,
+      "details": [
+        "BV42_651873348_VALID_A",
+        "BV42_651873348_VALID_B"
+      ]
+    },
+    {
+      "name": "atomic N+1 issuance returns 2 distinct issued coupons then None",
+      "passed": true,
+      "details": {
+        "issued": [
+          {
+            "id": "4512d042-ac2b-48ac-bcff-48b35ef2ddb5",
+            "source_code": "SRC_RETEST_42_651873348",
+            "brand_name": "BV42_651873348_BrandA",
+            "code": "BV42_651873348_VALID_A",
+            "value": 111.0,
+            "expiry": "2027-12-31",
+            "status": "issued",
+            "issued_to_phone": "9189429933480",
+            "issued_at": "2026-08-13T20:11:13.300495+00:00",
+            "created_at": "2026-08-13T20:11:13.145381+00:00"
+          },
+          {
+            "id": "5ff517bf-c962-46d9-b15d-f6c0353b3f16",
+            "source_code": "SRC_RETEST_42_651873348",
+            "brand_name": "BV42_651873348_BrandB",
+            "code": "BV42_651873348_VALID_B",
+            "value": 444.0,
+            "expiry": "2028-01-15",
+            "status": "issued",
+            "issued_to_phone": "9189429933481",
+            "issued_at": "2026-08-13T20:11:13.302169+00:00",
+            "created_at": "2026-08-13T20:11:13.145405+00:00"
+          },
+          null
+        ]
+      }
+    },
+    {
+      "name": "inventory endpoint shape/counts after issuance",
+      "passed": true,
+      "details": {
+        "inventory": [
+          {
+            "source_code": "SRC_RETEST_42_651873348",
+            "brand_name": "BV42_651873348_BrandA",
+            "status": "issued",
+            "count": 1,
+            "total_value": 111.0
+          },
+          {
+            "source_code": "SRC_RETEST_42_651873348",
+            "brand_name": "BV42_651873348_BrandB",
+            "status": "issued",
+            "count": 1,
+            "total_value": 444.0
+          }
+        ],
+        "totals": {
+          "available": 0,
+          "issued": 2,
+          "expired": 0,
+          "void": 0
+        }
+      }
+    },
+    {
+      "name": "issued endpoint shape/counts after issuance",
+      "passed": true,
+      "details": {
+        "issued": [
+          {
+            "id": "5ff517bf-c962-46d9-b15d-f6c0353b3f16",
+            "source_code": "SRC_RETEST_42_651873348",
+            "brand_name": "BV42_651873348_BrandB",
+            "code": "BV42_651873348_VALID_B",
+            "value": 444.0,
+            "expiry": "2028-01-15",
+            "status": "issued",
+            "issued_to_phone": "9189429933481",
+            "issued_at": "2026-08-13T20:11:13.302169+00:00",
+            "created_at": "2026-08-13T20:11:13.145405+00:00"
+          },
+          {
+            "id": "4512d042-ac2b-48ac-bcff-48b35ef2ddb5",
+            "source_code": "SRC_RETEST_42_651873348",
+            "brand_name": "BV42_651873348_BrandA",
+            "code": "BV42_651873348_VALID_A",
+            "value": 111.0,
+            "expiry": "2027-12-31",
+            "status": "issued",
+            "issued_to_phone": "9189429933480",
+            "issued_at": "2026-08-13T20:11:13.300495+00:00",
+            "created_at": "2026-08-13T20:11:13.145381+00:00"
+          }
+        ],
+        "total": 2
+      }
+    },
+    {
+      "name": "WhatsApp seed coupon uploaded",
+      "passed": true,
+      "details": {
+        "success": true,
+        "dry_run": false,
+        "source_code": "SRC_RETEST_42_651873348_WA",
+        "summary": {
+          "total_rows": 1,
+          "imported": 1,
+          "skipped_duplicates": 0,
+          "invalid": 0
+        },
+        "imported_preview": [
+          {
+            "brand": "BV42_651873348_WABrand",
+            "code": "BV42_651873348_WA_CODE",
+            "value": 555.0,
+            "expiry": "2028-12-31"
+          }
+        ],
+        "skipped_preview": [],
+        "invalid_preview": []
+      }
+    },
+    {
+      "name": "webhook accepted new-user registration",
+      "passed": true,
+      "details": {
+        "status": 200,
+        "body": {
+          "status": "ok",
+          "message": "Webhook processed"
+        }
+      }
+    },
+    {
+      "name": "WhatsApp welcome log contains coupon brand/code/value",
+      "passed": true,
+      "details": {
+        "id": "9733736e-5498-4cf4-93dd-9f4368a79ede",
+        "user_id": "d47aac99-44fe-4363-8bcf-b1814317e8ec",
+        "user_phone": "918942428719",
+        "direction": "outbound",
+        "message_type": "interactive",
+        "content": "Hi BV42 User 651873348! Congratulations on joining Homeland Advantage.\n\nYou are now part of CP67 Mall's exclusive loyalty program, and your 1000 joining bonus points have been credited.\n\nEnjoy exclusive rewards, special benefits, and personalized offers every time you shop.\n\nShop - Earn - Redeem - Repeat\n\n\ud83c\udf81 Welcome Coupon Unlocked!\nBrand: BV42_651873348_WABrand\nCode:  BV42_651873348_WA_CODE\nValue: \u20b9555\nValid till: 2028-12-31",
+        "source_code": null,
+        "timestamp": "2026-08-13T20:11:20.394129+00:00"
+      }
+    },
+    {
+      "name": "WhatsApp registration atomically issued seeded coupon",
+      "passed": true,
+      "details": {
+        "id": "e03451bb-a66f-4104-93b2-26dc66261f69",
+        "source_code": "SRC_RETEST_42_651873348_WA",
+        "brand_name": "BV42_651873348_WABrand",
+        "code": "BV42_651873348_WA_CODE",
+        "value": 555.0,
+        "expiry": "2028-12-31",
+        "status": "issued",
+        "issued_to_phone": "918942428719",
+        "issued_at": "2026-08-13T20:11:20.393061+00:00",
+        "created_at": "2026-08-13T20:11:13.311973+00:00"
+      }
+    }
+  ],
+  "failures": [],
+  "bulk_upload_status": 200,
+  "bulk_upload_response": {
+    "success": true,
+    "dry_run": false,
+    "source_code": "SRC_RETEST_42_651873348",
+    "summary": {
+      "total_rows": 4,
+      "imported": 2,
+      "skipped_duplicates": 0,
+      "invalid": 2
+    },
+    "imported_preview": [
+      {
+        "brand": "BV42_651873348_BrandA",
+        "code": "BV42_651873348_VALID_A",
+        "value": 111.0,
+        "expiry": "2027-12-31"
+      },
+      {
+        "brand": "BV42_651873348_BrandB",
+        "code": "BV42_651873348_VALID_B",
+        "value": 444.0,
+        "expiry": "2028-01-15"
+      }
+    ],
+    "skipped_preview": [],
+    "invalid_preview": [
+      {
+        "row": 3,
+        "reason": "invalid expiry date (need YYYY-MM-DD)",
+        "brand": "BV42_651873348_BrandBad",
+        "code": "BV42_651873348_BAD_DATE",
+        "raw_expiry": "not-a-date"
+      },
+      {
+        "row": 4,
+        "reason": "missing expiry date",
+        "brand": "BV42_651873348_BrandMissing",
+        "code": "BV42_651873348_MISSING_EXP"
+      }
+    ]
+  },
+  "webhook_response": {
+    "status": 200,
+    "body": {
+      "status": "ok",
+      "message": "Webhook processed"
+    }
+  },
+  "cleanup": {
+    "remaining_coupons": 0,
+    "remaining_whatsapp_logs": 0
+  },
+  "passed": true
+}

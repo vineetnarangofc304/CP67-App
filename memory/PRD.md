@@ -484,3 +484,22 @@ Fixed the three critical items from the client's Google Doc (Points 19, 24, 25):
 - `_resolve_slabs_for_staff()` priority updated: **brand → category → __ALL__ → default**.
 - Slabs tab now includes a "Brand ↔ Category Mapping" upload block with Template + Upload buttons, and applies to both Registration Slabs and Bill Upload Slabs.
 
+
+## Feb 2026 — Client Point 26: Registration Coupon Inventory
+
+### Delivered
+- New MongoDB collection `coupon_codes` with schema: `{id, source_code, brand_name, code, value, expiry, status, issued_to_phone, issued_at, created_at}`
+- New backend module `/app/backend/routes/coupons.py` with admin endpoints under `/api/admin/coupons/*`:
+  - `GET /template.csv` — downloadable CSV template (Brand Name, Coupon Code, Coupon Value, Expiry Date)
+  - `POST /bulk-upload` — CSV upload tied to a `source_code` (SRC_RWA, SRC_OFFICE, etc.), supports `dry_run`
+  - `GET /inventory?source_code=...` — per-source × brand × status counts + totals
+  - `GET /issued?source_code=...` — list of issued coupons with customer phone
+  - `GET /list` — filterable list
+  - `POST /delete` — bulk-remove available (unissued) coupons
+- Atomic issuance helper `issue_coupon_for_registration(phone, source_code)` uses `find_one_and_update` (sort by created_at) so two concurrent registrations can never receive the same coupon.
+- Hooked into `process_new_user_registration` in server.py: new customers registering via non-parking / non-generic sources get one coupon popped from inventory and the welcome WhatsApp message is appended with brand, code, value, and expiry.
+- New admin UI at `/coupons` (sidebar "Registration Coupons") with source dropdown, KPI tiles, Template + Upload CSV, Inventory + Issued tabs.
+
+### Validation
+Strict `^\d{4}-\d{2}-\d{2}$` regex + `date.fromisoformat()` rejects compact ISO (`20281231`), week-date (`2028-W01-1`), malformed, and empty expiry values. Bug testing agent iteration 43 verified 100% backend + 100% frontend, no critical or minor issues.
+

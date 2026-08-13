@@ -1,0 +1,44 @@
+{
+  "source": "SRC_RETEST_42_EDGE_652051793",
+  "expected": "Non-YYYY-MM-DD expiry strings 20281231 and 2028-W01-1 should be invalid and not persisted.",
+  "status_code": 200,
+  "response": {
+    "success": true,
+    "dry_run": false,
+    "source_code": "SRC_RETEST_42_EDGE_652051793",
+    "summary": {
+      "total_rows": 2,
+      "imported": 2,
+      "skipped_duplicates": 0,
+      "invalid": 0
+    },
+    "imported_preview": [
+      {
+        "brand": "BV42EDGEBrandCompact",
+        "code": "BV42EDGE_652051793_COMPACT",
+        "value": 100.0,
+        "expiry": "20281231"
+      },
+      {
+        "brand": "BV42EDGEBrandWeek",
+        "code": "BV42EDGE_652051793_WEEK",
+        "value": 100.0,
+        "expiry": "2028-W01-1"
+      }
+    ],
+    "skipped_preview": [],
+    "invalid_preview": []
+  },
+  "persisted_before_cleanup": [
+    {
+      "code": "BV42EDGE_652051793_COMPACT",
+      "expiry": "20281231"
+    },
+    {
+      "code": "BV42EDGE_652051793_WEEK",
+      "expiry": "2028-W01-1"
+    }
+  ],
+  "passed": false,
+  "cleanup_deleted": 2
+}

@@ -1,0 +1,59 @@
+{
+  "verdict": "not_fixed",
+  "user_reported_bug": "https://docs.google.com/document/d/1ljCJt99LTbVTLtJwyab62Zn-pHXzP1HHkPuLFnLqxb4/edit?tab=t.0\n\n26 Point to be done pls\n\nPoint 26: RWA/Office QR-registration coupon inventory — admin uploads coupon codes (Brand Name, Coupon Code, Coupon Value, Expiry Date); new customer registering via that source's QR gets one atomically issued; admin can view inventory + issued list.\n\nRE-VERIFICATION: Iteration 41 flagged one HIGH issue — rows with invalid/missing Expiry Date were being imported instead of counted invalid. Please re-verify.",
+  "summary": "No relevant testing skill found. The exact requested 4-row CSV now passes (imported=2, invalid=2; 'not-a-date' and blank expiry are not persisted), and atomic issuance, inventory/issued endpoints, WhatsApp welcome coupon logging, and /coupons UI live upload all passed. However the strict 'not YYYY-MM-DD' requirement is still not fully fixed: POST /api/admin/coupons/bulk-upload accepts non-YYYY-MM-DD ISO formats such as 20281231 and 2028-W01-1, imports them, and persists them as available coupons.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/admin/coupons/bulk-upload",
+        "issue": "Expiry Date validation uses date.fromisoformat(), which accepts non-YYYY-MM-DD strings like '20281231' and '2028-W01-1'. These malformed-format rows returned imported=2 invalid=0 and were persisted before cleanup, violating the stated need for YYYY-MM-DD only.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_42_backend.py",
+    "/app/tests/bug_verification_42_expiry_edge.py",
+    "/app/tests/bug_verification_42_ui_setup_cleanup.py",
+    "/app/tests/bug_verification_42_ui_playwright.py",
+    "/app/test_reports/bug_verification_42_backend_results.json",
+    "/app/test_reports/bug_verification_42_expiry_edge_results.json",
+    "/app/test_reports/bug_verification_42_ui_db_results.json"
+  ],
+  "action_items": [
+    "In /app/backend/routes/coupons.py, enforce the literal YYYY-MM-DD shape before date.fromisoformat(), e.g. regex ^\\d{4}-\\d{2}-\\d{2}$ plus date.fromisoformat(expiry).",
+    "Add a regression test for compact ISO/date-week strings (e.g. 20281231, 2028-W01-1) to ensure they are counted invalid and never persisted."
+  ],
+  "critical_code_review_comments": [
+    "The new missing/not-a-date handling at /app/backend/routes/coupons.py lines 148-156 works for blank and obvious invalid strings, but date.fromisoformat() alone is not a strict YYYY-MM-DD validator in Python; it accepts compact ISO and week-date formats.",
+    "/app/backend/server.py process_new_user_registration hook was unchanged and passed runtime regression: a new source registration issued the coupon and wrote 'Welcome Coupon Unlocked' with brand/code/value to db.whatsapp_logs."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_42_backend.py",
+    "/app/tests/bug_verification_42_expiry_edge.py",
+    "/app/tests/bug_verification_42_ui_setup_cleanup.py",
+    "/app/tests/bug_verification_42_ui_playwright.py",
+    "/app/test_reports/bug_verification_42_backend_results.json",
+    "/app/test_reports/bug_verification_42_expiry_edge_results.json",
+    "/app/test_reports/bug_verification_42_ui_context.json",
+    "/app/test_reports/bug_verification_42_ui_db_results.json",
+    "/app/test_reports/bug_verification_42.json",
+    "/app/test_reports/iteration_42.json",
+    "/tmp/coupon_ui_test42.csv"
+  ],
+  "success_rate": {
+    "backend": "92% (required exact CSV and regressions passed; strict YYYY-MM-DD edge failed)",
+    "frontend": "100% for focused /coupons UI flow"
+  },
+  "seed_data_creation": "Created temporary SRC_RETEST_42_* backend coupon rows, one temporary webhook user/log, temporary SRC_RWA BV42UI_* UI coupon rows, and temporary SRC_RETEST_42_EDGE_* rows. Cleanup verified 0 remaining SRC_RETEST_42 coupons, 0 BV42UI/BV42EDGE coupons, and 0 BV42 WhatsApp logs.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "No relevant testing skill found. Re-test the exact 4-row CSV and the additional strict-format edge case. Current exact requested case passes, but bug_verification_42_expiry_edge.py shows non-YYYY-MM-DD values 20281231 and 2028-W01-1 are imported/persisted because date.fromisoformat() is too permissive. No mocked APIs were used.",
+  "rca_of_the_issue": "RCA: date.fromisoformat() validates date semantics but not the literal dashed YYYY-MM-DD format. Python accepts compact ISO dates and ISO week dates, so malformed-format expiry values can still enter coupon inventory and later be issued. Repro: admin upload CSV with Expiry Date 20281231 and 2028-W01-1; actual response imported=2 invalid=0 and MongoDB stores both rows. Expected imported=0 invalid=2 and no persistence."
+}

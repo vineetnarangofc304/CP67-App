@@ -1,0 +1,26 @@
+{
+  "marker": "652345993",
+  "source": "SRC_UI_BV43_652345993",
+  "csv_path": "/tmp/coupon_ui_test43.csv",
+  "valid_codes": [
+    "BV43UI_652345993_VALID_A",
+    "BV43UI_652345993_VALID_B"
+  ],
+  "invalid_codes": [
+    "BV43UI_652345993_COMPACT_1",
+    "BV43UI_652345993_WEEK_1",
+    "BV43UI_652345993_BAD_1",
+    "BV43UI_652345993_EMPTY_1"
+  ],
+  "valid_brands": [
+    "BV43UI_652345993_BrandValidA",
+    "BV43UI_652345993_BrandValidB"
+  ],
+  "invalid_brands": [
+    "BV43UI_652345993_BrandCompact",
+    "BV43UI_652345993_BrandWeek",
+    "BV43UI_652345993_BrandBad",
+    "BV43UI_652345993_BrandEmpty"
+  ],
+  "setup_deleted_existing_ui_rows": 0
+}

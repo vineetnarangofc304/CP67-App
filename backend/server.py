@@ -4817,6 +4817,18 @@ async def process_new_user_registration(phone: str, profile_name: str, source_co
         except Exception as e:
             logger.error(f"Failed to create staff registration incentive: {e}")
 
+    # Point 26: Registration Coupon issuance
+    # If a coupon exists for this registration source (RWA / OFFICE etc.),
+    # atomically claim one and deliver it to the customer over WhatsApp.
+    issued_coupon = None
+    if customer_type == "new" and source_code and source_code.upper() not in ("SRC_WHATSAPP", "SRC_PARKING"):
+        try:
+            issued_coupon = await issue_coupon_for_registration(phone, source_code)
+            if issued_coupon:
+                logger.info(f"Issued coupon {issued_coupon['code']} to {phone} from {source_code} inventory")
+        except Exception as e:
+            logger.error(f"Coupon issuance failed for {phone} / {source_code}: {e}")
+
     # Update QR analytics - only count NEW customers as registrations
     if qr_data:
         if customer_type == "new":
@@ -4842,6 +4854,17 @@ You are now part of CP67 Mall's exclusive loyalty program, and your 1000 joining
 Enjoy exclusive rewards, special benefits, and personalized offers every time you shop.
 
 Shop - Earn - Redeem - Repeat"""
+
+    # Point 26: Append issued coupon details (RWA/Office registration bonus).
+    if issued_coupon:
+        expiry_txt = issued_coupon.get("expiry") or ""
+        welcome_msg += (
+            "\n\n🎁 Welcome Coupon Unlocked!\n"
+            f"Brand: {issued_coupon.get('brand_name', '')}\n"
+            f"Code:  {issued_coupon.get('code', '')}\n"
+            f"Value: ₹{int(issued_coupon.get('value') or 0)}\n"
+            + (f"Valid till: {expiry_txt}" if expiry_txt else "")
+        )
     
     menu_options = [
         {"id": "upload_bill", "title": "Upload Bill", "description": "Upload your shopping bill to earn points"},
@@ -8182,6 +8205,15 @@ from routes.admin_diy import admin_diy_router, consumer_diy_router, init_diy_rou
 init_diy_routes(db)
 app.include_router(admin_diy_router)
 app.include_router(consumer_diy_router)
+
+# Point 26 — Registration Coupon Inventory (RWA / Office etc.)
+from routes.coupons import (
+    coupons_admin_router,
+    bind_db as bind_coupons_db,
+    issue_coupon_for_registration,
+)
+bind_coupons_db(db)
+app.include_router(coupons_admin_router)
 
 
 # ==================== PUBLIC DOWNLOADS ====================

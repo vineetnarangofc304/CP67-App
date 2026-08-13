@@ -1,0 +1,21 @@
+{
+  "marker": "651925305",
+  "csv_path": "/tmp/coupon_ui_test42.csv",
+  "valid_codes": [
+    "BV42UI_651925305_VALID_A",
+    "BV42UI_651925305_VALID_B"
+  ],
+  "invalid_codes": [
+    "BV42UI_651925305_BAD_DATE",
+    "BV42UI_651925305_MISSING_EXP"
+  ],
+  "valid_brands": [
+    "BV42UI_651925305_BrandA",
+    "BV42UI_651925305_BrandB"
+  ],
+  "invalid_brands": [
+    "BV42UI_651925305_BrandBad",
+    "BV42UI_651925305_BrandMissing"
+  ],
+  "setup_deleted_existing_ui_rows": 0
+}

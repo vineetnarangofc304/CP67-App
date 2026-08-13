@@ -1,0 +1,16 @@
+{
+  "phones_from_backend_result": [
+    "918811940023",
+    "9188433241810",
+    "9188433241811"
+  ],
+  "deleted_coupons": 0,
+  "deleted_whatsapp_logs": 0,
+  "deleted_users": 0,
+  "remaining": {
+    "coupons": 0,
+    "whatsapp_logs": 0,
+    "users": 0
+  },
+  "passed": true
+}

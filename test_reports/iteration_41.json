@@ -1,0 +1,51 @@
+{
+  "verdict": "not_fixed",
+  "user_reported_bug": "Point 26: If any customer is getting registered from RWA QR code then issue coupon to such NEW customer only if coupon code exists in backend; admin must upload coupon codes with Brand Name, Coupon Code, Coupon Value, Expiry Date, track issued coupons and remaining inventory; same for other registration QR sources.",
+  "summary": "No relevant testing skill found. Focused backend/API + preview UI verification completed for Registration Coupon Inventory. Core coupon upload, dry-run non-persistence, duplicate skip, inventory/issued endpoints, atomic N+1 issuance, WhatsApp RWA new-registration coupon message, existing-user no-extra-issue, and admin UI /coupons flow all worked. However, POST /api/admin/coupons/bulk-upload accepts an invalid Expiry Date ('not-a-date') as an available coupon instead of counting it as invalid, so the upload validation requirement is only partially fixed.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/admin/coupons/bulk-upload",
+        "issue": "Rows with invalid Expiry Date are imported with status='available' (e.g. expiry='not-a-date') instead of being rejected/counted in summary.invalid. This can lead to invalid coupons being issued to new QR registrations.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_41_backend.py",
+    "/app/tests/bug_verification_41_valid_phone_webhook.py",
+    "/app/test_reports/bug_verification_41_backend_results.json"
+  ],
+  "action_items": [
+    "Validate Expiry Date during CSV upload (YYYY-MM-DD parse at minimum; ideally reject past dates or mark expired per product rule) and include invalid date rows in summary.invalid without persisting them.",
+    "Add a backend regression test covering invalid/missing expiry values for coupon bulk upload.",
+    "Retest /api/admin/coupons/bulk-upload, inventory counts, and the /coupons UI upload summary after the validation fix."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/routes/coupons.py validates brand, code, and numeric value, but stores expiry as an unchecked string; issue_coupon_for_registration can later issue that invalid-date coupon because it only filters source_code + status='available'.",
+    "Runtime startup had no coupon-route 500s; backend log warnings/errors seen were pre-existing index warnings and test-induced TagnPay errors from an initial malformed test phone. A follow-up valid 91+10-digit webhook registration was run and coupon issuance/message logging passed."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_41_backend.py",
+    "/app/tests/bug_verification_41_valid_phone_webhook.py",
+    "/app/test_reports/bug_verification_41_backend_results.json",
+    "/app/test_reports/bug_verification_41.json",
+    "/app/test_reports/iteration_41.json",
+    "/tmp/coupon_ui_test41.csv"
+  ],
+  "success_rate": {
+    "backend": "92% (all core issuance/inventory/WhatsApp paths passed; invalid expiry upload validation failed)",
+    "frontend": "100% for focused /coupons preview UI flow"
+  },
+  "seed_data_creation": "Created TEST41_* coupon rows, two webhook test users/logs, and a temporary UI CSV during testing; cleanup verified 0 remaining TEST41 coupon codes/users/WhatsApp logs in MongoDB.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Newest verification report is iteration_41/bug_verification_41. Re-test invalid Expiry Date handling first. Confirm dry-run still does not persist, live upload invalid count increments, inventory totals exclude invalid rows, and a valid RWA webhook still issues a coupon and appends 'Welcome Coupon Unlocked' with brand/code/value. No relevant testing skill was available for this bug.",
+  "rca_of_the_issue": "Reproduction: login as admin, POST multipart CSV to /api/admin/coupons/bulk-upload with source_code=SRC_RWA and a row like Brand=Any, Code=Any, Coupon Value=100, Expiry Date=not-a-date. Actual: API returns success with imported count incremented and MongoDB stores the row as status='available'. Expected: row should be rejected/counted invalid and not persist, because Expiry Date is a required upload field and invalid rows must be counted in invalid."
+}

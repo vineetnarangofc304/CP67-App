@@ -1,0 +1,285 @@
+{
+  "run": "TEST41_1786651519_becf7d",
+  "base_url": "http://localhost:8001/api",
+  "checks": [
+    {
+      "name": "admin login",
+      "passed": true,
+      "detail": {
+        "status": 200,
+        "body": "{\"token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwibmFtZSI6IlN1cGVyIEFkbWluIiwicm9sZSI6InN1cGVyX2FkbWluIiwiYWRtaW5faWQiOiIxYWI4NGU5Zi1iODlhLTQ1ZTItOGUwOC1kMzA1NmM0MDVkY2EiLCJnY"
+      }
+    },
+    {
+      "name": "template.csv returns exact required header",
+      "passed": true,
+      "detail": {
+        "status": 200,
+        "first_line": "Brand Name,Coupon Code,Coupon Value,Expiry Date",
+        "content_disposition": "attachment; filename=\"coupon-upload-template.csv\""
+      }
+    },
+    {
+      "name": "dry-run reports imports but does not persist",
+      "passed": true,
+      "detail": {
+        "status": 200,
+        "summary": {
+          "total_rows": 2,
+          "imported": 2,
+          "skipped_duplicates": 0,
+          "invalid": 0
+        },
+        "before": 0,
+        "after": 0
+      }
+    },
+    {
+      "name": "live upload imports available coupons, skips duplicate, counts invalid rows including bad expiry",
+      "passed": false,
+      "detail": {
+        "status": 200,
+        "summary": {
+          "total_rows": 6,
+          "imported": 3,
+          "skipped_duplicates": 1,
+          "invalid": 2
+        },
+        "persisted": [
+          {
+            "source_code": "SRC_RWA",
+            "code": "TEST41_TEST41_1786651519_becf7d_A",
+            "expiry": "2026-12-31",
+            "status": "available"
+          },
+          {
+            "source_code": "SRC_RWA",
+            "code": "TEST41_TEST41_1786651519_becf7d_B",
+            "expiry": "2026-12-31",
+            "status": "available"
+          },
+          {
+            "source_code": "SRC_RWA",
+            "code": "TEST41_TEST41_1786651519_becf7d_BAD_EXPIRY",
+            "expiry": "not-a-date",
+            "status": "available"
+          }
+        ],
+        "note": "Bad expiry should be invalid; if imported, expiry validation is missing."
+      }
+    },
+    {
+      "name": "live upload basic persistence/status works",
+      "passed": true,
+      "detail": {
+        "status": 200,
+        "summary": {
+          "total_rows": 6,
+          "imported": 3,
+          "skipped_duplicates": 1,
+          "invalid": 2
+        },
+        "persisted": [
+          {
+            "source_code": "SRC_RWA",
+            "code": "TEST41_TEST41_1786651519_becf7d_A",
+            "expiry": "2026-12-31",
+            "status": "available"
+          },
+          {
+            "source_code": "SRC_RWA",
+            "code": "TEST41_TEST41_1786651519_becf7d_B",
+            "expiry": "2026-12-31",
+            "status": "available"
+          },
+          {
+            "source_code": "SRC_RWA",
+            "code": "TEST41_TEST41_1786651519_becf7d_BAD_EXPIRY",
+            "expiry": "not-a-date",
+            "status": "available"
+          }
+        ]
+      }
+    },
+    {
+      "name": "same coupon code allowed for different source",
+      "passed": true,
+      "detail": {
+        "status": 200,
+        "summary": {
+          "total_rows": 1,
+          "imported": 1,
+          "skipped_duplicates": 0,
+          "invalid": 0
+        },
+        "office_doc_exists": true
+      }
+    },
+    {
+      "name": "inventory endpoint returns per-brand/status rows and top-level totals",
+      "passed": true,
+      "detail": {
+        "status": 200,
+        "brand_rows": [
+          {
+            "source_code": "SRC_RWA",
+            "brand_name": "TEST41_BrandA",
+            "status": "available",
+            "count": 2,
+            "total_value": 300.0
+          },
+          {
+            "source_code": "SRC_RWA",
+            "brand_name": "TEST41_BrandC",
+            "status": "available",
+            "count": 1,
+            "total_value": 300.0
+          }
+        ],
+        "totals": {
+          "available": 3,
+          "issued": 0,
+          "expired": 0,
+          "void": 0
+        }
+      }
+    },
+    {
+      "name": "atomic helper issues N distinct coupons then returns None on N+1",
+      "passed": true,
+      "detail": {
+        "returned": [
+          {
+            "code": "TEST41_TEST41_1786651519_becf7d_HELPER_0",
+            "status": "issued",
+            "issued_to_phone": "9198884100001"
+          },
+          {
+            "code": "TEST41_TEST41_1786651519_becf7d_HELPER_1",
+            "status": "issued",
+            "issued_to_phone": "9198884100002"
+          },
+          {
+            "code": "TEST41_TEST41_1786651519_becf7d_HELPER_2",
+            "status": "issued",
+            "issued_to_phone": "9198884100003"
+          },
+          null
+        ],
+        "db": [
+          {
+            "code": "TEST41_TEST41_1786651519_becf7d_HELPER_0",
+            "status": "issued",
+            "issued_to_phone": "9198884100001",
+            "issued_at": "2026-08-13T20:05:19.872033+00:00"
+          },
+          {
+            "code": "TEST41_TEST41_1786651519_becf7d_HELPER_1",
+            "status": "issued",
+            "issued_to_phone": "9198884100002",
+            "issued_at": "2026-08-13T20:05:19.875723+00:00"
+          },
+          {
+            "code": "TEST41_TEST41_1786651519_becf7d_HELPER_2",
+            "status": "issued",
+            "issued_to_phone": "9198884100003",
+            "issued_at": "2026-08-13T20:05:19.876390+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "name": "issued endpoint returns issued coupons with issued_to_phone and issued_at",
+      "passed": true,
+      "detail": {
+        "status": 200,
+        "issued_rows": [
+          {
+            "code": "TEST41_TEST41_1786651519_becf7d_HELPER_2",
+            "phone": "9198884100003",
+            "issued_at": "2026-08-13T20:05:19.876390+00:00"
+          },
+          {
+            "code": "TEST41_TEST41_1786651519_becf7d_HELPER_1",
+            "phone": "9198884100002",
+            "issued_at": "2026-08-13T20:05:19.875723+00:00"
+          },
+          {
+            "code": "TEST41_TEST41_1786651519_becf7d_HELPER_0",
+            "phone": "9198884100001",
+            "issued_at": "2026-08-13T20:05:19.872033+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WhatsApp webhook new RWA registrations pop distinct coupons and welcome logs include coupon details",
+      "passed": true,
+      "detail": {
+        "responses": [
+          {
+            "status": 200,
+            "body": "{\"status\":\"ok\",\"message\":\"Webhook processed\"}"
+          },
+          {
+            "status": 200,
+            "body": "{\"status\":\"ok\",\"message\":\"Webhook processed\"}"
+          }
+        ],
+        "docs": [
+          {
+            "brand_name": "TEST41_WebhookBrand",
+            "code": "TEST41_TEST41_1786651519_becf7d_WEBHOOK_1",
+            "value": 777,
+            "status": "issued",
+            "issued_to_phone": "9198884100005",
+            "issued_at": "2026-08-13T20:05:34.579678+00:00"
+          },
+          {
+            "brand_name": "TEST41_WebhookBrand",
+            "code": "TEST41_TEST41_1786651519_becf7d_WEBHOOK_2",
+            "value": 888,
+            "status": "issued",
+            "issued_to_phone": "9198884100006",
+            "issued_at": "2026-08-13T20:05:34.609841+00:00"
+          }
+        ],
+        "logs_found": 2,
+        "log_excerpt": "Hi TEST41_ User 1! Congratulations on joining Homeland Advantage.\n\nYou are now part of CP67 Mall's exclusive loyalty program, and your 1000 joining bonus points have been credited.\n\nEnjoy exclusive rewards, special benefits, and personalized offers every time you shop.\n\nShop - Earn - Redeem - Repeat\n\n\ud83c\udf81 Welcome Coupon Unlocked!\nBrand: TEST41_WebhookBrand\nCode:  TEST41_TEST41_1786651519_becf7d_WEBHOOK_1\nValue: \u20b9777\nValid till: 2026-12-31\n---\nHi TEST41_ User 2! Congratulations on joining Homeland Advantage.\n\nYou are now part of CP67 Mall's exclusive loyalty program, and your 1000 joining bonus points have been credited.\n\nEnjoy exclusive rewards, special benefits, and personalized offers every time you shop.\n\nShop - Earn - Redeem - Repeat\n\n\ud83c\udf81 Welcome Coupon Unlocked!\nBrand: TEST41_WebhookBrand\nCode:  TEST41_TEST41_1786651519_becf7d_WEBHOOK_2\nValue: \u20b9888\nValid till: 2026-12-31"
+      }
+    },
+    {
+      "name": "repeat scan by existing user does not issue an extra registration coupon",
+      "passed": true,
+      "detail": {
+        "repeat_status": 200,
+        "available_before": 0,
+        "available_after": 0,
+        "coupon_logs_for_phone": 1
+      }
+    },
+    {
+      "name": "regression sanity: admin me and staff bulk-import template still work",
+      "passed": false,
+      "detail": {
+        "me_status": 200,
+        "staff_template_status": 200,
+        "staff_first_line": "Mob No,Name of Employee,Brand Name,Brand Category"
+      }
+    }
+  ],
+  "cleanup_before": {
+    "coupons": 0,
+    "users": 0,
+    "logs": 0,
+    "dedup": 0
+  },
+  "cleanup_after": {
+    "coupons": 9,
+    "users": 2,
+    "logs": 6,
+    "dedup": 3
+  },
+  "passed": 10,
+  "failed": 2
+}

@@ -1,0 +1,49 @@
+{
+  "verdict": "fixed",
+  "user_reported_bug": "Point 26 — Registration Coupon Inventory. Re-verification of iteration 42's HIGH finding: date.fromisoformat() was too permissive and accepted '20281231' and '2028-W01-1'. Main agent added a regex ^\\d{4}-\\d{2}-\\d{2}$ pre-check before fromisoformat(), so only strict dashed YYYY-MM-DD is accepted.",
+  "summary": "No relevant testing skill found. Verified the strict Expiry Date fix end-to-end: the 6-row CSV imported only the two dashed YYYY-MM-DD rows, rejected compact ISO/week-date/garbage/empty expiry rows, and did not persist invalid rows. Regression checks for atomic issuance, inventory/issued counts, SRC_RWA WhatsApp welcome coupon logging, and /coupons UI upload all passed. Test artifacts and BV43/SRC_STRICT_TEST/SRC_RETEST data were cleaned up.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_43_backend.py",
+    "/app/test_reports/bug_verification_43_backend_results.json",
+    "/app/tests/bug_verification_43_ui_setup_cleanup.py",
+    "/app/tests/bug_verification_43_ui_playwright.py",
+    "/app/test_reports/bug_verification_43_ui_context.json",
+    "/app/test_reports/bug_verification_43_ui_db_results.json",
+    "/app/tests/bug_verification_43_final_cleanup.py",
+    "/app/test_reports/bug_verification_43_cleanup_results.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Inspected /app/backend/routes/coupons.py: the regex pre-check ^\\d{4}-\\d{2}-\\d{2}$ runs before date.fromisoformat(), so compact ISO dates and ISO week dates no longer reach Python's permissive parser. Runtime API evidence confirmed this."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_43_backend.py",
+    "/app/tests/bug_verification_43_ui_setup_cleanup.py",
+    "/app/tests/bug_verification_43_ui_playwright.py",
+    "/app/tests/bug_verification_43_final_cleanup.py",
+    "/app/test_reports/bug_verification_43_backend_results.json",
+    "/app/test_reports/bug_verification_43_ui_context.json",
+    "/app/test_reports/bug_verification_43_ui_db_results.json",
+    "/app/test_reports/bug_verification_43_cleanup_results.json",
+    "/app/test_reports/bug_verification_43.json",
+    "/app/test_reports/iteration_43.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "Created isolated BV43 coupon CSV uploads under SRC_STRICT_TEST_BV43_* and SRC_UI_BV43_* plus one SRC_RWA BV43 WhatsApp coupon and fresh phone; all created coupons, user/log rows, and BV43/SRC_STRICT_TEST/SRC_RETEST artifacts were removed after verification.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend strict 6-row upload returned imported=2 invalid=4; invalid_preview included compact ISO, week-date, not-a-date, and empty-expiry codes. Atomic issuance returned two distinct coupons then None. Inventory/issued endpoints showed available=0 issued=2 after issuance. WhatsApp webhook for new SRC_RWA phone saved a welcome_msg with 'Welcome Coupon Unlocked' and brand/code/value. UI /coupons upload used an isolated injected source option to avoid contaminating real RWA/Office inventory; banner and inventory table matched backend truth.",
+  "rca_of_the_issue": "Previous validation relied on date.fromisoformat(), which accepts additional ISO representations such as compact YYYYMMDD and ISO week dates. The added strict dashed-date regex blocks those before date parsing."
+}

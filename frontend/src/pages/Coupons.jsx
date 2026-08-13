@@ -1,0 +1,272 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import DashboardLayout from '../components/DashboardLayout';
+import { useAuth } from '../App';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
+import { toast } from 'sonner';
+import { Ticket, Upload, FileText, RefreshCw } from 'lucide-react';
+
+// Point 26: Registration Coupon Inventory
+// Admin uploads coupon codes tied to a registration source (RWA / OFFICE / etc.).
+// When new customers register through that source's QR, the next available coupon
+// is atomically issued to them and delivered on WhatsApp.
+
+const SOURCE_OPTIONS = [
+  { code: 'SRC_RWA', label: 'RWA (Resident Welfare)' },
+  { code: 'SRC_OFFICE', label: 'Offices' },
+];
+
+export default function Coupons() {
+  const { token, API_URL, logout } = useAuth();
+  const [tab, setTab] = useState('inventory');
+  const [source, setSource] = useState('SRC_RWA');
+  const [inventory, setInventory] = useState({ inventory: [], totals: {} });
+  const [issued, setIssued] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState(null);
+
+  const api = (path, opts = {}) => fetch(`${API_URL}${path}`, {
+    ...opts,
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+  });
+
+  const handle401 = (status) => {
+    if (status === 401) {
+      toast.error('Session expired — please sign in again');
+      logout();
+      setTimeout(() => { window.location.href = '/'; }, 800);
+      return true;
+    }
+    return false;
+  };
+
+  const loadAll = async () => {
+    try {
+      const invR = await api(`/admin/coupons/inventory?source_code=${source}`);
+      if (handle401(invR.status)) return;
+      const inv = await invR.json();
+      setInventory(inv);
+      const isR = await api(`/admin/coupons/issued?source_code=${source}`);
+      if (handle401(isR.status)) return;
+      const is = await isR.json();
+      setIssued(is.issued || []);
+    } catch (e) {
+      toast.error('Failed to load coupon data');
+    }
+  };
+
+  useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [source]);
+
+  const downloadTemplate = async () => {
+    try {
+      const r = await fetch(`${API_URL}/admin/coupons/template.csv`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (handle401(r.status)) return;
+      if (!r.ok) { toast.error('Template download failed'); return; }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'coupon-upload-template.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Template downloaded');
+    } catch (e) {
+      toast.error('Download failed: ' + e.message);
+    }
+  };
+
+  const uploadCsv = async (file, dryRun) => {
+    if (!file) return;
+    setUploading(true);
+    setUploadResult(null);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('source_code', source);
+    fd.append('dry_run', dryRun ? 'true' : 'false');
+    try {
+      const r = await fetch(`${API_URL}/admin/coupons/bulk-upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (handle401(r.status)) return;
+      const data = await r.json();
+      if (!r.ok) { toast.error(data.detail || 'Upload failed'); return; }
+      setUploadResult(data);
+      if (dryRun) {
+        toast.info(`Dry run: ${data.summary.imported} will be imported, ${data.summary.skipped_duplicates} duplicates, ${data.summary.invalid} invalid.`);
+      } else {
+        toast.success(`Imported ${data.summary.imported} coupon(s) for ${data.source_code}.`);
+        loadAll();
+      }
+    } catch (e) {
+      toast.error('Upload failed: ' + e.message);
+    } finally { setUploading(false); }
+  };
+
+  // Group inventory rows into a table per brand with columns for each status.
+  const inventoryByBrand = useMemo(() => {
+    const byBrand = {};
+    (inventory.inventory || []).forEach(r => {
+      const key = r.brand_name || '—';
+      if (!byBrand[key]) byBrand[key] = { brand: key, available: 0, issued: 0, expired: 0, void: 0, total_value: 0 };
+      byBrand[key][r.status] = (byBrand[key][r.status] || 0) + r.count;
+      byBrand[key].total_value += r.total_value || 0;
+    });
+    return Object.values(byBrand).sort((a, b) => a.brand.localeCompare(b.brand));
+  }, [inventory]);
+
+  const totals = inventory.totals || {};
+
+  return (
+    <DashboardLayout title="Registration Coupons">
+      <div className="space-y-6" data-testid="coupons-page">
+        {/* KPIs */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card><CardContent className="p-4"><div className="text-xs text-slate-500 uppercase">Available</div><div className="text-3xl font-bold mt-1 text-emerald-600">{totals.available || 0}</div></CardContent></Card>
+          <Card><CardContent className="p-4"><div className="text-xs text-slate-500 uppercase">Issued</div><div className="text-3xl font-bold mt-1">{totals.issued || 0}</div></CardContent></Card>
+          <Card><CardContent className="p-4"><div className="text-xs text-slate-500 uppercase">Expired</div><div className="text-3xl font-bold mt-1 text-slate-400">{totals.expired || 0}</div></CardContent></Card>
+          <Card><CardContent className="p-4"><div className="text-xs text-slate-500 uppercase">Source</div>
+            <select
+              value={source}
+              onChange={e => setSource(e.target.value)}
+              className="mt-1 w-full h-10 px-3 rounded-md border border-slate-200 bg-white text-sm"
+              data-testid="coupon-source-select"
+            >
+              {SOURCE_OPTIONS.map(o => <option key={o.code} value={o.code}>{o.label}</option>)}
+            </select>
+          </CardContent></Card>
+        </div>
+
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList>
+            <TabsTrigger value="inventory" data-testid="tab-inventory"><Ticket size={16} className="mr-1" /> Inventory</TabsTrigger>
+            <TabsTrigger value="issued" data-testid="tab-issued"><Ticket size={16} className="mr-1" /> Issued</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="inventory">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Inventory · {source}</CardTitle>
+                <div className="flex gap-2 items-center">
+                  <Button variant="outline" size="sm" onClick={downloadTemplate} data-testid="coupon-template-btn">
+                    <FileText size={14} className="mr-1" /> Template
+                  </Button>
+                  <label className="cursor-pointer" data-testid="coupon-upload-label">
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      className="hidden"
+                      data-testid="coupon-upload-input"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        if (window.confirm(`Upload coupons from "${f.name}" for ${source}?\n\nOK = Dry-run first. Cancel = Live import.`)) {
+                          uploadCsv(f, true);
+                        } else {
+                          uploadCsv(f, false);
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                    <span className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border hover:bg-slate-50">
+                      <Upload size={14} /> {uploading ? 'Uploading…' : 'Upload Coupons CSV'}
+                    </span>
+                  </label>
+                  <Button variant="outline" size="sm" onClick={loadAll} data-testid="coupon-refresh-btn"><RefreshCw size={16} /></Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {uploadResult && (
+                  <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm" data-testid="coupon-upload-result-banner">
+                    <div className="font-medium mb-1">
+                      {uploadResult.dry_run ? 'Dry-run result:' : 'Last upload:'}
+                      &nbsp;{uploadResult.summary.imported} imported · {uploadResult.summary.skipped_duplicates} duplicates · {uploadResult.summary.invalid} invalid
+                    </div>
+                    <button className="ml-2 text-xs text-slate-500 underline" onClick={() => setUploadResult(null)}>dismiss</button>
+                  </div>
+                )}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left border-b">
+                      <tr>
+                        <th className="py-2 pr-4">Brand</th>
+                        <th className="pr-4">Available</th>
+                        <th className="pr-4">Issued</th>
+                        <th className="pr-4">Expired</th>
+                        <th className="pr-4">Face Value (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody data-testid="coupon-inventory-tbody">
+                      {inventoryByBrand.map(r => (
+                        <tr key={r.brand} className="border-b hover:bg-slate-50">
+                          <td className="py-2 pr-4 font-medium">{r.brand}</td>
+                          <td className="pr-4 text-emerald-600 font-bold">{r.available}</td>
+                          <td className="pr-4">{r.issued}</td>
+                          <td className="pr-4 text-slate-400">{r.expired}</td>
+                          <td className="pr-4">₹{Math.round(r.total_value)}</td>
+                        </tr>
+                      ))}
+                      {inventoryByBrand.length === 0 && (
+                        <tr><td colSpan={5} className="py-8 text-center text-slate-400">
+                          No coupons uploaded yet for {source}. Upload a CSV to get started.
+                        </td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-4 p-3 rounded-md bg-slate-50 text-xs text-slate-600">
+                  <div className="font-medium mb-1">How it works</div>
+                  <ol className="list-decimal ml-5 space-y-1">
+                    <li>Upload coupon codes tied to a registration source (RWA / Office / etc.).</li>
+                    <li>When a NEW customer registers through that source&apos;s QR, the next available coupon is atomically issued and sent on WhatsApp.</li>
+                    <li>Once inventory is empty, registrations still succeed but no coupon is issued.</li>
+                  </ol>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="issued">
+            <Card>
+              <CardHeader><CardTitle>Issued Coupons · {source}</CardTitle></CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left border-b">
+                      <tr>
+                        <th className="py-2 pr-4">Brand</th>
+                        <th className="pr-4">Code</th>
+                        <th className="pr-4">Value</th>
+                        <th className="pr-4">Issued To</th>
+                        <th className="pr-4">Issued At</th>
+                        <th>Expiry</th>
+                      </tr>
+                    </thead>
+                    <tbody data-testid="coupon-issued-tbody">
+                      {issued.map(c => (
+                        <tr key={c.id} className="border-b hover:bg-slate-50">
+                          <td className="py-2 pr-4 font-medium">{c.brand_name}</td>
+                          <td className="pr-4 font-mono">{c.code}</td>
+                          <td className="pr-4">₹{c.value}</td>
+                          <td className="pr-4 font-mono">{c.issued_to_phone}</td>
+                          <td className="pr-4 text-xs">{c.issued_at?.slice(0, 16).replace('T', ' ')}</td>
+                          <td>{c.expiry}</td>
+                        </tr>
+                      ))}
+                      {issued.length === 0 && (
+                        <tr><td colSpan={6} className="py-8 text-center text-slate-400">No coupons issued yet for {source}.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </DashboardLayout>
+  );
+}

@@ -1,0 +1,56 @@
+{
+  "context": {
+    "marker": "651925305",
+    "csv_path": "/tmp/coupon_ui_test42.csv",
+    "valid_codes": [
+      "BV42UI_651925305_VALID_A",
+      "BV42UI_651925305_VALID_B"
+    ],
+    "invalid_codes": [
+      "BV42UI_651925305_BAD_DATE",
+      "BV42UI_651925305_MISSING_EXP"
+    ],
+    "valid_brands": [
+      "BV42UI_651925305_BrandA",
+      "BV42UI_651925305_BrandB"
+    ],
+    "invalid_brands": [
+      "BV42UI_651925305_BrandBad",
+      "BV42UI_651925305_BrandMissing"
+    ],
+    "setup_deleted_existing_ui_rows": 0
+  },
+  "persisted_codes_before_cleanup": [
+    "BV42UI_651925305_VALID_A",
+    "BV42UI_651925305_VALID_B"
+  ],
+  "valid_rows_persisted": true,
+  "invalid_rows_absent": true,
+  "inventory_before_cleanup": {
+    "inventory": [
+      {
+        "source_code": "SRC_RWA",
+        "brand_name": "BV42UI_651925305_BrandA",
+        "status": "available",
+        "count": 1,
+        "total_value": 101.0
+      },
+      {
+        "source_code": "SRC_RWA",
+        "brand_name": "BV42UI_651925305_BrandB",
+        "status": "available",
+        "count": 1,
+        "total_value": 404.0
+      }
+    ],
+    "totals": {
+      "available": 2,
+      "issued": 0,
+      "expired": 0,
+      "void": 0
+    }
+  },
+  "deleted_ui_rows": 2,
+  "remaining_after_cleanup": 0,
+  "passed": true
+}

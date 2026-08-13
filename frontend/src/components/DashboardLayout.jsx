@@ -25,7 +25,8 @@ import {
   Type,
   RefreshCw,
   Award,
-  Rocket
+  Rocket,
+  Ticket
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 
@@ -81,6 +82,7 @@ const NAV_SECTIONS = [
     heading: 'Modules',
     items: [
       { path: '/staff-incentives', label: 'Staff Incentives', icon: Award },
+      { path: '/coupons', label: 'Registration Coupons', icon: Ticket },
       { path: '/app-controls', label: 'App Controls', icon: Rocket },
     ],
   },
