@@ -25,6 +25,12 @@ export default function Coupons() {
   const [issued, setIssued] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
+  // Point 28: All-coupons list view + search/filter so freshly uploaded codes are actually findable
+  const [allCoupons, setAllCoupons] = useState([]);
+  const [couponSearch, setCouponSearch] = useState('');
+  const [couponBrandFilter, setCouponBrandFilter] = useState('');
+  const [couponStatusFilter, setCouponStatusFilter] = useState('');
+  const [couponPageSize, setCouponPageSize] = useState(100);
 
   const api = (path, opts = {}) => fetch(`${API_URL}${path}`, {
     ...opts,
@@ -51,6 +57,11 @@ export default function Coupons() {
       if (handle401(isR.status)) return;
       const is = await isR.json();
       setIssued(is.issued || []);
+      // Point 28: also load the flat list so admin can see individual codes
+      const listR = await api(`/admin/coupons/list?source_code=${source}&limit=5000`);
+      if (handle401(listR.status)) return;
+      const list = await listR.json();
+      setAllCoupons(list.coupons || []);
     } catch (e) {
       toast.error('Failed to load coupon data');
     }
@@ -120,6 +131,24 @@ export default function Coupons() {
 
   const totals = inventory.totals || {};
 
+  // Point 28: derive filtered flat coupons list
+  const filteredCoupons = useMemo(() => {
+    const q = couponSearch.trim().toLowerCase();
+    return allCoupons.filter(c => {
+      if (couponBrandFilter && c.brand_name !== couponBrandFilter) return false;
+      if (couponStatusFilter && c.status !== couponStatusFilter) return false;
+      if (!q) return true;
+      const hay = [c.code, c.brand_name, c.issued_to_phone, c.source_code]
+        .filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }, [allCoupons, couponSearch, couponBrandFilter, couponStatusFilter]);
+
+  const couponBrands = useMemo(
+    () => [...new Set(allCoupons.map(c => c.brand_name).filter(Boolean))].sort(),
+    [allCoupons],
+  );
+
   return (
     <DashboardLayout title="Registration Coupons">
       <div className="space-y-6" data-testid="coupons-page">
@@ -143,6 +172,7 @@ export default function Coupons() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
             <TabsTrigger value="inventory" data-testid="tab-inventory"><Ticket size={16} className="mr-1" /> Inventory</TabsTrigger>
+            <TabsTrigger value="all" data-testid="tab-all"><Ticket size={16} className="mr-1" /> All Coupons</TabsTrigger>
             <TabsTrigger value="issued" data-testid="tab-issued"><Ticket size={16} className="mr-1" /> Issued</TabsTrigger>
           </TabsList>
 
@@ -185,6 +215,28 @@ export default function Coupons() {
                       {uploadResult.dry_run ? 'Dry-run result:' : 'Last upload:'}
                       &nbsp;{uploadResult.summary.imported} imported · {uploadResult.summary.skipped_duplicates} duplicates · {uploadResult.summary.invalid} invalid
                     </div>
+                    {!uploadResult.dry_run && uploadResult.summary.imported > 0 && (
+                      <div className="text-xs mb-1 text-emerald-700" data-testid="coupon-upload-view-hint">
+                        Newly uploaded coupons are in the &ldquo;All Coupons&rdquo; tab.
+                        <button
+                          className="ml-2 underline"
+                          onClick={() => { setTab('all'); setCouponStatusFilter('available'); setCouponSearch(''); setCouponBrandFilter(''); }}
+                          data-testid="view-uploaded-coupons-btn"
+                        >
+                          Show me the codes
+                        </button>
+                      </div>
+                    )}
+                    {uploadResult.invalid_preview?.length > 0 && (
+                      <details>
+                        <summary className="cursor-pointer text-amber-700">Show {uploadResult.invalid_preview.length} invalid rows</summary>
+                        <ul className="mt-2 text-xs text-slate-600 pl-4 list-disc">
+                          {uploadResult.invalid_preview.map((r, i) => (
+                            <li key={i}>Row {r.row}: {r.reason} — {r.brand || ''} {r.code ? `[${r.code}]` : ''} {r.raw_expiry ? `expiry="${r.raw_expiry}"` : ''}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
                     <button className="ml-2 text-xs text-slate-500 underline" onClick={() => setUploadResult(null)}>dismiss</button>
                   </div>
                 )}
@@ -224,6 +276,108 @@ export default function Coupons() {
                     <li>When a NEW customer registers through that source&apos;s QR, the next available coupon is atomically issued and sent on WhatsApp.</li>
                     <li>Once inventory is empty, registrations still succeed but no coupon is issued.</li>
                   </ol>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Point 28: All-coupons flat view with search + brand + status filters */}
+          <TabsContent value="all">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>
+                  All Coupons · {source} ({filteredCoupons.length}{filteredCoupons.length !== allCoupons.length ? ` of ${allCoupons.length}` : ''})
+                </CardTitle>
+                <Button variant="outline" size="sm" onClick={loadAll} data-testid="coupon-all-refresh-btn"><RefreshCw size={16} /></Button>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-3 flex flex-wrap items-center gap-2 p-3 rounded-lg bg-slate-50 border" data-testid="coupon-filter-bar">
+                  <input
+                    type="search"
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white flex-1 min-w-[200px]"
+                    placeholder="Search by code, brand, issued phone…"
+                    value={couponSearch}
+                    onChange={e => setCouponSearch(e.target.value)}
+                    data-testid="coupon-search-input"
+                  />
+                  <select
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white"
+                    value={couponBrandFilter}
+                    onChange={e => setCouponBrandFilter(e.target.value)}
+                    data-testid="coupon-brand-filter"
+                  >
+                    <option value="">All brands ({couponBrands.length})</option>
+                    {couponBrands.map(b => (<option key={b} value={b}>{b}</option>))}
+                  </select>
+                  <select
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white"
+                    value={couponStatusFilter}
+                    onChange={e => setCouponStatusFilter(e.target.value)}
+                    data-testid="coupon-status-filter"
+                  >
+                    <option value="">All statuses</option>
+                    <option value="available">Available</option>
+                    <option value="issued">Issued</option>
+                    <option value="expired">Expired</option>
+                    <option value="void">Void</option>
+                  </select>
+                  <select
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white"
+                    value={couponPageSize}
+                    onChange={e => setCouponPageSize(Number(e.target.value))}
+                    data-testid="coupon-page-size"
+                  >
+                    <option value={100}>Show 100</option>
+                    <option value={500}>Show 500</option>
+                    <option value={99999}>Show all</option>
+                  </select>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left border-b">
+                      <tr>
+                        <th className="py-2 pr-4">Brand</th>
+                        <th className="pr-4">Code</th>
+                        <th className="pr-4">Value</th>
+                        <th className="pr-4">Expiry</th>
+                        <th className="pr-4">Status</th>
+                        <th className="pr-4">Issued To</th>
+                        <th>Uploaded</th>
+                      </tr>
+                    </thead>
+                    <tbody data-testid="coupon-all-tbody">
+                      {filteredCoupons.slice(0, couponPageSize).map(c => (
+                        <tr key={c.id} className="border-b hover:bg-slate-50">
+                          <td className="py-2 pr-4 font-medium">{c.brand_name}</td>
+                          <td className="pr-4 font-mono">{c.code}</td>
+                          <td className="pr-4">₹{c.value}</td>
+                          <td className="pr-4">{c.expiry}</td>
+                          <td className="pr-4">
+                            <span className={
+                              c.status === 'available' ? 'text-emerald-600' :
+                              c.status === 'issued' ? 'text-slate-700' :
+                              'text-slate-400'
+                            }>{c.status}</span>
+                          </td>
+                          <td className="pr-4 font-mono">{c.issued_to_phone || '—'}</td>
+                          <td className="text-xs">{c.created_at?.slice(0, 10)}</td>
+                        </tr>
+                      ))}
+                      {filteredCoupons.length === 0 && allCoupons.length > 0 && (
+                        <tr><td colSpan={7} className="py-8 text-center text-slate-400" data-testid="coupon-no-matches">
+                          No matches — try clearing search or filters. Total codes for {source}: <span className="font-semibold text-slate-700">{allCoupons.length}</span>.
+                        </td></tr>
+                      )}
+                      {allCoupons.length === 0 && (
+                        <tr><td colSpan={7} className="py-8 text-center text-slate-400">No coupons uploaded yet for {source}.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                  {filteredCoupons.length > couponPageSize && (
+                    <div className="p-3 text-xs text-slate-500 text-center border-t bg-slate-50" data-testid="coupon-truncated-hint">
+                      Showing {couponPageSize} of {filteredCoupons.length} matches. Increase &ldquo;Show&rdquo; size above to see more.
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

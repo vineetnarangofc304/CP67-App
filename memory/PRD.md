@@ -517,3 +517,17 @@ User reported: "I have imported staff data but it is not visible anywhere". Back
 
 Bug testing agent iteration 44 verified 100% backend + 100% frontend, zero issues.
 
+
+## Feb 2026 — Client Point 28: Coupon Uploads Discoverability
+
+### Problem
+User: "same issue happening in coupon upload just like staff upload" — admin uploaded coupons but couldn't see the individual codes because the Inventory tab showed only brand-level aggregates.
+
+### Fix (frontend-only)
+- New **All Coupons** tab on `/coupons` with a flat table of every coupon (Brand, Code, Value, Expiry, Status, Issued To, Uploaded date), backed by the existing `GET /api/admin/coupons/list` endpoint.
+- Filter bar: search input (code / brand / phone), brand dropdown, status dropdown (available/issued/expired/void), page-size selector (100/500/all), plus a truncation hint when results exceed the page size.
+- Header shows "All Coupons · <SOURCE> (X of N)" when filtering, "(N)" otherwise.
+- Post-upload banner now has a **"Show me the codes"** CTA that jumps to the All Coupons tab with status='available' pre-selected so the just-uploaded rows are immediately visible.
+
+Testing agent iteration 45: 100% frontend passed, zero critical/minor issues.
+

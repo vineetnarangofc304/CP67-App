@@ -1,0 +1,44 @@
+{
+  "summary": "Point 28 (Coupons discoverability) — full Playwright verification passed. Verified new All Coupons tab, filter bar (search/brand/status/page-size), post-upload CTA, table columns, source switching, filter behaviours, and regression on Inventory/Issued tabs. All BV45 test data cleaned up (deleteStatus=200, deleted=2).",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "point28_tab_structure": "PASS — tabs [Inventory, All Coupons, Issued] present with data-testid tab-inventory/tab-all/tab-issued.",
+    "point28_filter_bar": "PASS — coupon-filter-bar with coupon-search-input, coupon-brand-filter, coupon-status-filter (values: Available/Issued/Expired/Void), coupon-page-size all visible.",
+    "point28_header_count": "PASS — 'All Coupons · SRC_RWA (2)' matched GET /api/admin/coupons/list?source_code=SRC_RWA count.",
+    "point28_columns": "PASS — Brand, Code, Value, Expiry, Status, Issued To, Uploaded.",
+    "point28_upload_live": "PASS — bulk-upload returned 200; banner shows '2 imported · 0 duplicates · 0 invalid'.",
+    "point28_upload_hint_and_cta": "PASS — coupon-upload-view-hint + view-uploaded-coupons-btn shown; click switched to All Coupons tab and applied status='available'.",
+    "point28_rows_visible": "PASS — both BV45_A and BV45_B visible after CTA.",
+    "point28_search_filter": "PASS — search='BV45_A' → A visible, B hidden.",
+    "point28_brand_filter": "PASS — brand=BV45_COUPON_TEST_BRAND → both rows.",
+    "point28_status_filter": "PASS — status='issued' → 0 rows; coupon-no-matches empty state visible.",
+    "point28_source_switch": "PASS — switching to Offices fires GET /api/admin/coupons/list?source_code=SRC_OFFICE&limit=5000; header updates to 'All Coupons · SRC_OFFICE (0)'.",
+    "regression_inventory_tab": "PASS — coupon-inventory-tbody still renders brand aggregates.",
+    "regression_issued_tab": "PASS — coupon-issued-tbody renders (empty state shown as no issued yet).",
+    "regression_template_upload_buttons": "PASS — coupon-template-btn and coupon-upload-label visible.",
+    "regression_kpi_tiles": "PASS — Available/Issued/Expired/Source tiles render.",
+    "cleanup": "PASS — POST /api/admin/coupons/delete deleted 2 BV45 coupons (status 200)."
+  },
+  "test_report_links": ["/app/test_reports/ui_45/02_coupons.jpeg", "/app/test_reports/ui_45/03_all_office.jpeg"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Coupons.jsx is 426 lines and mixes upload UI, filters, three tabs — still within the 700-line guideline but growing; consider extracting InventoryTab / AllCouponsTab / IssuedTab and a useCoupons hook to keep future changes safe.",
+    "The CSV upload UX uses window.confirm with 'OK = Dry-run, Cancel = Live' which is fragile and easy to mis-click (accidentally hitting Cancel/Enter runs a live import). Recommend replacing with an explicit shadcn dialog offering two buttons: 'Dry-run' and 'Import now'.",
+    "loadAll() calls three endpoints sequentially inside a single try; a failure in inventory throws before issued/list load. Prefer Promise.all so one slow/failing endpoint doesn't block the others.",
+    "GET /admin/coupons/list is fetched with limit=5000 client-side and further sliced/filtered in-memory — for larger deployments push search/brand/status/pageSize down to the backend query params (they are already supported).",
+    "handle401 helper is duplicated across pages (Coupons, likely Staff); consider extracting to a shared axios/fetch wrapper in App.js."
+  ],
+  "updated_files": [],
+  "success_rate": { "backend": "n/a (frontend-only run)", "frontend": "100%" },
+  "test_credentials": "admin / CP67Admin@2025 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Uploaded 2 coupons (BV45_A, BV45_B, brand BV45_COUPON_TEST_BRAND, source SRC_RWA) via the UI; deleted them at end of the run via /api/admin/coupons/delete.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Point 28 verified end-to-end via UI + network + DB round-trip. Note: coupon bulk-upload CSV columns are 'Brand Name,Coupon Code,Coupon Value,Expiry Date' (NOT source_code/brand_name/code/... — that mistake yields a 400). The window.confirm dialog: dismiss()=Cancel=LIVE import, accept()=OK=Dry-run.",
+  "rca of the issue": "n/a — verification only, no defects found."
+}
