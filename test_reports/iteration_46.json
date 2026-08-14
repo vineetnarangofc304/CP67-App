@@ -1,0 +1,51 @@
+{
+  "verdict": "fixed",
+  "user_reported_bug": "https://docs.google.com/document/d/1ljCJt99LTbVTLtJwyab62Zn-pHXzP1HHkPuLFnLqxb4/edit\n\nPoint 27 & Point 28 — user says: 'Not done, not showing in production'. Point 27 was 'imported staff data not visible anywhere'. Point 28 was the same discoverability problem for coupon uploads.",
+  "summary": "No relevant testing skill found. Focused preview-only verification passed for Points 27 and 28 at https://cp67-engage-preview.preview.emergentagent.com: Staff Incentives exposes the staff filter bar/search/brand/recent/page-size controls, count headers match API truth, search and recent CSV filters work, and a live CSV import displayed the post-import CTA with new rows visible. Coupons exposes Inventory/All Coupons/Issued tabs, All Coupons filters, count header matching API truth, and a live BV46 coupon CSV upload displayed the 'Show me the codes' CTA with available filter and both codes visible. Production was intentionally not tested per request; production still needs redeploy if users expect these changes there.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_46_preview_discoverability_mcp.py",
+    "/app/tests/bug46_cleanup_verify.py",
+    "/app/test_reports/ui_46/bug46_staff_runtime_results.json",
+    "/app/test_reports/ui_46/bug46_coupon_runtime_results.json",
+    "/app/test_reports/ui_46/bug46_cleanup_results.json",
+    "/app/test_reports/bug_verification_46.json",
+    "/app/test_reports/iteration_46.json"
+  ],
+  "action_items": [
+    "Redeploy the latest preview code to production (https://mall-rewards-1.emergent.host) before asking the user to retest there."
+  ],
+  "critical_code_review_comments": [
+    "Reviewed /app/frontend/src/pages/StaffIncentives.jsx: Point 27 controls and filtering are present; header uses filteredStaff versus staffList total; post-import CTA sets Recent CSV imports only and clears other filters.",
+    "Reviewed /app/frontend/src/pages/Coupons.jsx: Point 28 All Coupons tab and coupon-filter-bar are present; post-upload CTA switches to All Coupons and applies status='available'.",
+    "Runtime evidence was collected on preview only, using the REACT_APP_BACKEND_URL host. No mocked APIs were used."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_46_preview_discoverability_mcp.py",
+    "/app/tests/bug46_cleanup_verify.py",
+    "/app/test_reports/ui_46/bug46_staff_import.csv",
+    "/app/test_reports/ui_46/bug46_coupons.csv",
+    "/app/test_reports/ui_46/bug46_staff_runtime_results.json",
+    "/app/test_reports/ui_46/bug46_coupon_runtime_results.json",
+    "/app/test_reports/ui_46/bug46_cleanup_results.json",
+    "/app/test_reports/bug_verification_46.json",
+    "/app/test_reports/iteration_46.json"
+  ],
+  "success_rate": {
+    "backend": "n/a (frontend-only verification; API used only for count truth and cleanup)",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "Created two live staff rows (BV46 Staff Alpha/Beta, brand BV46_STAFF_VERIFY_BRAND) via the Staff Incentives CSV import and confirmed the post-import CTA made them visible; cleaned them up via MongoDB delete_many and final staff total returned to 757. Uploaded two live coupons (BV46_A/B, brand BV46_VERIFY_BRAND, source SRC_RWA) through the Coupons UI; post-upload CTA showed both in All Coupons with status=available; deleted both via /api/admin/coupons/delete and confirmed no leftovers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Skill lookup was run first with 'staff import coupon upload discoverability' and returned no relevant testing skill. Staff evidence: GET /api/admin/staff total 757; Retail Staff (757) header matched; search HL-0757 showed Retail Staff (1 of 757); Recent CSV imports showed Retail Staff (737 of 757) with 50 visible rows all mapped to import_source=csv_bulk; live import showed banner/CTA and rows HL-0758/HL-0759 visible, then cleanup restored total to 757. Coupon evidence: All Coupons tab/filter bar present; header All Coupons · SRC_RWA (0) matched API before upload; live upload of BV46_A/B showed 2 imported/0 duplicate/0 invalid, CTA applied status=available and both rows appeared; cleanup deleted 2 coupons.",
+  "rca_of_the_issue": "The reported production symptom is consistent with a deployment gap, not a missing preview fix: latest Point 27 and Point 28 UI changes are present and functional on preview, while production was not tested because the request explicitly said it has not been redeployed. Mitigation: redeploy latest preview code to production, then rerun the same staff/coupon discoverability checks there."
+}

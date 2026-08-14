@@ -1,0 +1,19 @@
+{
+  "staff_total_initial": 757,
+  "staff_search_code": "HL-0757",
+  "staff_search_header_after_query": "Retail Staff (1 of 757)",
+  "staff_csv_bulk_count_initial": 737,
+  "staff_recent_header": "Retail Staff (737 of 757)",
+  "staff_recent_visible_rows_checked": 50,
+  "staff_import_banner": "Last import result: 2 imported · 0 skipped (already exist) · 0 invalid",
+  "staff_post_import_header_after_cta": "Retail Staff (739 of 759)",
+  "staff_imported_rows_visible_after_cta": [
+    {"staff_code": "HL-0758", "name": "BV46 Staff Alpha", "brand_name": "BV46_STAFF_VERIFY_BRAND", "phone": "9304697302"},
+    {"staff_code": "HL-0759", "name": "BV46 Staff Beta", "brand_name": "BV46_STAFF_VERIFY_BRAND", "phone": "9304797302"}
+  ],
+  "cleanup": {
+    "deleted_staff": 2,
+    "post_staff_matches": 0,
+    "final_staff_total": 757
+  }
+}
