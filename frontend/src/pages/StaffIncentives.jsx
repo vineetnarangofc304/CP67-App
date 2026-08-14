@@ -23,12 +23,14 @@ export default function StaffIncentives() {
   const [form, setForm] = useState({ name: '', phone: '', brand_name: '', brand_category: '', store_location: '' });
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [pendingImportFile, setPendingImportFile] = useState(null); // file staged after dry-run, waiting for user confirm
   const [managers, setManagers] = useState([]);
   const [mgrForm, setMgrForm] = useState({ name: '', phone: '', brands: '', email: '' });
   const [creatingMgr, setCreatingMgr] = useState(false);
   const [catalog, setCatalog] = useState({ brands: [], categories: [] });   // Point 7: dropdown source
   const [uploadingMapping, setUploadingMapping] = useState(false);
   const [mappingResult, setMappingResult] = useState(null);
+  const [pendingMappingFile, setPendingMappingFile] = useState(null);
   // Point 27: search + filter so imported staff are actually findable in a 700+ row table.
   const [staffSearch, setStaffSearch] = useState('');
   const [staffBrandFilter, setStaffBrandFilter] = useState('');
@@ -147,8 +149,11 @@ export default function StaffIncentives() {
       if (!r.ok) { toast.error(data.detail || 'Import failed'); return; }
       setImportResult(data);
       if (dryRun) {
-        toast.info(`Dry run: ${data.summary.imported} rows will be imported, ${data.summary.invalid} invalid, ${data.summary.skipped_existing} already exist.`);
+        // Stage the file so the user can explicitly confirm the actual import.
+        setPendingImportFile(file);
+        toast.info(`Preview only: ${data.summary.imported} row(s) will be imported. Click "Confirm & Import" to save.`);
       } else {
+        setPendingImportFile(null);
         toast.success(`Imported ${data.summary.imported} staff across ${data.summary.brands_imported} brands.`);
         loadAll();
       }
@@ -196,8 +201,10 @@ export default function StaffIncentives() {
       if (!r.ok) { toast.error(data.detail || 'Upload failed'); return; }
       setMappingResult(data);
       if (dryRun) {
-        toast.info(`Dry run: ${data.summary.updated} update(s), ${data.summary.created} new brand(s), ${data.summary.invalid} invalid.`);
+        setPendingMappingFile(file);
+        toast.info(`Preview only: ${data.summary.updated} update(s), ${data.summary.created} new brand(s). Click "Confirm & Import" to save.`);
       } else {
+        setPendingMappingFile(null);
         toast.success(`Mapping applied: ${data.summary.updated} updated, ${data.summary.created} created.`);
         loadAll();
       }
@@ -314,11 +321,8 @@ export default function StaffIncentives() {
                       onChange={(e) => {
                         const f = e.target.files?.[0];
                         if (!f) return;
-                        if (window.confirm(`Import staff from "${f.name}"?\n\nClick OK to run a dry-run first (preview only, nothing saved). Cancel to do a live import.`)) {
-                          doBulkImport(f, true);
-                        } else {
-                          doBulkImport(f, false);
-                        }
+                        // Auto-run dry-run first — user must explicitly click "Confirm & Import" in the banner below to commit.
+                        doBulkImport(f, true);
                         e.target.value = '';
                       }}
                     />
@@ -393,9 +397,30 @@ export default function StaffIncentives() {
                 {importResult && (
                   <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm" data-testid="import-result-banner">
                     <div className="font-medium mb-1">
-                      {importResult.dry_run ? 'Dry-run result:' : 'Last import result:'}
-                      &nbsp;{importResult.summary.imported} imported · {importResult.summary.skipped_existing} skipped (already exist) · {importResult.summary.invalid} invalid
+                      {importResult.dry_run ? 'Preview (not saved yet):' : 'Last import result:'}
+                      &nbsp;{importResult.summary.imported} {importResult.dry_run ? 'will be imported' : 'imported'} · {importResult.summary.skipped_existing} skipped (already exist) · {importResult.summary.invalid} invalid
                     </div>
+                    {importResult.dry_run && pendingImportFile && (
+                      <div className="mt-2 mb-2 flex flex-wrap gap-2 items-center p-2 rounded-md bg-white border border-amber-300" data-testid="confirm-import-cta">
+                        <span className="text-xs text-slate-600">Nothing has been saved yet. Review the preview above and click Confirm to save {importResult.summary.imported} row(s).</span>
+                        <Button
+                          size="sm"
+                          onClick={() => { const f = pendingImportFile; setPendingImportFile(null); doBulkImport(f, false); }}
+                          disabled={importing || importResult.summary.imported === 0}
+                          data-testid="confirm-import-btn"
+                        >
+                          {importing ? 'Saving…' : `Confirm & Import ${importResult.summary.imported} row(s)`}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { setPendingImportFile(null); setImportResult(null); }}
+                          data-testid="cancel-import-btn"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
                     {!importResult.dry_run && importResult.summary.imported > 0 && (
                       <div className="text-xs mb-1 text-emerald-700" data-testid="import-view-hint">
                         Newly imported staff appear at the top of the table below (sorted by newest first).
@@ -418,7 +443,7 @@ export default function StaffIncentives() {
                         </ul>
                       </details>
                     )}
-                    <button className="ml-2 text-xs text-slate-500 underline" onClick={() => setImportResult(null)}>dismiss</button>
+                    <button className="ml-2 text-xs text-slate-500 underline" onClick={() => { setImportResult(null); setPendingImportFile(null); }}>dismiss</button>
                   </div>
                 )}
                 <div className="overflow-x-auto">
@@ -676,11 +701,7 @@ export default function StaffIncentives() {
                           onChange={(e) => {
                             const f = e.target.files?.[0];
                             if (!f) return;
-                            if (window.confirm(`Upload mapping from "${f.name}"?\n\nOK = Dry run first (preview only). Cancel = Live import.`)) {
-                              uploadBrandCategoryMapping(f, true);
-                            } else {
-                              uploadBrandCategoryMapping(f, false);
-                            }
+                            uploadBrandCategoryMapping(f, true);
                             e.target.value = '';
                           }}
                         />
@@ -692,10 +713,30 @@ export default function StaffIncentives() {
                     {mappingResult && (
                       <div className="mt-3 p-3 rounded-md bg-amber-50 border border-amber-200 text-xs" data-testid="mapping-result-banner">
                         <div className="font-medium">
-                          {mappingResult.dry_run ? 'Dry-run result:' : 'Last upload:'}
-                          &nbsp;{mappingResult.summary.updated} updated · {mappingResult.summary.created} new · {mappingResult.summary.invalid} invalid
+                          {mappingResult.dry_run ? 'Preview (not saved yet):' : 'Last upload:'}
+                          &nbsp;{mappingResult.summary.updated} {mappingResult.dry_run ? 'will be updated' : 'updated'} · {mappingResult.summary.created} new · {mappingResult.summary.invalid} invalid
                         </div>
-                        <button className="mt-1 text-slate-500 underline" onClick={() => setMappingResult(null)}>dismiss</button>
+                        {mappingResult.dry_run && pendingMappingFile && (
+                          <div className="mt-2 flex flex-wrap gap-2 items-center" data-testid="confirm-mapping-cta">
+                            <Button
+                              size="sm"
+                              onClick={() => { const f = pendingMappingFile; setPendingMappingFile(null); uploadBrandCategoryMapping(f, false); }}
+                              disabled={uploadingMapping}
+                              data-testid="confirm-mapping-btn"
+                            >
+                              {uploadingMapping ? 'Saving…' : 'Confirm & Import'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => { setPendingMappingFile(null); setMappingResult(null); }}
+                              data-testid="cancel-mapping-btn"
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        )}
+                        <button className="mt-1 text-slate-500 underline" onClick={() => { setMappingResult(null); setPendingMappingFile(null); }}>dismiss</button>
                       </div>
                     )}
                   </div>

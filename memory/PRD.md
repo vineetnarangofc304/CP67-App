@@ -531,3 +531,30 @@ User: "same issue happening in coupon upload just like staff upload" — admin u
 
 Testing agent iteration 45: 100% frontend passed, zero critical/minor issues.
 
+
+
+## Feb 14 2026 — CSV Import UX Bug Fix (Dry-Run Confusion)
+
+### Problem
+User: "It is showing Dry run 3 Imported / Dry run 731 Imported - But the imported record is not visible anywhere." (Staff Bulk Import + Coupon Upload)
+
+### Root Cause
+Previous flow used a native `window.confirm()` dialog with inverted semantics:
+- **OK** = Run a dry-run (nothing saved)
+- **Cancel** = Live import
+Users naturally clicked OK expecting the import to happen, so the dry-run banner said "731 imported" but zero rows were actually persisted.
+
+### Fix (frontend-only)
+Applied consistently to all 3 CSV upload flows: Staff Bulk Import, Coupon Upload, Brand↔Category Mapping.
+1. Removed `window.confirm` entirely.
+2. Selecting a file **auto-runs a dry-run**.
+3. The result banner now clearly reads **"Preview (not saved yet)"** and shows an explicit **"Confirm & Import N row(s)"** button (plus a "Cancel" button).
+4. Only after clicking Confirm does the second call fire with `dry_run=false`, persist the data, and refresh the list.
+5. Dismissing the banner also clears the staged file so no orphan state.
+
+### Data-testids added
+- Staff: `confirm-import-btn`, `cancel-import-btn`
+- Coupons: `confirm-coupon-btn`, `cancel-coupon-btn`
+- Mapping: `confirm-mapping-btn`, `cancel-mapping-btn`
+
+Testing agent iteration 47: 100% pass across 4 scenarios (Staff, Coupon, Mapping, Cancel path). Zero `window.confirm` popups observed.

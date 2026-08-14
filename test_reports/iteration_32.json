@@ -1,7 +1,7 @@
 {
   "verdict": "fixed",
   "user_reported_bug": "[7/6, 2:11 PM] Bharat New Sharma: Google Document https://docs.google.com/document/d/1ljCJt99LTbVTLtJwyab62Zn-pHXzP1HHkPuLFnLqxb4/edit?usp=sharing\n[7/20, 2:36 PM] Bharat New Sharma: Pending Point - 11,16,17 to be done\nNot.done ..check.pls",
-  "summary": "Focused verification on PREVIEW only (https://cp67-engage-preview.preview.emergentagent.com). No relevant testing skill found. Point 11 base64 bill upload works via API and real /app/upload UI, UI uses /api/consumer/bills/upload-base64 only and shows Bill Uploaded. Point 16 normalized invoice dedup/backfill works for INV12345 vs INV:12345. Point 17 admin Fix Brand returns queued in 0.46s and background force-credit approved the seeded pending bill within ~9s with points_issued=150 and force_credited=true. Regression endpoints and multipart upload also passed. Production was not tested in this run.",
+  "summary": "Focused verification on PREVIEW only (https://staff-incentive-lab.preview.emergentagent.com). No relevant testing skill found. Point 11 base64 bill upload works via API and real /app/upload UI, UI uses /api/consumer/bills/upload-base64 only and shows Bill Uploaded. Point 16 normalized invoice dedup/backfill works for INV12345 vs INV:12345. Point 17 admin Fix Brand returns queued in 0.46s and background force-credit approved the seeded pending bill within ~9s with points_issued=150 and force_credited=true. Regression endpoints and multipart upload also passed. Production was not tested in this run.",
   "backend_issues": {
     "critical": [],
     "minor": []

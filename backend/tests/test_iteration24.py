@@ -7,7 +7,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://cp67-engage-preview.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://staff-incentive-lab.preview.emergentagent.com')
 
 # Test credentials
 CONSUMER_PHONE = "9876543210"

@@ -4,7 +4,7 @@
 
 import asyncio
 
-BASE_URL = 'https://cp67-engage-preview.preview.emergentagent.com'
+BASE_URL = 'https://staff-incentive-lab.preview.emergentagent.com'
 STAFF_CSV = '/app/test_reports/ui_staff_import_40.csv'
 MAPPING_CSV = '/app/test_reports/ui_mapping_40.csv'
 

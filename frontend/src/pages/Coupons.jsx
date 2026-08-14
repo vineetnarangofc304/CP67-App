@@ -25,6 +25,7 @@ export default function Coupons() {
   const [issued, setIssued] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [uploadResult, setUploadResult] = useState(null);
+  const [pendingUploadFile, setPendingUploadFile] = useState(null);
   // Point 28: All-coupons list view + search/filter so freshly uploaded codes are actually findable
   const [allCoupons, setAllCoupons] = useState([]);
   const [couponSearch, setCouponSearch] = useState('');
@@ -107,8 +108,10 @@ export default function Coupons() {
       if (!r.ok) { toast.error(data.detail || 'Upload failed'); return; }
       setUploadResult(data);
       if (dryRun) {
-        toast.info(`Dry run: ${data.summary.imported} will be imported, ${data.summary.skipped_duplicates} duplicates, ${data.summary.invalid} invalid.`);
+        setPendingUploadFile(file);
+        toast.info(`Preview only: ${data.summary.imported} coupon(s) will be imported. Click "Confirm & Import" to save.`);
       } else {
+        setPendingUploadFile(null);
         toast.success(`Imported ${data.summary.imported} coupon(s) for ${data.source_code}.`);
         loadAll();
       }
@@ -193,11 +196,8 @@ export default function Coupons() {
                       onChange={(e) => {
                         const f = e.target.files?.[0];
                         if (!f) return;
-                        if (window.confirm(`Upload coupons from "${f.name}" for ${source}?\n\nOK = Dry-run first. Cancel = Live import.`)) {
-                          uploadCsv(f, true);
-                        } else {
-                          uploadCsv(f, false);
-                        }
+                        // Auto-run dry-run first — user must explicitly click "Confirm & Import" in the banner below to commit.
+                        uploadCsv(f, true);
                         e.target.value = '';
                       }}
                     />
@@ -212,9 +212,30 @@ export default function Coupons() {
                 {uploadResult && (
                   <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm" data-testid="coupon-upload-result-banner">
                     <div className="font-medium mb-1">
-                      {uploadResult.dry_run ? 'Dry-run result:' : 'Last upload:'}
-                      &nbsp;{uploadResult.summary.imported} imported · {uploadResult.summary.skipped_duplicates} duplicates · {uploadResult.summary.invalid} invalid
+                      {uploadResult.dry_run ? 'Preview (not saved yet):' : 'Last upload:'}
+                      &nbsp;{uploadResult.summary.imported} {uploadResult.dry_run ? 'will be imported' : 'imported'} · {uploadResult.summary.skipped_duplicates} duplicates · {uploadResult.summary.invalid} invalid
                     </div>
+                    {uploadResult.dry_run && pendingUploadFile && (
+                      <div className="mt-2 mb-2 flex flex-wrap gap-2 items-center p-2 rounded-md bg-white border border-amber-300" data-testid="confirm-coupon-cta">
+                        <span className="text-xs text-slate-600">Nothing has been saved yet. Review the preview above and click Confirm to save {uploadResult.summary.imported} coupon(s).</span>
+                        <Button
+                          size="sm"
+                          onClick={() => { const f = pendingUploadFile; setPendingUploadFile(null); uploadCsv(f, false); }}
+                          disabled={uploading || uploadResult.summary.imported === 0}
+                          data-testid="confirm-coupon-btn"
+                        >
+                          {uploading ? 'Saving…' : `Confirm & Import ${uploadResult.summary.imported} coupon(s)`}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { setPendingUploadFile(null); setUploadResult(null); }}
+                          data-testid="cancel-coupon-btn"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
                     {!uploadResult.dry_run && uploadResult.summary.imported > 0 && (
                       <div className="text-xs mb-1 text-emerald-700" data-testid="coupon-upload-view-hint">
                         Newly uploaded coupons are in the &ldquo;All Coupons&rdquo; tab.
@@ -237,7 +258,7 @@ export default function Coupons() {
                         </ul>
                       </details>
                     )}
-                    <button className="ml-2 text-xs text-slate-500 underline" onClick={() => setUploadResult(null)}>dismiss</button>
+                    <button className="ml-2 text-xs text-slate-500 underline" onClick={() => { setUploadResult(null); setPendingUploadFile(null); }}>dismiss</button>
                   </div>
                 )}
                 <div className="overflow-x-auto">

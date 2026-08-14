@@ -7,14 +7,14 @@ Slabs tab, and GET /api/admin/staff response shape.
 
 try:
     await page.set_viewport_size({"width": 1920, "height": 1080})
-    await page.goto("https://cp67-engage-preview.preview.emergentagent.com/login", wait_until="domcontentloaded")
+    await page.goto("https://staff-incentive-lab.preview.emergentagent.com/login", wait_until="domcontentloaded")
     await page.evaluate("localStorage.clear()")
     await page.reload(wait_until="domcontentloaded")
     await page.locator('[data-testid="login-username-input"]').fill("admin")
     await page.locator('[data-testid="login-password-input"]').fill("CP67Admin@2025")
     await page.locator('[data-testid="login-submit-btn"]').click()
     await page.wait_for_timeout(1000)
-    await page.goto("https://cp67-engage-preview.preview.emergentagent.com/staff-incentives", wait_until="domcontentloaded")
+    await page.goto("https://staff-incentive-lab.preview.emergentagent.com/staff-incentives", wait_until="domcontentloaded")
     await page.locator('[data-testid="staff-incentives-page"]').wait_for(timeout=20000)
 
     await page.locator('[data-testid="add-staff-btn"]').click()

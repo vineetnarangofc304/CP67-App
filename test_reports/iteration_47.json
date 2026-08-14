@@ -1,0 +1,29 @@
+{
+  "summary": "Frontend-only validation of CSV import UX fix (bug: 'Dry run imported' banner shown but no rows persisted). All 4 requested scenarios PASSED. window.confirm() completely removed; auto dry-run on file selection now shows a 'Preview (not saved yet)' banner with an explicit 'Confirm & Import' CTA that actually persists the data on click. Verified across Staff Bulk Import, Coupon Upload, Brand↔Category Mapping, and the Cancel path.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_scenarios_executed": [
+    {"id": "1-Staff", "steps": "Upload staff CSV (2 rows) -> preview banner shows 'Preview (not saved yet): 2 will be imported' with confirm-import-btn & cancel-import-btn visible; rows NOT in table before confirm; after clicking confirm-import-btn banner switches to 'Last import result: 2 imported' and both rows appear in the staff table.", "result": "PASS"},
+    {"id": "2-Coupon", "steps": "SRC_RWA source, upload coupons CSV (3 rows) -> 'Preview (not saved yet): 3 will be imported' banner + confirm-coupon-btn/cancel-coupon-btn visible; codes NOT visible in All Coupons before confirm; after confirm banner switches to 'Last upload: 3 imported' and all 3 codes appear in All Coupons tab.", "result": "PASS"},
+    {"id": "3-Cancel", "steps": "Upload staff CSV -> preview banner -> click cancel-import-btn -> import-result-banner disappears and cancelled row is NOT persisted (search returns 0 occurrences).", "result": "PASS"},
+    {"id": "4-Mapping", "steps": "Slabs tab -> upload brand-category mapping CSV -> mapping-result-banner shows 'Preview (not saved yet): 0 will be updated · 1 new · 0 invalid' with confirm-mapping-btn and cancel-mapping-btn visible; no window.confirm dialog.", "result": "PASS"}
+  ],
+  "window_confirm_dialogs_observed": 0,
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "StaffIncentives.jsx is 968 lines — consider splitting into sub-components (StaffTab, SlabsTab, MappingSection) for maintainability.",
+    "Repeated 'Preview / Last import result / dry_run summary' banner pattern is duplicated across Staff, Coupon, and Mapping flows; can be extracted into a reusable <ImportPreviewBanner /> component to keep the three call sites DRY."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only)", "frontend": "100% (4/4 scenarios)"},
+  "test_credentials": "admin / CP67Admin@2025 (from review request)",
+  "seed_data_creation": "Test data persisted (will remain in preview DB): 2 staff rows (TEST_ImpChk_*_A/_B) under brand BrandChk_*; 3 coupons TESTCP<suffix>0..2 under source SRC_RWA / brand CBrand_*; 1 brand-category mapping BrandMap_* -> TestCategory_*. Cancel-flow rows were NOT saved (as expected).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The CSV import UX fix (removal of window.confirm + explicit 'Confirm & Import' CTA) is fully validated for Staff, Coupon, and Brand-Category Mapping flows plus the Cancel path. Data-testids: confirm-import-btn / cancel-import-btn / import-result-banner (staff), confirm-coupon-btn / cancel-coupon-btn / coupon-upload-result-banner (coupon), confirm-mapping-btn / cancel-mapping-btn / mapping-result-banner (mapping). Note: <input type=\"file\"> is class='hidden' — playwright must use state='attached' (not default 'visible') when waiting for it."
+}

@@ -78,7 +78,7 @@
     "consumer_otp": "1234 (dev mode)",
     "admin_username": "admin",
     "admin_password": "CP67Admin@2025",
-    "api_base_url": "https://cp67-engage-preview.preview.emergentagent.com"
+    "api_base_url": "https://staff-incentive-lab.preview.emergentagent.com"
   },
   "seed_data_creation": "None - using existing 101 brands with proper floor assignments",
   "retest_needed": false,
