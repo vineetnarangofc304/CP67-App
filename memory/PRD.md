@@ -503,3 +503,17 @@ Fixed the three critical items from the client's Google Doc (Points 19, 24, 25):
 ### Validation
 Strict `^\d{4}-\d{2}-\d{2}$` regex + `date.fromisoformat()` rejects compact ISO (`20281231`), week-date (`2028-W01-1`), malformed, and empty expiry values. Bug testing agent iteration 43 verified 100% backend + 100% frontend, no critical or minor issues.
 
+
+## Feb 2026 — Client Point 27: Staff Imports Discoverability
+
+### Problem
+User reported: "I have imported staff data but it is not visible anywhere". Backend was storing all imports correctly (757 rows in `retail_staff` collection, all reachable via `GET /api/admin/staff`) — the bug was a UX discoverability gap on the admin `/staff-incentives` Staff tab, which rendered a flat 700+ row table without any filter, so freshly imported entries were effectively invisible below the fold.
+
+### Fix (frontend-only)
+- New filter bar on the Staff tab: search input (name / phone / staff_code / brand / store), brand dropdown, "Recent CSV imports only" checkbox (filters `import_source === 'csv_bulk'`), and a page-size selector (50 / 200 / 1000 / all).
+- Header count now shows "Retail Staff (X of N)" when filtering, "Retail Staff (N)" otherwise.
+- Truncation hint appears when filtered rows exceed the page size.
+- Post-import banner shows a "Show only recent CSV imports" CTA that jumps the table straight to the newly imported rows.
+
+Bug testing agent iteration 44 verified 100% backend + 100% frontend, zero issues.
+

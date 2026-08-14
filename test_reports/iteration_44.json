@@ -1,0 +1,42 @@
+{
+  "verdict": "fixed",
+  "user_reported_bug": "https://docs.google.com/document/d/1ljCJt99LTbVTLtJwyab62Zn-pHXzP1HHkPuLFnLqxb4/edit?tab=t.0\n\npoint 27\n\nPoint 27 \u2014 I have imported staff data but it is not visible anywhere please check.",
+  "summary": "No relevant testing skill found. Focused Point 27 verification passed: admin UI shows Retail Staff count matching GET /api/admin/staff (757), filter bar controls exist, search/brand/recent CSV filters work, truncation hint appears, and a live 2-row CSV import showed the result banner/hint/CTA with newly imported rows visible. Light regression checks for Add Staff dialog, QR PDF dialog, CSV template, Retailer Logins tab, Slabs tab, and GET /api/admin/staff shape also passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_44_staff_discoverability_mcp.py",
+    "/app/tests/bug_verification_44_regression_mcp.py",
+    "/app/tests/bug44_staff_import.csv",
+    "/app/test_reports/bug_verification_44.json",
+    "/app/test_reports/iteration_44.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Reviewed /app/frontend/src/pages/StaffIncentives.jsx Point 27 changes: filtering derives from staffList and checks import_source === 'csv_bulk'; header displays filtered count versus total; table uses filteredStaff slice; import CTA clears search/brand and enables recent-import filter.",
+    "Reviewed /app/backend/routes/staff.py: GET /api/admin/staff still returns {staff, total} sorted by created_at desc, and bulk import stamps import_source='csv_bulk'."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_44_staff_discoverability_mcp.py",
+    "/app/tests/bug_verification_44_regression_mcp.py",
+    "/app/tests/bug44_staff_import.csv",
+    "/app/test_reports/bug_verification_44.json",
+    "/app/test_reports/iteration_44.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "Created two live CSV test rows under brand BV44_TEST_BRAND (phones 9100827001 and 9100827002) via the UI bulk import; verified they appeared as HL-0758/HL-0759 with import_source='csv_bulk'; cleaned them up from retail_staff and confirmed zero remaining and total count back to 757.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Core UI proof came from Playwright MCP against https://cp67-engage-preview.preview.emergentagent.com/staff-incentives. Pre-import API total was 757 with 737 csv_bulk rows; after live import UI showed Retail Staff (739 of 759) under recent filter and both BV44 rows at top; cleanup restored total to 757. No mocked APIs were used.",
+  "rca_of_the_issue": "The original symptom was discoverability: imported rows existed in retail_staff but were buried in a 700+ row flat table. The fix adds visible search/filter/recent-import affordances plus a post-import CTA, and runtime testing confirms imported staff can now be found immediately. Test plan covered exact bug, affected Staff Incentives flow, changed frontend/backend references, proof from UI/API counts, and edge cases for search, brand, recent import filtering, truncation, and live import visibility."
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import DashboardLayout from '../components/DashboardLayout';
 import { useAuth } from '../App';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -29,6 +29,11 @@ export default function StaffIncentives() {
   const [catalog, setCatalog] = useState({ brands: [], categories: [] });   // Point 7: dropdown source
   const [uploadingMapping, setUploadingMapping] = useState(false);
   const [mappingResult, setMappingResult] = useState(null);
+  // Point 27: search + filter so imported staff are actually findable in a 700+ row table.
+  const [staffSearch, setStaffSearch] = useState('');
+  const [staffBrandFilter, setStaffBrandFilter] = useState('');
+  const [showRecentImportsOnly, setShowRecentImportsOnly] = useState(false);
+  const [staffPageSize, setStaffPageSize] = useState(50);
 
   const api = (path, opts = {}) => fetch(`${API_URL}${path}`, {
     ...opts,
@@ -255,6 +260,19 @@ export default function StaffIncentives() {
     else { toast.error('Delete failed'); }
   };
 
+  // Point 27: derived filter view so imported rows are findable
+  const filteredStaff = useMemo(() => {
+    const q = staffSearch.trim().toLowerCase();
+    return staffList.filter(s => {
+      if (staffBrandFilter && s.brand_name !== staffBrandFilter) return false;
+      if (showRecentImportsOnly && s.import_source !== 'csv_bulk') return false;
+      if (!q) return true;
+      const hay = [s.name, s.phone, s.staff_code, s.brand_name, s.store_location]
+        .filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }, [staffList, staffSearch, staffBrandFilter, showRecentImportsOnly]);
+
   return (
     <DashboardLayout title="Staff Incentive Program">
       <div className="space-y-6" data-testid="staff-incentives-page">
@@ -281,7 +299,7 @@ export default function StaffIncentives() {
           <TabsContent value="staff">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Retail Staff ({staffList.length})</CardTitle>
+                <CardTitle>Retail Staff ({filteredStaff.length}{filteredStaff.length !== staffList.length ? ` of ${staffList.length}` : ''})</CardTitle>
                 <div className="flex gap-2 items-center">
                   <QRCardsPDFButton token={token} API_URL={API_URL} brands={[...new Set(staffList.map(s => s.brand_name).filter(Boolean))].sort()} />
                   <Button variant="outline" size="sm" onClick={downloadTemplate} data-testid="download-template-btn">
@@ -330,12 +348,66 @@ export default function StaffIncentives() {
                 </div>
               </CardHeader>
               <CardContent>
+                {/* Point 27: search + filter + recent-import view so freshly imported staff are actually discoverable in a 700+ row table */}
+                <div className="mb-3 flex flex-wrap items-center gap-2 p-3 rounded-lg bg-slate-50 border" data-testid="staff-filter-bar">
+                  <input
+                    type="search"
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white flex-1 min-w-[200px]"
+                    placeholder="Search by name, phone, staff code…"
+                    value={staffSearch}
+                    onChange={e => setStaffSearch(e.target.value)}
+                    data-testid="staff-search-input"
+                  />
+                  <select
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white"
+                    value={staffBrandFilter}
+                    onChange={e => setStaffBrandFilter(e.target.value)}
+                    data-testid="staff-brand-filter"
+                  >
+                    <option value="">All brands ({[...new Set(staffList.map(s => s.brand_name).filter(Boolean))].length})</option>
+                    {[...new Set(staffList.map(s => s.brand_name).filter(Boolean))].sort().map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                  <label className="text-xs flex items-center gap-1 cursor-pointer" data-testid="staff-recent-toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={showRecentImportsOnly}
+                      onChange={e => setShowRecentImportsOnly(e.target.checked)}
+                      data-testid="staff-recent-toggle"
+                    />
+                    Recent CSV imports only
+                  </label>
+                  <select
+                    className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white"
+                    value={staffPageSize}
+                    onChange={e => setStaffPageSize(Number(e.target.value))}
+                    data-testid="staff-page-size"
+                  >
+                    <option value={50}>Show 50</option>
+                    <option value={200}>Show 200</option>
+                    <option value={1000}>Show 1000</option>
+                    <option value={99999}>Show all</option>
+                  </select>
+                </div>
                 {importResult && (
                   <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm" data-testid="import-result-banner">
                     <div className="font-medium mb-1">
                       {importResult.dry_run ? 'Dry-run result:' : 'Last import result:'}
                       &nbsp;{importResult.summary.imported} imported · {importResult.summary.skipped_existing} skipped (already exist) · {importResult.summary.invalid} invalid
                     </div>
+                    {!importResult.dry_run && importResult.summary.imported > 0 && (
+                      <div className="text-xs mb-1 text-emerald-700" data-testid="import-view-hint">
+                        Newly imported staff appear at the top of the table below (sorted by newest first).
+                        <button
+                          className="ml-2 underline"
+                          onClick={() => { setShowRecentImportsOnly(true); setStaffSearch(''); setStaffBrandFilter(''); }}
+                          data-testid="filter-recent-imports-btn"
+                        >
+                          Show only recent CSV imports
+                        </button>
+                      </div>
+                    )}
                     {importResult.invalid_preview?.length > 0 && (
                       <details>
                         <summary className="cursor-pointer text-amber-700">Show {importResult.invalid_preview.length} invalid rows</summary>
@@ -355,7 +427,7 @@ export default function StaffIncentives() {
                       <tr><th className="py-2 pr-4">Code</th><th className="pr-4">Name</th><th className="pr-4">Brand</th><th className="pr-4">Phone</th><th className="pr-4">Status</th><th>Actions</th></tr>
                     </thead>
                     <tbody data-testid="staff-list-tbody">
-                      {staffList.map(s => (
+                      {filteredStaff.slice(0, staffPageSize).map(s => (
                         <tr key={s.id} className="border-b hover:bg-slate-50">
                           <td className="py-2 pr-4 font-mono text-xs">{s.staff_code}</td>
                           <td className="pr-4 font-medium">{s.name}</td>
@@ -370,11 +442,21 @@ export default function StaffIncentives() {
                           </td>
                         </tr>
                       ))}
+                      {filteredStaff.length === 0 && staffList.length > 0 && (
+                        <tr><td colSpan={6} className="py-8 text-center text-slate-400" data-testid="staff-no-matches">
+                          No matches — try clearing the search or brand filter above. Total staff in system: <span className="font-semibold text-slate-700">{staffList.length}</span>.
+                        </td></tr>
+                      )}
                       {staffList.length === 0 && (
                         <tr><td colSpan={6} className="py-8 text-center text-slate-400">No staff onboarded yet.</td></tr>
                       )}
                     </tbody>
                   </table>
+                  {filteredStaff.length > staffPageSize && (
+                    <div className="p-3 text-xs text-slate-500 text-center border-t bg-slate-50" data-testid="staff-truncated-hint">
+                      Showing {staffPageSize} of {filteredStaff.length} matches. Increase &ldquo;Show&rdquo; size above to see more.
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
