@@ -694,17 +694,27 @@ async def get_home(current_user=Depends(get_current_consumer)):
         banners.append(b)
     random.shuffle(banners)
 
-    # Featured stores
+    # Featured stores — prefer brands collection (Point 33: admin's is_featured toggle on a brand must be reflected here)
     featured_stores = []
-    async for s in _db.stores.find({"is_active": True, "is_featured": True}, {"_id": 0}).limit(8):
-        featured_stores.append(s)
+    async for b in _db.brands.find(
+        {"is_active": {"$ne": False}, "is_featured": True, "hidden_from_app": {"$ne": True}, "brand_name": {"$exists": True, "$ne": ""}},
+        {"_id": 0}
+    ).limit(8):
+        featured_stores.append({
+            "id": b.get("id"),
+            "name": b.get("brand_name"),
+            "category": b.get("category") or "General",
+            "cover_image": b.get("cover_image_url") or b.get("logo_url") or "",
+            "logo_url": b.get("logo_url") or "",
+            "is_featured": True
+        })
 
-    # Fallback: if no featured stores in stores collection, pull from brands
+    # Fallback: if no featured brands, pull first few from brands collection (respecting hidden_from_app)
     if not featured_stores:
-        async for s in _db.stores.find({"is_active": True}, {"_id": 0}).limit(8):
-            featured_stores.append(s)
-    if not featured_stores:
-        async for b in _db.brands.find({"is_active": {"$ne": False}, "is_eligible": {"$ne": False}}, {"_id": 0}).limit(8):
+        async for b in _db.brands.find(
+            {"is_active": {"$ne": False}, "hidden_from_app": {"$ne": True}, "brand_name": {"$exists": True, "$ne": ""}},
+            {"_id": 0}
+        ).limit(8):
             featured_stores.append({
                 "id": b.get("id"),
                 "name": b.get("brand_name"),
@@ -746,7 +756,12 @@ async def get_home(current_user=Depends(get_current_consumer)):
 @consumer_router.get("/stores")
 async def list_stores(category: str = None, search: str = None, floor: str = None):
     """List stores from brands collection with filters"""
-    query = {"is_active": {"$ne": False}, "brand_name": {"$exists": True, "$ne": ""}}
+    # Point 32: brands marked hidden_from_app are excluded from the consumer directory
+    query = {
+        "is_active": {"$ne": False},
+        "hidden_from_app": {"$ne": True},
+        "brand_name": {"$exists": True, "$ne": ""},
+    }
     if category:
         query["category"] = category
     if floor:
@@ -772,8 +787,9 @@ async def list_stores(category: str = None, search: str = None, floor: str = Non
         })
 
     EXCLUDED_FLOORS = {"Food Court"}
-    categories = sorted([c for c in await _db.brands.distinct("category", {"is_active": {"$ne": False}, "brand_name": {"$exists": True, "$ne": ""}}) if c])
-    floors_list = sorted([f for f in await _db.brands.distinct("floor", {"is_active": {"$ne": False}, "brand_name": {"$exists": True, "$ne": ""}}) if f and f not in EXCLUDED_FLOORS])
+    _list_filter = {"is_active": {"$ne": False}, "hidden_from_app": {"$ne": True}, "brand_name": {"$exists": True, "$ne": ""}}
+    categories = sorted([c for c in await _db.brands.distinct("category", _list_filter) if c])
+    floors_list = sorted([f for f in await _db.brands.distinct("floor", _list_filter) if f and f not in EXCLUDED_FLOORS])
     # Ensure Third Floor is always available
     if "Third Floor" not in floors_list:
         floors_list.append("Third Floor")

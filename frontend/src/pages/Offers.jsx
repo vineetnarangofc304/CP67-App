@@ -12,7 +12,7 @@ export default function Offers() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editOffer, setEditOffer] = useState(null);
-  const [form, setForm] = useState({ title: '', description: '', store_name: '', discount_text: '', is_active: true });
+  const [form, setForm] = useState({ title: '', description: '', store_name: '', discount_text: '', is_hot_deal: false, is_active: true });
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -74,13 +74,13 @@ export default function Offers() {
   };
 
   const resetForm = () => {
-    setForm({ title: '', description: '', store_name: '', discount_text: '', is_active: true });
+    setForm({ title: '', description: '', store_name: '', discount_text: '', is_hot_deal: false, is_active: true });
     setSelectedFile(null); setPreview(null); setEditOffer(null); setShowForm(false);
   };
 
   const startEdit = (o) => {
     setEditOffer(o);
-    setForm({ title: o.title, description: o.description || '', store_name: o.store_name || '', discount_text: o.discount_text || '', is_active: o.is_active });
+    setForm({ title: o.title, description: o.description || '', store_name: o.store_name || '', discount_text: o.discount_text || '', is_hot_deal: !!o.is_hot_deal, is_active: o.is_active });
     setPreview(o.image_url || null);
     setShowForm(true);
   };
@@ -128,6 +128,17 @@ export default function Offers() {
                 <textarea className="w-full border rounded-lg px-3 py-2 text-sm" rows={2} value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Details..." data-testid="offer-desc" />
               </div>
+              {/* Point 34: Hot Deal toggle — offers marked here surface in the app's Hot Deals strip. */}
+              <div className="col-span-2 flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                <input
+                  type="checkbox"
+                  id="is_hot_deal"
+                  checked={form.is_hot_deal}
+                  onChange={e => setForm(f => ({ ...f, is_hot_deal: e.target.checked }))}
+                  data-testid="offer-hot-deal-toggle"
+                />
+                <label htmlFor="is_hot_deal" className="text-sm font-medium text-amber-900">Mark as Hot Deal (shown on app&apos;s Hot Deals section)</label>
+              </div>
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-slate-600 mb-1">Image</label>
                 <div className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-slate-400"
@@ -162,6 +173,7 @@ export default function Offers() {
                   <h4 className="font-semibold text-sm">{o.title}</h4>
                   {o.store_name && <p className="text-xs text-slate-500">{o.store_name}</p>}
                   {o.discount_text && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">{o.discount_text}</span>}
+                  {o.is_hot_deal && <span className="ml-1 text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full" data-testid={`offer-hot-badge-${o.id}`}>🔥 Hot Deal</span>}
                 </div>
                 <div className="flex items-center gap-2">
                   <button onClick={() => toggleActive(o)} className="p-1" title={o.is_active ? 'Active' : 'Inactive'}>

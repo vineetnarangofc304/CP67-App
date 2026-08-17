@@ -36,6 +36,9 @@ export default function StaffIncentives() {
   const [staffBrandFilter, setStaffBrandFilter] = useState('');
   const [showRecentImportsOnly, setShowRecentImportsOnly] = useState(false);
   const [staffPageSize, setStaffPageSize] = useState(50);
+  const [showUnmappedOnly, setShowUnmappedOnly] = useState(false); // Point 35
+  const [staffUnmappedCount, setStaffUnmappedCount] = useState(0); // Point 35: server-computed
+  const [reassignStaff, setReassignStaff] = useState(null); // Point 35: modal for in-place brand fix
 
   const api = (path, opts = {}) => fetch(`${API_URL}${path}`, {
     ...opts,
@@ -54,6 +57,7 @@ export default function StaffIncentives() {
         api('/admin/staff/catalog/brands-categories').then(x => x.json()),
       ]);
       setStaffList(s.staff || []);
+      setStaffUnmappedCount(s.unmapped_count || 0);
       setConfig(c.config || null);
       setMetrics(m);
       setLeaderboard(l.leaderboard || []);
@@ -273,12 +277,30 @@ export default function StaffIncentives() {
     return staffList.filter(s => {
       if (staffBrandFilter && s.brand_name !== staffBrandFilter) return false;
       if (showRecentImportsOnly && s.import_source !== 'csv_bulk') return false;
+      if (showUnmappedOnly && s.is_brand_mapped) return false; // Point 35
       if (!q) return true;
       const hay = [s.name, s.phone, s.staff_code, s.brand_name, s.store_location]
         .filter(Boolean).join(' ').toLowerCase();
       return hay.includes(q);
     });
-  }, [staffList, staffSearch, staffBrandFilter, showRecentImportsOnly]);
+  }, [staffList, staffSearch, staffBrandFilter, showRecentImportsOnly, showUnmappedOnly]);
+
+  // Point 35: in-place reassignment of a staff's brand from the master brand list.
+  const submitReassignBrand = async (newBrand) => {
+    if (!reassignStaff || !newBrand) return;
+    const cat = catalog.brands.find(b => b.brand_name === newBrand)?.category || '';
+    const body = { brand_name: newBrand };
+    if (cat) body.brand_category = cat;
+    const r = await api(`/admin/staff/${reassignStaff.id}`, { method: 'PATCH', body: JSON.stringify(body) });
+    if (r.ok) {
+      toast.success(`Reassigned to ${newBrand}`);
+      setReassignStaff(null);
+      loadAll();
+    } else {
+      const d = await r.json().catch(() => ({}));
+      toast.error(d.detail || 'Reassign failed');
+    }
+  };
 
   return (
     <DashboardLayout title="Staff Incentive Program">
@@ -340,8 +362,38 @@ export default function StaffIncentives() {
                       <div className="space-y-3">
                         <div><Label>Name *</Label><Input data-testid="staff-form-name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
                         <div><Label>Phone (10 digits) *</Label><Input data-testid="staff-form-phone" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
-                        <div><Label>Brand Name *</Label><Input data-testid="staff-form-brand" value={form.brand_name} onChange={e => setForm({ ...form, brand_name: e.target.value })} /></div>
-                        <div><Label>Brand Category</Label><Input data-testid="staff-form-brand-category" placeholder="e.g. Fashion, Food, Electronics" value={form.brand_category} onChange={e => setForm({ ...form, brand_category: e.target.value })} /></div>
+                        {/* Point 35: brand must come from the master brand list so incentive logic maps cleanly by brand/category */}
+                        <div>
+                          <Label>Brand Name *</Label>
+                          <select
+                            data-testid="staff-form-brand"
+                            className="w-full h-10 px-3 rounded-md border border-slate-200 bg-white text-sm"
+                            value={form.brand_name}
+                            onChange={e => {
+                              const bn = e.target.value;
+                              const cat = catalog.brands.find(b => b.brand_name === bn)?.category || '';
+                              setForm({ ...form, brand_name: bn, brand_category: cat || form.brand_category });
+                            }}
+                          >
+                            <option value="">Select a brand…</option>
+                            {catalog.brands.map(b => (
+                              <option key={b.brand_name} value={b.brand_name}>{b.brand_name}{b.category ? ` — ${b.category}` : ''}</option>
+                            ))}
+                          </select>
+                          <p className="text-[11px] text-slate-500 mt-1">Master brand list from Brand Admin. Missing a brand? Add it in <em>Brand Management</em> first.</p>
+                        </div>
+                        <div>
+                          <Label>Brand Category</Label>
+                          <select
+                            data-testid="staff-form-brand-category"
+                            className="w-full h-10 px-3 rounded-md border border-slate-200 bg-white text-sm"
+                            value={form.brand_category}
+                            onChange={e => setForm({ ...form, brand_category: e.target.value })}
+                          >
+                            <option value="">(auto — from brand)</option>
+                            {catalog.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
                         <div><Label>Store Location</Label><Input data-testid="staff-form-store" value={form.store_location} onChange={e => setForm({ ...form, store_location: e.target.value })} /></div>
                       </div>
                       <DialogFooter>
@@ -381,6 +433,16 @@ export default function StaffIncentives() {
                       data-testid="staff-recent-toggle"
                     />
                     Recent CSV imports only
+                  </label>
+                  {/* Point 35: quick filter to zero in on staff whose brand isn't in the master list */}
+                  <label className="text-xs flex items-center gap-1 cursor-pointer" data-testid="staff-unmapped-toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={showUnmappedOnly}
+                      onChange={e => setShowUnmappedOnly(e.target.checked)}
+                      data-testid="staff-unmapped-toggle"
+                    />
+                    Unmapped brand only {staffUnmappedCount > 0 && <span className="ml-1 px-1.5 rounded bg-amber-100 text-amber-800 font-semibold">{staffUnmappedCount}</span>}
                   </label>
                   <select
                     className="h-9 px-3 text-sm rounded-md border border-slate-200 bg-white"
@@ -456,13 +518,22 @@ export default function StaffIncentives() {
                         <tr key={s.id} className="border-b hover:bg-slate-50">
                           <td className="py-2 pr-4 font-mono text-xs">{s.staff_code}</td>
                           <td className="pr-4 font-medium">{s.name}</td>
-                          <td className="pr-4">{s.brand_name}</td>
+                          <td className="pr-4">
+                            {s.brand_name}
+                            {/* Point 35: warning tag when the staff's brand isn't in the master brand list */}
+                            {s.is_brand_mapped === false && (
+                              <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold align-middle" data-testid={`staff-unmapped-badge-${s.id}`}>Unmapped</span>
+                            )}
+                          </td>
                           <td className="pr-4">{s.phone}</td>
                           <td className="pr-4">
                             <span className={s.is_active ? 'text-emerald-600' : 'text-slate-400'}>{s.is_active ? 'Active' : 'Inactive'}</span>
                           </td>
                           <td className="flex gap-2 py-2">
                             <Button size="sm" variant="outline" onClick={() => openQR(s.id)} data-testid={`staff-qr-btn-${s.id}`}><QrCode size={14} /></Button>
+                            {s.is_brand_mapped === false && (
+                              <Button size="sm" variant="outline" className="text-amber-700 border-amber-300" onClick={() => setReassignStaff(s)} data-testid={`staff-reassign-btn-${s.id}`}>Reassign</Button>
+                            )}
                             <Button size="sm" variant="ghost" onClick={() => toggleActive(s)} data-testid={`staff-toggle-btn-${s.id}`}>{s.is_active ? 'Deactivate' : 'Activate'}</Button>
                           </td>
                         </tr>
@@ -769,6 +840,33 @@ export default function StaffIncentives() {
                 <div className="mt-2 text-sm">Prefilled: <span className="font-mono">{showQR.prefilled_message}</span></div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Point 35: Reassign brand modal for legacy/unmapped staff */}
+        <Dialog open={!!reassignStaff} onOpenChange={o => !o && setReassignStaff(null)}>
+          <DialogContent data-testid="reassign-brand-dialog">
+            <DialogHeader><DialogTitle>Reassign Brand — {reassignStaff?.name}</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              <div className="text-sm text-slate-600">
+                Current brand: <span className="font-medium">{reassignStaff?.brand_name || '(none)'}</span>. This brand isn&apos;t in your master brand list, so incentive attribution may misfire.
+              </div>
+              <div>
+                <Label>Pick a master brand</Label>
+                <select
+                  data-testid="reassign-brand-select"
+                  className="w-full h-10 px-3 rounded-md border border-slate-200 bg-white text-sm"
+                  defaultValue=""
+                  onChange={e => e.target.value && submitReassignBrand(e.target.value)}
+                >
+                  <option value="">Select a brand…</option>
+                  {catalog.brands.map(b => (
+                    <option key={b.brand_name} value={b.brand_name}>{b.brand_name}{b.category ? ` — ${b.category}` : ''}</option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">Category will be auto-filled from the master brand.</p>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>

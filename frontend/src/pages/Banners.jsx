@@ -15,6 +15,7 @@ export default function Banners() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [dimWarning, setDimWarning] = useState('');
   const fileRef = useRef(null);
 
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -36,6 +37,21 @@ export default function Banners() {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) { toast.error('Image must be under 5MB'); return; }
+    // Point 29: verify dimensions match the recommended 1200 × 400 (3:1) hero-banner aspect.
+    const img = new window.Image();
+    img.onload = () => {
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      const targetRatio = 1200 / 400; // 3:1
+      const actualRatio = w / h;
+      const off = Math.abs(actualRatio - targetRatio) / targetRatio;
+      if (off > 0.1 || w < 900) {
+        setDimWarning(`This image is ${w} × ${h}px (aspect ${actualRatio.toFixed(2)}). Recommended is 1200 × 400 px (3:1). It will still upload, but may crop on the app.`);
+      } else {
+        setDimWarning('');
+      }
+    };
+    img.src = URL.createObjectURL(file);
     setSelectedFile(file);
     setPreview(URL.createObjectURL(file));
   };
@@ -153,6 +169,10 @@ export default function Banners() {
               </div>
               <div style={{ gridColumn: '1/3' }}>
                 <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Banner Image {!editBanner && <span style={{ color: '#ef4444' }}>*</span>}</label>
+                {/* Point 29: display exact recommended banner dimensions inline for admins */}
+                <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 12px', marginBottom: 8, fontSize: 12, color: '#1e40af' }} data-testid="banner-dimensions-hint">
+                  <strong>Recommended:</strong> 1200 × 400 px (3:1) &middot; JPG, PNG or WebP &middot; ≤ 5 MB
+                </div>
                 <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileSelect} data-testid="banner-file-input" />
                 <div
                   onClick={() => fileRef.current?.click()}
@@ -169,11 +189,12 @@ export default function Banners() {
                     <>
                       <Upload size={32} color="#9ca3af" />
                       <p style={{ color: '#6b7280', marginTop: 8, fontSize: 14 }}>Click to upload image</p>
-                      <p style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>JPG, PNG, WebP (Max 5MB)</p>
+                      <p style={{ color: '#9ca3af', fontSize: 12, marginTop: 4 }}>Target: 1200 × 400 px (JPG, PNG, WebP · Max 5MB)</p>
                     </>
                   )}
                 </div>
                 {selectedFile && <p style={{ fontSize: 12, color: '#22c55e', marginTop: 4 }}>{selectedFile.name}</p>}
+                {dimWarning && <p style={{ fontSize: 12, color: '#b45309', background: '#fef3c7', border: '1px solid #fcd34d', padding: '6px 10px', borderRadius: 6, marginTop: 6 }} data-testid="banner-dim-warning">⚠️ {dimWarning}</p>}
               </div>
               <div>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>

@@ -1882,8 +1882,13 @@ async def create_offer(request: Request, payload: dict = Depends(verify_jwt_toke
         "title": data.get("title", ""),
         "description": data.get("description", ""),
         "store_name": data.get("store_name", ""),
+        "store_id": data.get("store_id", ""),
         "image_url": data.get("image_url", ""),
         "discount_text": data.get("discount_text", ""),
+        # Point 34: numeric percent used by the consumer Offers screen to render the badge; also drives the "Hot Deals" strip when is_hot_deal is true.
+        "discount_value": data.get("discount_value") or data.get("discount_text", ""),
+        "is_hot_deal": bool(data.get("is_hot_deal", False)),
+        "valid_until": data.get("valid_until", ""),
         "is_active": data.get("is_active", True),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
@@ -1903,7 +1908,9 @@ async def upload_offer_image(offer_id: str, file: UploadFile = File(...), payloa
 @api_router.put("/admin/offers/{offer_id}")
 async def update_offer(offer_id: str, request: Request, payload: dict = Depends(verify_jwt_token)):
     data = await request.json()
-    update = {k: v for k, v in data.items() if k in ("title", "description", "store_name", "discount_text", "image_url", "is_active")}
+    update = {k: v for k, v in data.items() if k in ("title", "description", "store_name", "store_id", "discount_text", "discount_value", "image_url", "is_active", "is_hot_deal", "valid_until")}
+    if "is_hot_deal" in update:
+        update["is_hot_deal"] = bool(update["is_hot_deal"])
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     await db.offers.update_one({"id": offer_id}, {"$set": update})
     return {"success": True}
@@ -2006,7 +2013,7 @@ async def update_brand(brand_id: str, data: dict, payload: dict = Depends(verify
     # Core fields
     for field in ["atv", "category", "is_active", "brand_name", "description",
                   "floor", "timing", "unit_no", "tags", "is_featured", "is_eligible", "contact_phone",
-                  "contact_email", "website"]:
+                  "contact_email", "website", "hidden_from_app"]:
         if field in data:
             if field == "atv":
                 update_data[field] = float(data[field])
@@ -2023,16 +2030,18 @@ async def update_brand(brand_id: str, data: dict, payload: dict = Depends(verify
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Brand not found")
     
-    # Auto-sync to stores collection
+    # Auto-sync to stores collection (unconditional — Point 33/30: featured flag and logos must reach app immediately)
     brand = await db.brands.find_one({"id": brand_id}, {"_id": 0})
-    if brand and brand.get("description"):
+    if brand:
         await _sync_brand_to_store(brand)
     
     return {"success": True, "message": "Brand updated"}
 
 
 async def _sync_brand_to_store(brand: dict):
-    """Sync a brand to the consumer stores collection"""
+    """Sync a brand to the consumer stores collection.
+    Point 33/30 (Feb 2026): sync is now unconditional so that is_featured toggles and logo updates propagate to the consumer /home + /stores endpoints immediately, not only when the admin has also written a description.
+    """
     store_data = {
         "name": brand.get("brand_name"),
         "category": brand.get("category") or "General",
@@ -2044,7 +2053,8 @@ async def _sync_brand_to_store(brand: dict):
         "timing": brand.get("timing") or "11:00 AM - 9:00 PM",
         "tags": brand.get("tags") or [],
         "is_featured": brand.get("is_featured", False),
-        "is_active": brand.get("is_active", True),
+        "is_active": brand.get("is_active", True) and not brand.get("hidden_from_app", False),
+        "hidden_from_app": brand.get("hidden_from_app", False),
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
     existing = await db.stores.find_one({"name": {"$regex": f'^{re.escape(brand["brand_name"])}$', "$options": "i"}})
@@ -2087,9 +2097,9 @@ async def upload_brand_image(
     field = "logo_url" if image_type == "logo" else "cover_image_url"
     await db.brands.update_one({"id": brand_id}, {"$set": {field: image_url, "updated_at": datetime.now(timezone.utc).isoformat()}})
     
-    # Auto-sync to stores
+    # Auto-sync to stores (Point 30: logos must sync immediately regardless of description)
     brand = await db.brands.find_one({"id": brand_id}, {"_id": 0})
-    if brand and brand.get("description"):
+    if brand:
         await _sync_brand_to_store(brand)
     
     return {"success": True, "image_url": image_url, "field": field}
@@ -2108,26 +2118,73 @@ async def sync_brands_to_stores(payload: dict = Depends(verify_jwt_token)):
 
 @api_router.get("/app-download-qr")
 async def get_app_download_qr():
-    """Generate QR code for CP67 App download"""
+    """Generate QR code image that points to a tracked scan redirect (Point 31)."""
     import qrcode
     import io
     backend_url = os.environ.get("BACKEND_PUBLIC_URL", "")
-    app_url = f"{backend_url}/app/welcome"
-    
+    # Point 31: QR now points to the tracked redirect endpoint below so admin can see scan counts.
+    qr_target = f"{backend_url}/api/app-download-qr/scan"
+
     qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=10, border=2)
-    qr.add_data(app_url)
+    qr.add_data(qr_target)
     qr.make(fit=True)
     img = qr.make_image(fill_color="#1a1a2e", back_color="white")
-    
+
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     buf.seek(0)
-    
+
     from fastapi.responses import StreamingResponse
     return StreamingResponse(buf, media_type="image/png", headers={
         "Content-Disposition": "inline; filename=cp67-app-qr.png",
         "Cache-Control": "public, max-age=86400"
     })
+
+
+PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.homelandadvantage.cp67&hl=en_IN"
+
+
+@api_router.get("/app-download-qr/scan")
+async def app_download_qr_scan(request: Request):
+    """Tracked redirect for the App Install QR (Point 31). Logs each scan then 302s to Play Store."""
+    from fastapi.responses import RedirectResponse
+    ua = request.headers.get("user-agent", "")[:400]
+    ip = (request.headers.get("x-forwarded-for") or request.client.host if request.client else "").split(",")[0].strip()
+    now = datetime.now(timezone.utc)
+    await db.app_qr_scans.insert_one({
+        "id": str(uuid.uuid4()),
+        "scanned_at": now.isoformat(),
+        "day": now.strftime("%Y-%m-%d"),
+        "user_agent": ua,
+        "ip": ip,
+    })
+    return RedirectResponse(PLAY_STORE_URL, status_code=302)
+
+
+@api_router.get("/admin/app-download-qr/stats")
+async def app_download_qr_stats(payload: dict = Depends(verify_jwt_token)):
+    """Admin: total scans + daily counts for the last 30 days (Point 31)."""
+    total = await db.app_qr_scans.count_documents({})
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_count = await db.app_qr_scans.count_documents({"day": today})
+    # Daily buckets for the last 30 days
+    from datetime import timedelta
+    since = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
+    pipeline = [
+        {"$match": {"day": {"$gte": since}}},
+        {"$group": {"_id": "$day", "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+    ]
+    daily = [{"day": r["_id"], "count": r["count"]} async for r in db.app_qr_scans.aggregate(pipeline)]
+    backend_url = os.environ.get("BACKEND_PUBLIC_URL", "")
+    return {
+        "total_scans": total,
+        "today_scans": today_count,
+        "daily": daily,
+        "play_store_url": PLAY_STORE_URL,
+        "qr_image_url": f"{backend_url}/api/app-download-qr",
+        "scan_target_url": f"{backend_url}/api/app-download-qr/scan",
+    }
 
 
 @api_router.delete("/admin/brands/{brand_id}")

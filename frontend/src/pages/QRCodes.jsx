@@ -36,9 +36,26 @@ const QRCodes = () => {
   const [qrUsers, setQrUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
+  const [appQrStats, setAppQrStats] = useState(null);
+  const [appQrRefreshedAt, setAppQrRefreshedAt] = useState(null);
+
   useEffect(() => {
     fetchQRCodes();
+    fetchAppQrStats();
   }, []);
+
+  const fetchAppQrStats = async () => {
+    // Point 31: pull scan count for the Play Store QR
+    try {
+      const res = await fetch(`${API_URL}/admin/app-download-qr/stats`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setAppQrStats(await res.json());
+        setAppQrRefreshedAt(new Date());
+      }
+    } catch { /* ignore */ }
+  };
 
   const fetchQRCodes = async () => {
     try {
@@ -157,6 +174,85 @@ const QRCodes = () => {
 
   return (
     <DashboardLayout title="QR Codes">
+      {/* Point 31: App Install QR + scan tracking */}
+      <Card className="mb-6 border-emerald-200 bg-emerald-50/50 shadow-none" data-testid="app-install-qr-card">
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row items-start gap-6">
+            <div className="flex-shrink-0 bg-white p-3 rounded-lg border border-emerald-200">
+              {appQrStats?.qr_image_url ? (
+                <img
+                  src={appQrStats.qr_image_url}
+                  alt="App Install QR"
+                  width="160"
+                  height="160"
+                  data-testid="app-install-qr-image"
+                />
+              ) : (
+                <div className="w-40 h-40 flex items-center justify-center text-slate-300"><QrCode size={40} /></div>
+              )}
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-slate-900 text-lg">Play Store App Install QR</h3>
+                <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">Tracked</Badge>
+              </div>
+              <p className="text-sm text-slate-600 mt-1">
+                Scans are redirected to the Play Store and counted below. Print this QR on flyers, standees or brand touchpoints.
+              </p>
+              <div className="grid grid-cols-2 gap-4 mt-4 max-w-md" data-testid="app-install-qr-stats">
+                <div className="bg-white rounded-lg p-3 border border-emerald-200">
+                  <div className="text-xs text-slate-500 uppercase">Total scans</div>
+                  <div className="text-2xl font-bold text-emerald-700" data-testid="app-install-qr-total">{appQrStats?.total_scans ?? '—'}</div>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-emerald-200">
+                  <div className="text-xs text-slate-500 uppercase">Today</div>
+                  <div className="text-2xl font-bold text-emerald-700" data-testid="app-install-qr-today">{appQrStats?.today_scans ?? '—'}</div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-4">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    if (!appQrStats?.qr_image_url) return;
+                    const a = document.createElement('a');
+                    a.href = appQrStats.qr_image_url;
+                    a.download = 'cp67-app-install-qr.png';
+                    document.body.appendChild(a); a.click(); a.remove();
+                  }}
+                  data-testid="download-app-qr-btn"
+                >
+                  <Download size={14} className="mr-1" /> Download PNG
+                </Button>
+                <Button size="sm" variant="outline" onClick={fetchAppQrStats} data-testid="refresh-app-qr-btn">
+                  Refresh
+                </Button>
+                {appQrStats?.play_store_url && (
+                  <a
+                    href={appQrStats.play_store_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-emerald-700 underline px-3 py-1.5"
+                    data-testid="open-play-store-link"
+                  >
+                    <ExternalLink size={14} /> Open Play Store
+                  </a>
+                )}
+              </div>
+              {appQrStats?.daily?.length > 0 && (
+                <details className="mt-3 text-xs text-slate-600">
+                  <summary className="cursor-pointer">Daily scans (last 30 days)</summary>
+                  <ul className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1">
+                    {appQrStats.daily.map(d => <li key={d.day}>{d.day}: <strong>{d.count}</strong></li>)}
+                  </ul>
+                </details>
+              )}
+              {appQrRefreshedAt && <p className="text-[11px] text-slate-400 mt-2">Last refreshed: {appQrRefreshedAt.toLocaleTimeString()}</p>}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Info Banner */}
       <Card className="mb-6 border-[#D4AF37] bg-[#D4AF37]/5 shadow-none">
         <CardContent className="pt-6">

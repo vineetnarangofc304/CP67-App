@@ -558,3 +558,48 @@ Applied consistently to all 3 CSV upload flows: Staff Bulk Import, Coupon Upload
 - Mapping: `confirm-mapping-btn`, `cancel-mapping-btn`
 
 Testing agent iteration 47: 100% pass across 4 scenarios (Staff, Coupon, Mapping, Cancel path). Zero `window.confirm` popups observed.
+
+## Feb 15 2026 — Client Points 29-35 Batch
+
+All shipped in one batch, backend + frontend covered by testing_agent iter 48 (6/6 pytest + 11/11 UI scenarios PASS).
+
+### Point 29 — Banner Dimensions in Admin
+- Added `Recommended: 1200 × 400 px (3:1) · JPG, PNG or WebP · ≤ 5 MB` hint (data-testid `banner-dimensions-hint`) in Banner form.
+- Client-side aspect-ratio check on file select: shows amber warning banner (data-testid `banner-dim-warning`) if ratio deviates >10 % from 3:1 or width < 900 px. Upload still proceeds.
+
+### Point 30 — Brand Logos Sync Everywhere
+- `POST /admin/brands/{id}/upload-image` and `PUT /admin/brands/{id}` now unconditionally call `_sync_brand_to_store`, so logo + featured + category updates hit `stores` collection immediately (previously gated on `description`).
+
+### Point 31 — Play Store App QR + Scan Tracking
+- New endpoints:
+  - `GET /api/app-download-qr/scan` → 302 redirect to `https://play.google.com/store/apps/details?id=com.homelandadvantage.cp67&hl=en_IN` and logs a row into `app_qr_scans`.
+  - `GET /api/admin/app-download-qr/stats` → `{total_scans, today_scans, daily[30], qr_image_url, play_store_url}`.
+- `GET /api/app-download-qr` QR now points to the tracked `/scan` URL.
+- Admin `QRCodes` page: new "Play Store App Install QR" card (data-testid `app-install-qr-card`) with total, today, daily breakdown, Download PNG, Refresh.
+
+### Point 32 — Hide Brand From Consumer App
+- New `hidden_from_app` boolean on brands.
+- Consumer `/home` featured_stores and `/stores` filter out `hidden_from_app=true`.
+- Admin Brand edit dialog exposes `brand-hidden-toggle` checkbox; list shows a "Hidden" badge.
+
+### Point 33 — Featured Brand Toggle Actually Works
+- Consumer `/home` now queries `brands` collection directly with `{is_active: true, is_featured: true, hidden_from_app: {$ne: true}}` (previously it read stale `stores.is_featured` and needed a description).
+- Combined with unconditional `_sync_brand_to_store`, admin's Featured toggle reaches the app on the next home refresh.
+
+### Point 34 — Hot Deal Sync
+- New `is_hot_deal` boolean on offers.
+- Admin Offers form has `offer-hot-deal-toggle` checkbox; list shows a 🔥 Hot Deal badge (data-testid `offer-hot-badge-<id>`).
+- Consumer `Offers` screen `hotDeals` filter now checks `o.is_hot_deal` first, keeps the legacy discount-percent heuristic as fallback.
+- Backend `POST/PUT /admin/offers` accepts `is_hot_deal`, `discount_value`, `store_id`, `valid_until`.
+
+### Point 35 — Retailer Staff ↔ Master Brand Mapping
+- `GET /admin/staff` now enriches each row with `is_brand_mapped` (bool) + `canonical_brand_name` + `canonical_brand_category`, and returns `unmapped_count` at the top level.
+- Admin Staff Incentive Program `Staff` tab:
+  - "Add Staff" dialog: `Brand Name` is now a `<select>` (data-testid `staff-form-brand`) populated from `/admin/staff/catalog/brands-categories`; selecting a brand auto-fills Brand Category.
+  - New filter chip "Unmapped brand only" (data-testid `staff-unmapped-toggle`) with count badge.
+  - Each unmapped row gets an amber "Unmapped" badge (data-testid `staff-unmapped-badge-<id>`) and a "Reassign" button that opens a dialog (`reassign-brand-dialog`) with a master-brand dropdown. Picking a brand PATCHes `brand_name` + `brand_category` in one call.
+- Current preview data: 759 staff, 315 unmapped.
+
+### Data-testids added
+`banner-dimensions-hint`, `banner-dim-warning`, `brand-featured-toggle`, `brand-hidden-toggle`, `brand-featured-badge-<id>`, `brand-hidden-badge-<id>`, `offer-hot-deal-toggle`, `offer-hot-badge-<id>`, `app-install-qr-card`, `app-install-qr-image`, `app-install-qr-total`, `app-install-qr-today`, `download-app-qr-btn`, `refresh-app-qr-btn`, `open-play-store-link`, `staff-unmapped-toggle`, `staff-unmapped-badge-<id>`, `staff-reassign-btn-<id>`, `reassign-brand-dialog`, `reassign-brand-select`.
+

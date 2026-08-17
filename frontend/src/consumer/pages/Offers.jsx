@@ -24,10 +24,12 @@ export default function Offers() {
 
   useEffect(() => { fetchOffers(); }, [fetchOffers]);
 
-  // Separate hot deals (>30% discount or containing "flash"/"hot" in title)
+  // Point 34: Hot deals are now explicitly tagged by admin via is_hot_deal.
+  // Legacy fallback: high-discount or "flash/hot/mega" keyword offers are still surfaced so old data still works.
   const hotDeals = offers.filter(o => {
-    const val = parseInt((o.discount_value || '').replace(/[^0-9]/g, ''));
-    return val >= 30 || /flash|hot|mega|clearance/i.test(o.title);
+    if (o.is_hot_deal) return true;
+    const val = parseInt((o.discount_value || o.discount_text || '').replace(/[^0-9]/g, ''));
+    return val >= 30 || /flash|hot|mega|clearance/i.test(o.title || '');
   });
 
   const filtered = filter === 'hot' ? hotDeals : offers;
@@ -71,7 +73,7 @@ export default function Offers() {
                 data-testid={`hot-deal-${o.id}`}>
                 <div className="hot-deal-img">
                   <img src={o.image_url} alt={o.title} loading="lazy" />
-                  <div className="hot-deal-badge"><Zap size={12} /> {o.discount_value}</div>
+                  <div className="hot-deal-badge"><Zap size={12} /> {o.discount_value || o.discount_text}</div>
                 </div>
                 <div className="hot-deal-body">
                   <span className="hot-deal-store">{o.store_name}</span>
@@ -94,7 +96,7 @@ export default function Offers() {
               <img src={o.image_url} alt={o.title} loading="lazy" />
               <div className="offer-list-badge">
                 <Tag size={14} />
-                <span>{o.discount_value}</span>
+                <span>{o.discount_value || o.discount_text}</span>
               </div>
             </div>
             <div className="offer-list-body">

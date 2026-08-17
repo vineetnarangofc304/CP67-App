@@ -1,0 +1,40 @@
+{
+  "summary": "Full-stack validation of Points 29-35 (Banner dims hint, Brand logo sync scaffolding, App Install QR + scan tracking, Hide-from-app brand toggle, Featured brand toggle, Hot Deal offer flag, Staff master-brand dropdown + unmapped filter/reassign). Backend 6/6 pytest passing, all UI data-testids present and interactive.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_scenarios_executed": [
+    {"id": "P31-backend", "steps": "GET /api/app-download-qr returns image/*; GET /api/app-download-qr/scan (no auth) returns 302 with Location containing play.google.com; GET /api/admin/app-download-qr/stats total_scans incremented and today_scans>=1", "result": "PASS"},
+    {"id": "P31-ui", "steps": "/qr-codes page shows app-install-qr-card, -image, -total (4), -today (4), download-app-qr-btn, refresh-app-qr-btn, open-play-store-link", "result": "PASS"},
+    {"id": "P29", "steps": "/banners Add Banner dialog shows banner-dimensions-hint reading 'Recommended: 1200 × 400 px (3:1) · JPG, PNG or WebP · ≤ 5 MB'", "result": "PASS"},
+    {"id": "P32-P33-backend", "steps": "PUT /api/admin/brands/{adidas} is_featured=true hidden_from_app=false -> /api/consumer/home featured_stores contains Adidas; toggle hidden_from_app=true -> Adidas removed from both /consumer/home featured_stores AND /consumer/stores; state restored", "result": "PASS"},
+    {"id": "P32-P33-ui", "steps": "Brands edit dialog Store Details tab exposes brand-featured-toggle (checked) and brand-hidden-toggle (unchecked) for Adidas; list shows brand-featured-badge-<id>", "result": "PASS"},
+    {"id": "P34-backend", "steps": "POST /api/admin/offers with is_hot_deal=true persists flag; GET /api/consumer/offers returns the offer with is_hot_deal=true. Cleaned up via DELETE.", "result": "PASS"},
+    {"id": "P34-ui", "steps": "Offers Add Offer dialog has offer-hot-deal-toggle; list already shows offer-hot-badge-<id> for existing hot deals", "result": "PASS"},
+    {"id": "P35-backend", "steps": "GET /api/admin/staff returns is_brand_mapped per row and unmapped_count in payload; /admin/staff/catalog/brands-categories returns brands list", "result": "PASS"},
+    {"id": "P35-ui-filter", "steps": "/staff-incentives Staff tab shows staff-unmapped-toggle with count badge '315'; 25 staff-unmapped-badge-<id> + 25 staff-reassign-btn-<id> visible on first page; clicking Reassign opens reassign-brand-dialog with reassign-brand-select", "result": "PASS"},
+    {"id": "P35-ui-addstaff", "steps": "Add Staff dialog: staff-form-brand is a SELECT populated with master brands and staff-form-brand-category present", "result": "PASS"},
+    {"id": "Regression-CSV", "steps": "Staff tab file input + Bulk Import CSV section still present (preview/confirm flow from iter 47 unchanged; not committed)", "result": "PASS"}
+  ],
+  "backend_test_evidence": {
+    "pytest_file": "/app/backend/tests/test_points_29_35.py",
+    "junit_xml": "/app/test_reports/pytest/iter48.xml",
+    "result": "6 passed in 8.26s"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_points_29_35.py",
+    "/app/test_reports/pytest/iter48.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "StaffIncentives.jsx already flagged >900 lines in iter47 — still valid; adding reassign dialog + unmapped filter increases surface area, splitting into StaffTab / ReassignDialog sub-components recommended.",
+    "Brand edit dialog uses custom tab buttons (not role=tab). Consider adding role='tab' / aria-selected for a11y + more robust automation.",
+    "Consumer /api/consumer/home is auth-gated; Point 31/32/33 client integration correctly enforces auth. If any public marketing page needs featured stores, expose a public variant."
+  ],
+  "updated_files": ["/app/backend/tests/test_points_29_35.py"],
+  "success_rate": {"backend": "100% (6/6)", "frontend": "100% (all testids resolved & interactions verified)"},
+  "test_credentials": "admin/CP67Admin@2025; consumer 9876543210/1234",
+  "seed_data_creation": "Transient: 1 offer 'TEST_HotDeal_29_35' created + deleted; App QR scan counter incremented by 1 (expected side-effect). Adidas brand state restored to is_featured=true, hidden_from_app=false (its pre-test values).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "For admin app the routes are at ROOT (no /admin prefix): /login, /qr-codes, /banners, /brands, /offers, /staff-incentives. Login response uses key 'token' (NOT 'access_token'). Consumer endpoints require Bearer token from /api/consumer/auth/verify-otp (phone=9876543210, otp=1234). Brands list uses key 'brand_name' (not 'name'). POST /api/admin/offers wraps result as {success, offer}. Brand edit dialog uses plain <button> for Store Details tab (locator: button:has-text('Store Details'))."
+}

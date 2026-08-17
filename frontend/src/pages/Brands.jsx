@@ -34,7 +34,7 @@ const Brands = () => {
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState(null);
   const [formData, setFormData] = useState({ brand_name: '', atv: '', category: '' });
-  const [storeData, setStoreData] = useState({ description: '', floor: '', timing: '11:00 AM - 9:00 PM', unit_no: '', tags: '', is_featured: false });
+  const [storeData, setStoreData] = useState({ description: '', floor: '', timing: '11:00 AM - 9:00 PM', unit_no: '', tags: '', is_featured: false, hidden_from_app: false });
   const [uploading, setUploading] = useState(false);
   const [uploadHistory, setUploadHistory] = useState([]);
   const [editTab, setEditTab] = useState('basic');
@@ -81,6 +81,7 @@ const Brands = () => {
         unit_no: storeData.unit_no,
         tags: storeData.tags ? storeData.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
         is_featured: storeData.is_featured,
+        hidden_from_app: storeData.hidden_from_app,
       };
       const res = await fetch(`${API_URL}/admin/brands/${selectedBrand.id}`, {
         method: 'PUT',
@@ -110,6 +111,7 @@ const Brands = () => {
       unit_no: brand.unit_no || '',
       tags: (brand.tags || []).join(', '),
       is_featured: brand.is_featured || false,
+      hidden_from_app: brand.hidden_from_app || false,
     });
     setEditTab('basic');
     setShowEditDialog(true);
@@ -367,7 +369,11 @@ const Brands = () => {
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={brand.is_active !== false ? 'default' : 'secondary'}>{brand.is_active !== false ? 'Active' : 'Inactive'}</Badge>
+                          <div className="flex gap-1 items-center">
+                            <Badge variant={brand.is_active !== false ? 'default' : 'secondary'}>{brand.is_active !== false ? 'Active' : 'Inactive'}</Badge>
+                            {brand.is_featured && <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100" data-testid={`brand-featured-badge-${brand.id}`}><Star className="h-3 w-3 mr-0.5" />Featured</Badge>}
+                            {brand.hidden_from_app && <Badge variant="outline" className="text-slate-500 border-slate-300" data-testid={`brand-hidden-badge-${brand.id}`}>Hidden</Badge>}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
@@ -471,8 +477,13 @@ const Brands = () => {
                 <div className="space-y-2"><Label><Clock className="h-3 w-3 inline mr-1" />Timing</Label><Input value={storeData.timing} onChange={e => setStoreData({...storeData, timing: e.target.value})} placeholder="11:00 AM - 9:00 PM" /></div>
                 <div className="space-y-2"><Label>Tags (comma-separated)</Label><Input value={storeData.tags} onChange={e => setStoreData({...storeData, tags: e.target.value})} placeholder="fashion, casual, premium" /></div>
                 <div className="flex items-center gap-2">
-                  <input type="checkbox" id="is_featured" checked={storeData.is_featured} onChange={e => setStoreData({...storeData, is_featured: e.target.checked})} className="rounded" />
+                  <input type="checkbox" id="is_featured" checked={storeData.is_featured} onChange={e => setStoreData({...storeData, is_featured: e.target.checked})} className="rounded" data-testid="brand-featured-toggle" />
                   <label htmlFor="is_featured" className="text-sm font-medium flex items-center gap-1"><Star className="h-3 w-3 text-amber-500" />Featured on Home Screen</label>
+                </div>
+                {/* Point 32: Hide from consumer app without deleting the brand */}
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="hidden_from_app" checked={storeData.hidden_from_app} onChange={e => setStoreData({...storeData, hidden_from_app: e.target.checked})} className="rounded" data-testid="brand-hidden-toggle" />
+                  <label htmlFor="hidden_from_app" className="text-sm font-medium text-slate-700">Hide from consumer app (kept in admin only)</label>
                 </div>
               </>
             )}

@@ -377,10 +377,27 @@ async def admin_list_staff(active_only: bool = False, brand: Optional[str] = Non
         q["is_active"] = True
     if brand:
         q["brand_name"] = brand
+    # Point 35: enrich each staff row with is_brand_mapped and the master brand's canonical category
+    # so the admin UI can tag unmapped rows and auto-fill category during in-place edits.
+    master_brands = {}
+    async for b in _db.brands.find({"brand_name": {"$exists": True, "$ne": ""}}, {"_id": 0, "brand_name": 1, "category": 1}):
+        bn = (b.get("brand_name") or "").strip()
+        if bn:
+            master_brands[bn.lower()] = {
+                "brand_name": bn,
+                "category": (b.get("category") or "").strip(),
+            }
+
     staff = []
     async for s in _db.retail_staff.find(q, {"_id": 0}).sort("created_at", -1):
+        raw_brand = (s.get("brand_name") or "").strip()
+        master = master_brands.get(raw_brand.lower())
+        s["is_brand_mapped"] = bool(master)
+        s["canonical_brand_name"] = master["brand_name"] if master else raw_brand
+        s["canonical_brand_category"] = master["category"] if master else (s.get("brand_category") or "")
         staff.append(s)
-    return {"staff": staff, "total": len(staff)}
+    unmapped = sum(1 for s in staff if not s["is_brand_mapped"])
+    return {"staff": staff, "total": len(staff), "unmapped_count": unmapped}
 
 
 @staff_admin_router.get("/qr-cards.pdf")
