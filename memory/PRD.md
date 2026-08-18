@@ -603,3 +603,36 @@ All shipped in one batch, backend + frontend covered by testing_agent iter 48 (6
 ### Data-testids added
 `banner-dimensions-hint`, `banner-dim-warning`, `brand-featured-toggle`, `brand-hidden-toggle`, `brand-featured-badge-<id>`, `brand-hidden-badge-<id>`, `offer-hot-deal-toggle`, `offer-hot-badge-<id>`, `app-install-qr-card`, `app-install-qr-image`, `app-install-qr-total`, `app-install-qr-today`, `download-app-qr-btn`, `refresh-app-qr-btn`, `open-play-store-link`, `staff-unmapped-toggle`, `staff-unmapped-badge-<id>`, `staff-reassign-btn-<id>`, `reassign-brand-dialog`, `reassign-brand-select`.
 
+
+## Feb 18 2026 — Client Points 8 & 9 (Staff Incentive Slabs V2)
+
+Verified end-to-end by testing_agent iteration 49 (8 unit pytest + 3 API pytest + full UI flow PASS).
+
+### Point 8 — Registration Reward per Category (flat amount)
+- New config field `registration_by_category: {"__ALL__": int, "<Category>": int}` on `staff_config`.
+- New resolver `_resolve_registration_amount(cfg, staff, count_so_far)` picks:
+  1. Staff's brand category-specific amount, else
+  2. `__ALL__` universal amount, else
+  3. Legacy count-based `registration_slabs` (backward compatible).
+- Admin Slabs tab shows a new **Point 8 · Registration Reward per Category** block. Admin can add rows for `ALL` + specific categories with a flat ₹ input.
+
+### Point 9 — Bill Upload Reward by Bill Value (per category)
+- New config field `bill_upload_value_slabs_by_category: {"__ALL__": [{min_value, max_value, amount}], "<Category>": [...]}`.
+- `create_or_activate_bill_incentive(...)` now accepts `bill_value` and, if not supplied, looks up the bill's amount from the `bills` collection.
+- New resolver `_resolve_bill_upload_amount(cfg, staff, bill_value, count_so_far)`:
+  1. Staff's brand category-specific value slabs → pick row containing `bill_value`, else
+  2. `__ALL__` value slabs → pick row containing `bill_value`, else
+  3. Legacy count-based `bill_upload_slabs` (backward compatible).
+- Admin Slabs tab shows a new **Point 9 · Bill Upload Reward by Bill Value** block with multi-row (min_value, max_value, amount) editor per category / ALL.
+
+### Backwards-compatibility
+- Existing count-based slabs (`registration_slabs`, `bill_upload_slabs`, per-brand/per-category overrides) are kept as the final fallback.
+- New fields auto-backfill to `{}` on read for existing configs, so nothing breaks.
+
+### New pytest coverage
+- `/app/backend/tests/test_points_8_9_slabs.py` — 8 unit tests for both resolvers (category → ALL → legacy priority + inclusive bucket boundaries).
+- `/app/backend/tests/test_points_8_9_config_api.py` — 3 API tests for PUT/GET persistence + cleanup (added by testing agent).
+
+### New data-testids
+`reg-by-category-editor`, `reg-by-category-new-key`, `reg-by-category-add`, `reg-by-category-amount-<key>`, `reg-by-category-remove-<key>`, `bill-value-slabs-editor`, `bill-value-slabs-new-key`, `bill-value-slabs-add`, `bill-value-slabs-remove-<key>`, `bill-value-slabs-addrow-<key>`, `bill-value-min-<k>-<i>`, `bill-value-max-<k>-<i>`, `bill-value-amt-<k>-<i>`.
+

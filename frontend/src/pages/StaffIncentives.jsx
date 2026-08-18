@@ -753,6 +753,20 @@ export default function StaffIncentives() {
                     placeholder="Pick a brand"
                   />
 
+                  {/* Point 8: Registration incentive — flat amount per category with __ALL__ universal fallback */}
+                  <RegistrationByCategoryEditor
+                    config={config}
+                    setConfig={setConfig}
+                    categoryOptions={catalog.categories}
+                  />
+
+                  {/* Point 9: Bill-upload incentive — value-based slabs per category with __ALL__ universal fallback */}
+                  <BillValueSlabsEditor
+                    config={config}
+                    setConfig={setConfig}
+                    categoryOptions={catalog.categories}
+                  />
+
                   {/* Point 7: Brand ↔ Category mapping bulk upload */}
                   <div className="border rounded-lg p-4 bg-slate-50/40" data-testid="brand-category-mapping-block">
                     <div className="font-medium mb-2 flex items-center gap-2"><Upload size={16} /> Brand ↔ Category Mapping</div>
@@ -981,6 +995,150 @@ function OverrideEditor({ title, kind, config, setConfig, placeholder, options =
               <Button size="sm" variant="outline" onClick={() => addSlabRow(key, sk)}><Plus size={12} className="mr-1" /> Add row</Button>
             </div>
           ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Point 8: Flat registration reward per category + universal (__ALL__) fallback.
+function RegistrationByCategoryEditor({ config, setConfig, categoryOptions }) {
+  const map = config.registration_by_category || {};
+  const entries = Object.entries(map);
+  const [newKey, setNewKey] = useState('');
+  const usedKeys = new Set(Object.keys(map));
+
+  const setMap = (updater) => {
+    const next = { ...(config.registration_by_category || {}) };
+    updater(next);
+    setConfig({ ...config, registration_by_category: next });
+  };
+  const addRow = () => {
+    const k = newKey.trim();
+    if (!k) { toast.error('Pick a category or ALL'); return; }
+    if (usedKeys.has(k)) { toast.error('Already added'); return; }
+    setMap(m => { m[k] = 50; });
+    setNewKey('');
+  };
+  const updateAmount = (k, v) => setMap(m => { m[k] = Number(v) || 0; });
+  const removeRow = (k) => {
+    if (!window.confirm(`Remove registration reward for "${k === '__ALL__' ? 'ALL' : k}"?`)) return;
+    setMap(m => { delete m[k]; });
+  };
+
+  return (
+    <div className="border rounded-lg p-4 bg-emerald-50/40" data-testid="reg-by-category-editor">
+      <div className="font-medium mb-2 flex items-center gap-2"><Award size={16} /> Point 8 · Registration Reward per Category</div>
+      <div className="text-xs text-slate-600 mb-3">
+        Flat ₹ reward per registration, resolved by the staff&apos;s brand category. Priority: <span className="font-mono">category → ALL → legacy slabs</span>.
+      </div>
+      <div className="flex gap-2 mb-3">
+        <select
+          value={newKey}
+          onChange={e => setNewKey(e.target.value)}
+          className="flex-1 h-10 px-3 rounded-md border border-slate-200 bg-white text-sm"
+          data-testid="reg-by-category-new-key"
+        >
+          <option value="">Pick a category</option>
+          {!usedKeys.has('__ALL__') && <option value="__ALL__">All (universal fallback)</option>}
+          {categoryOptions.filter(c => !usedKeys.has(c)).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <Button size="sm" onClick={addRow} data-testid="reg-by-category-add"><Plus size={14} className="mr-1" /> Add</Button>
+      </div>
+      {entries.length === 0 && (
+        <div className="text-sm text-slate-400 py-3">No category-specific rewards — old count-based slabs will apply.</div>
+      )}
+      {entries.map(([k, v]) => (
+        <div key={k} className="mb-2 grid grid-cols-[2fr_1fr_auto] gap-2 items-center bg-white p-2 rounded border">
+          <div className="font-medium text-sm">{k === '__ALL__' ? 'ALL (universal fallback)' : k}</div>
+          <div className="flex items-center gap-1">₹<Input type="number" value={v} onChange={e => updateAmount(k, e.target.value)} data-testid={`reg-by-category-amount-${k}`} /></div>
+          <Button size="sm" variant="ghost" onClick={() => removeRow(k)} data-testid={`reg-by-category-remove-${k}`}>×</Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Point 9: Bill-upload reward — value-based slabs (min/max ₹) per category + __ALL__ universal fallback.
+function BillValueSlabsEditor({ config, setConfig, categoryOptions }) {
+  const map = config.bill_upload_value_slabs_by_category || {};
+  const entries = Object.entries(map);
+  const [newKey, setNewKey] = useState('');
+  const usedKeys = new Set(Object.keys(map));
+
+  const setMap = (updater) => {
+    const next = { ...(config.bill_upload_value_slabs_by_category || {}) };
+    updater(next);
+    setConfig({ ...config, bill_upload_value_slabs_by_category: next });
+  };
+  const addBucket = () => {
+    const k = newKey.trim();
+    if (!k) { toast.error('Pick a category or ALL'); return; }
+    if (usedKeys.has(k)) { toast.error('Already added'); return; }
+    setMap(m => { m[k] = [{ min_value: 0, max_value: 999999, amount: 20 }]; });
+    setNewKey('');
+  };
+  const removeBucket = (k) => {
+    if (!window.confirm(`Remove bill-value slabs for "${k === '__ALL__' ? 'ALL' : k}"?`)) return;
+    setMap(m => { delete m[k]; });
+  };
+  const updateSlab = (k, idx, field, value) => {
+    setMap(m => {
+      const arr = [...(m[k] || [])];
+      arr[idx] = { ...arr[idx], [field]: Number(value) };
+      m[k] = arr;
+    });
+  };
+  const addSlab = (k) => setMap(m => { m[k] = [...(m[k] || []), { min_value: 0, max_value: 999999, amount: 0 }]; });
+  const removeSlab = (k, idx) => setMap(m => {
+    const arr = [...(m[k] || [])];
+    arr.splice(idx, 1);
+    m[k] = arr;
+  });
+
+  return (
+    <div className="border rounded-lg p-4 bg-blue-50/40" data-testid="bill-value-slabs-editor">
+      <div className="font-medium mb-2 flex items-center gap-2"><Award size={16} /> Point 9 · Bill Upload Reward by Bill Value</div>
+      <div className="text-xs text-slate-600 mb-3">
+        ₹ reward per bill-upload picked by the <strong>bill value</strong> uploaded. Priority: <span className="font-mono">category → ALL → legacy slabs</span>.
+      </div>
+      <div className="flex gap-2 mb-3">
+        <select
+          value={newKey}
+          onChange={e => setNewKey(e.target.value)}
+          className="flex-1 h-10 px-3 rounded-md border border-slate-200 bg-white text-sm"
+          data-testid="bill-value-slabs-new-key"
+        >
+          <option value="">Pick a category</option>
+          {!usedKeys.has('__ALL__') && <option value="__ALL__">All (universal fallback)</option>}
+          {categoryOptions.filter(c => !usedKeys.has(c)).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <Button size="sm" onClick={addBucket} data-testid="bill-value-slabs-add"><Plus size={14} className="mr-1" /> Add</Button>
+      </div>
+      {entries.length === 0 && (
+        <div className="text-sm text-slate-400 py-3">No value-based slabs — old count-based slabs will apply.</div>
+      )}
+      {entries.map(([k, rows]) => (
+        <div key={k} className="mb-4 p-3 bg-white border rounded">
+          <div className="flex justify-between items-center mb-2">
+            <div className="font-semibold text-sm">{k === '__ALL__' ? 'ALL (universal fallback)' : k}</div>
+            <Button size="sm" variant="outline" onClick={() => removeBucket(k)} data-testid={`bill-value-slabs-remove-${k}`}>Remove</Button>
+          </div>
+          <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 mb-1 text-xs text-slate-500">
+            <div>Bill ≥ ₹</div>
+            <div>Bill ≤ ₹</div>
+            <div>Reward ₹</div>
+            <div></div>
+          </div>
+          {rows.map((s, i) => (
+            <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 mb-1 items-center">
+              <Input type="number" value={s.min_value} onChange={e => updateSlab(k, i, 'min_value', e.target.value)} data-testid={`bill-value-min-${k}-${i}`} />
+              <Input type="number" value={s.max_value} onChange={e => updateSlab(k, i, 'max_value', e.target.value)} data-testid={`bill-value-max-${k}-${i}`} />
+              <Input type="number" value={s.amount} onChange={e => updateSlab(k, i, 'amount', e.target.value)} data-testid={`bill-value-amt-${k}-${i}`} />
+              <Button size="sm" variant="ghost" onClick={() => removeSlab(k, i)}>×</Button>
+            </div>
+          ))}
+          <Button size="sm" variant="outline" onClick={() => addSlab(k)} data-testid={`bill-value-slabs-addrow-${k}`}><Plus size={12} className="mr-1" /> Add row</Button>
         </div>
       ))}
     </div>

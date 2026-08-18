@@ -77,6 +77,12 @@ DEFAULT_STAFF_CONFIG = {
     # Lookup priority when awarding an incentive: brand override → category override → default.
     "category_slabs": {},
     "brand_slabs": {},
+    # Point 8: Flat registration reward per category (no min/max — just amount).
+    # Structure: { "__ALL__": <amount>, "<Category Name>": <amount>, ... }
+    "registration_by_category": {},
+    # Point 9: Bill-value-based slabs per category (rewards depend on the bill amount uploaded, not the count).
+    # Structure: { "__ALL__": [{"min_value": 0, "max_value": 1000, "amount": 20}, ...], "<Category Name>": [...] }
+    "bill_upload_value_slabs_by_category": {},
     "attribution_window_minutes": 15,
     "registration_validity_days": 60,
 }
@@ -97,10 +103,21 @@ async def get_staff_config() -> Dict:
     if "brand_slabs" not in doc:
         doc["brand_slabs"] = {}
         changed = True
+    if "registration_by_category" not in doc:
+        doc["registration_by_category"] = {}
+        changed = True
+    if "bill_upload_value_slabs_by_category" not in doc:
+        doc["bill_upload_value_slabs_by_category"] = {}
+        changed = True
     if changed:
         await _db.staff_config.update_one(
             {"id": "staff_config"},
-            {"$set": {"category_slabs": doc["category_slabs"], "brand_slabs": doc["brand_slabs"]}},
+            {"$set": {
+                "category_slabs": doc["category_slabs"],
+                "brand_slabs": doc["brand_slabs"],
+                "registration_by_category": doc["registration_by_category"],
+                "bill_upload_value_slabs_by_category": doc["bill_upload_value_slabs_by_category"],
+            }},
         )
     return doc
 
@@ -110,6 +127,66 @@ def _amount_for_slab(count: int, slabs: List[Dict]) -> int:
         if s["min"] <= count <= s["max"]:
             return int(s["amount"])
     return int(slabs[-1]["amount"]) if slabs else 0
+
+
+def _amount_for_value_slab(bill_value: float, slabs: List[Dict]) -> int:
+    """Point 9: pick the slab whose [min_value, max_value] range contains bill_value.
+    Falls back to the last slab if bill_value exceeds all ranges."""
+    if not slabs:
+        return 0
+    for s in slabs:
+        lo = float(s.get("min_value", 0))
+        hi = float(s.get("max_value", 0))
+        if lo <= bill_value <= hi:
+            return int(s.get("amount", 0))
+    return int(slabs[-1].get("amount", 0))
+
+
+async def _brand_category(brand_name: str) -> Optional[str]:
+    if not brand_name:
+        return None
+    doc = await _db.brands.find_one(
+        {"brand_name": {"$regex": f"^{re.escape(brand_name)}$", "$options": "i"}},
+        {"_id": 0, "category": 1},
+    )
+    return (doc or {}).get("category") if doc else None
+
+
+async def _resolve_registration_amount(cfg: Dict, staff: Dict, reg_count: int) -> int:
+    """Point 8: Category-flat registration reward with universal fallback.
+    Priority:
+      1. registration_by_category[<staff's brand category>]
+      2. registration_by_category["__ALL__"]
+      3. Legacy per-brand/category slab table
+      4. Default count-based slabs
+    """
+    reg_map = cfg.get("registration_by_category") or {}
+    category = await _brand_category((staff.get("brand_name") or "").strip())
+    if category and category in reg_map:
+        return int(reg_map[category])
+    if "__ALL__" in reg_map:
+        return int(reg_map["__ALL__"])
+    # Legacy count-based fallback
+    slabs = await _resolve_slabs_for_staff(cfg, staff, "registration_slabs")
+    return _amount_for_slab(reg_count, slabs)
+
+
+async def _resolve_bill_upload_amount(cfg: Dict, staff: Dict, bill_value: float, upload_count: int) -> int:
+    """Point 9: Value-based bill-upload reward with category and universal support.
+    Priority:
+      1. bill_upload_value_slabs_by_category[<staff's brand category>]
+      2. bill_upload_value_slabs_by_category["__ALL__"]
+      3. Legacy count-based slab table
+    """
+    value_map = cfg.get("bill_upload_value_slabs_by_category") or {}
+    category = await _brand_category((staff.get("brand_name") or "").strip())
+    if category and value_map.get(category):
+        return _amount_for_value_slab(bill_value, value_map[category])
+    if value_map.get("__ALL__"):
+        return _amount_for_value_slab(bill_value, value_map["__ALL__"])
+    # Legacy count-based fallback
+    slabs = await _resolve_slabs_for_staff(cfg, staff, "bill_upload_slabs")
+    return _amount_for_slab(upload_count, slabs)
 
 
 async def _resolve_slabs_for_staff(cfg: Dict, staff: Dict, slab_kind: str) -> List[Dict]:
@@ -800,6 +877,8 @@ class StaffConfigUpdate(BaseModel):
     bill_upload_slabs: Optional[List[Dict]] = None
     category_slabs: Optional[Dict[str, Dict[str, List[Dict]]]] = None
     brand_slabs: Optional[Dict[str, Dict[str, List[Dict]]]] = None
+    registration_by_category: Optional[Dict[str, int]] = None
+    bill_upload_value_slabs_by_category: Optional[Dict[str, List[Dict]]] = None
     attribution_window_minutes: Optional[int] = None
     registration_validity_days: Optional[int] = None
 
@@ -1144,8 +1223,8 @@ async def create_registration_incentive(customer_phone: str, staff: Dict):
     redeemable only after the customer uploads a bill."""
     cfg = await get_staff_config()
     count_so_far = await _db.staff_incentives.count_documents({"staff_id": staff["id"], "type": "registration"})
-    slabs = await _resolve_slabs_for_staff(cfg, staff, "registration_slabs")
-    amount = _amount_for_slab(count_so_far, slabs)
+    # Point 8: flat-per-category resolver (falls back to legacy count-based slabs).
+    amount = await _resolve_registration_amount(cfg, staff, count_so_far)
     validity_days = int(cfg.get("registration_validity_days") or 60)
     expires_at = (datetime.now(timezone.utc) + timedelta(days=validity_days)).isoformat()
     doc = {
@@ -1163,11 +1242,12 @@ async def create_registration_incentive(customer_phone: str, staff: Dict):
     return doc
 
 
-async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, bill_status: str):
+async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, bill_status: str, bill_value: float = 0.0):
     """Called from the bill-upload pipeline after each bill status change.
       - If a matching active attribution exists → create a bill_upload incentive.
       - Additionally, if the customer has a pending registration incentive → activate it.
-      - Status mapping: approved→approved(redeemable), pending/manual→pending_verification, rejected→cancelled."""
+      - Status mapping: approved→approved(redeemable), pending/manual→pending_verification, rejected→cancelled.
+    Point 9: `bill_value` (₹) is used to pick the value-based slab reward. If not provided, we look it up from the bill record."""
     # 1. Try to find an active attribution
     attribution = await find_active_attribution(customer_phone)
     cfg = await get_staff_config()
@@ -1181,8 +1261,12 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
             staff_id = attribution["staff_id"]
             attributed_staff = await _db.retail_staff.find_one({"id": staff_id}, {"_id": 0}) or attribution
             count_so_far = await _db.staff_incentives.count_documents({"staff_id": staff_id, "type": "bill_upload"})
-            slabs = await _resolve_slabs_for_staff(cfg, attributed_staff, "bill_upload_slabs")
-            amount = _amount_for_slab(count_so_far, slabs)
+            # Point 9: derive bill_value if caller didn't pass it.
+            if not bill_value:
+                bill_doc = await _db.bills.find_one({"id": bill_id}, {"_id": 0, "amount": 1, "total_amount": 1, "bill_amount": 1})
+                if bill_doc:
+                    bill_value = float(bill_doc.get("amount") or bill_doc.get("total_amount") or bill_doc.get("bill_amount") or 0)
+            amount = await _resolve_bill_upload_amount(cfg, attributed_staff, bill_value, count_so_far)
             status = _status_from_bill(bill_status)
             await _db.staff_incentives.insert_one({
                 "id": str(uuid.uuid4()),
@@ -1193,6 +1277,7 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
                 "status": status,
                 "amount": amount,
                 "bill_id": bill_id,
+                "bill_value": bill_value,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "approved_at": datetime.now(timezone.utc).isoformat() if status == "redeemable" else None,
             })
