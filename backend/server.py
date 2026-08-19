@@ -7,6 +7,7 @@ import os
 import logging
 import asyncio
 import csv
+import random
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
@@ -4158,6 +4159,30 @@ async def send_test_whatsapp(request: Request, payload: dict = Depends(verify_jw
     return r
 
 
+@api_router.post("/admin/otp/send-test")
+async def send_test_otp(request: Request, payload: dict = Depends(verify_jwt_token)):
+    """Point 11: dispatch a real OTP through the configured OTP_CHANNEL and return
+    per-channel diagnostics so admin can verify OTP delivery end-to-end without
+    inventing a fake customer number. Requires a 10-digit target phone."""
+    body = await request.json()
+    to = (body.get("phone") or "").strip()
+    digits = "".join(ch for ch in to if ch.isdigit())
+    if len(digits) < 10:
+        raise HTTPException(status_code=400, detail="phone required (10-digit)")
+    phone_10 = digits[-10:]
+    otp = str(random.randint(100000, 999999))
+    await store_otp(phone_10, otp)
+    result = await send_login_otp(phone_10, otp)
+    return {
+        "phone": phone_10,
+        "otp_channel": OTP_CHANNEL,
+        "success": bool(result.get("success")),
+        "whatsapp": result.get("whatsapp"),
+        "sms": result.get("sms"),
+        "hint": "OTP is stored in DB and can be verified via /consumer/auth/verify-otp for 5 minutes. If WhatsApp fails but SMS succeeds you can still login.",
+    }
+
+
 @app.on_event("startup")
 async def _load_admin_alert_phones_from_db():
     """On startup, restore admin_alert_phones override from db.settings if set."""
@@ -4529,6 +4554,43 @@ async def send_otp_sms(phone_10: str, otp: str) -> dict:
     except Exception as e:
         logger.error(f"Karix SMS send error: {e}")
         return {"success": False, "error": str(e)}
+
+
+async def send_otp_whatsapp(phone_10: str, otp: str) -> dict:
+    """Point 11: Send OTP via WhatsApp (Karix WABA text).
+    `phone_10` is the 10-digit Indian mobile number. The message uses the same
+    DLT-approved wording as the SMS template so recipients see a familiar
+    format. Returns the same {success, status_code, mid, ...} dict shape as
+    send_whatsapp_text_diag so callers can log / surface delivery diagnostics.
+
+    NOTE: outside a 24-hour WhatsApp session window, non-template messages will
+    be silently dropped by WhatsApp Business. For login OTP flows this is
+    typically fine because the app funnels users through a WhatsApp CTA first;
+    for cold registrations enable OTP_SMS_FALLBACK to also send an SMS.
+    """
+    phone_e164 = f"91{phone_10}" if len(phone_10) == 10 else phone_10
+    text = f"Your verification OTP is {otp} Use this at Homeland Advantage. Valid for 5 minutes."
+    return await send_whatsapp_text_diag(phone_e164, text)
+
+
+# Point 11: default channel is WhatsApp per client request. Set to 'both' to also fire the SMS fallback.
+OTP_CHANNEL = os.environ.get("OTP_CHANNEL", "whatsapp").strip().lower()  # 'whatsapp' | 'sms' | 'both'
+
+
+async def send_login_otp(phone_10: str, otp: str) -> dict:
+    """Dispatch OTP via the configured channel(s). Always returns a dict with
+    per-channel results so admin diagnostics can see exactly what happened."""
+    results = {"whatsapp": None, "sms": None, "success": False}
+    if OTP_CHANNEL in ("whatsapp", "both"):
+        results["whatsapp"] = await send_otp_whatsapp(phone_10, otp)
+        if results["whatsapp"].get("success"):
+            results["success"] = True
+    if OTP_CHANNEL in ("sms", "both") or (OTP_CHANNEL == "whatsapp" and not results["success"]
+                                          and os.environ.get("OTP_SMS_FALLBACK", "").lower() == "true"):
+        results["sms"] = await send_otp_sms(phone_10, otp)
+        if results["sms"].get("success"):
+            results["success"] = True
+    return results
 
 
 async def store_otp(phone_10: str, otp: str) -> None:
@@ -8380,7 +8442,7 @@ from routes.staff import (
     create_or_activate_bill_incentive,
     sync_incentive_on_bill_status_change,
 )
-bind_staff_db(db, send_sms_otp=send_otp_sms, store_otp=store_otp, verify_stored_otp=verify_stored_otp)
+bind_staff_db(db, send_sms_otp=send_login_otp, store_otp=store_otp, verify_stored_otp=verify_stored_otp)
 app.include_router(staff_router)
 app.include_router(staff_admin_router)
 

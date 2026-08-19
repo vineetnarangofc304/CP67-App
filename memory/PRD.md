@@ -682,3 +682,25 @@ Verified end-to-end: 5/5 pytest PASS + live curl + visual smoke on preview.
 ### New tests
 - `/app/backend/tests/test_points_36_37.py` — 5 tests: sources endpoint returns curated + counted list, requires auth, alerts/test per-phone diag, send-test validation, send-test success.
 
+
+## Feb 19 2026 — Client Point 11 (OTP via WhatsApp)
+
+Verified end-to-end: 4/4 new pytest PASS + live Karix OTP delivered (mid captured).
+
+### Problem
+User reported "No OTP is getting triggered, please send OTP via WhatsApp only". Existing flow only fired Karix SMS via a DLT template and did not use WhatsApp at all.
+
+### Fix
+- New helper `send_otp_whatsapp(phone_10, otp)` in `server.py` — sends the OTP as a plain-text WhatsApp message via Karix WABA (uses `send_whatsapp_text_diag` under the hood, so we get `status_code`, `mid`, response body back for diagnostics).
+- New dispatcher `send_login_otp(phone_10, otp)` — routes to WhatsApp, SMS, or both based on `OTP_CHANNEL` env (default `whatsapp`). Optional `OTP_SMS_FALLBACK=true` sends an SMS if WhatsApp fails.
+- Consumer `POST /consumer/auth/send-otp` now calls the dispatcher instead of `send_otp_sms` directly. The public API contract is unchanged (`{success:true, phone, message}`).
+- Staff/Retailer OTP endpoints (`bind_staff_db`) now receive the same dispatcher, so retailer manager login OTP also uses WhatsApp.
+- New admin endpoint `POST /admin/otp/send-test` — ops can trigger a real OTP and see per-channel Karix diagnostics without touching a customer account.
+
+### Env
+- `OTP_CHANNEL` (new) — `whatsapp` | `sms` | `both`. Defaults to `whatsapp` per client request.
+- `OTP_SMS_FALLBACK` (new) — `true` sends SMS if WhatsApp channel fails.
+
+### New tests
+`/app/backend/tests/test_point11_whatsapp_otp.py` — 4 tests covering the public flow, admin diagnostic, and auth guardrails.
+

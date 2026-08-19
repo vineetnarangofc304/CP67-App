@@ -390,22 +390,25 @@ async def send_otp(request: SendOTPRequest, background_tasks: BackgroundTasks):
         return {"success": True, "message": "OTP sent to your phone", "phone": phone}
 
     # Generate a 6-digit OTP and persist it (5-min TTL, max 5 attempts)
-    from server import send_otp_sms, store_otp
+    # Point 11: OTP now goes via WhatsApp by default (server-side OTP_CHANNEL controls this).
+    from server import send_login_otp, store_otp
     otp = str(random.randint(100000, 999999))
     await store_otp(phone_10, otp)
 
-    # Send the SMS in the background — Karix occasionally takes 30+ seconds, and
+    # Send the OTP in the background — WhatsApp/SMS gateways can take 30+ seconds and
     # we don't want the user staring at a loading spinner on the login screen.
-    async def _send_sms_bg(p10: str, code: str):
+    async def _send_otp_bg(p10: str, code: str):
         try:
-            res = await send_otp_sms(p10, code)
-            if res.get("success"):
-                logger.info(f"OTP SMS sent to {p10}")
+            res = await send_login_otp(p10, code)
+            wa = (res.get("whatsapp") or {}) if isinstance(res, dict) else {}
+            sms = (res.get("sms") or {}) if isinstance(res, dict) else {}
+            if wa.get("success") or sms.get("success"):
+                logger.info(f"OTP sent to {p10} via {'whatsapp' if wa.get('success') else ''}{'+sms' if sms.get('success') else ''}")
             else:
-                logger.warning(f"SMS gateway failed for {p10}: {res}")
+                logger.warning(f"OTP gateways all failed for {p10}: whatsapp={wa} sms={sms}")
         except Exception as e:
-            logger.warning(f"SMS send error for {p10}: {e}")
-    background_tasks.add_task(_send_sms_bg, phone_10, otp)
+            logger.warning(f"OTP send error for {p10}: {e}")
+    background_tasks.add_task(_send_otp_bg, phone_10, otp)
 
     # TagnPay sync also runs in the background.
     async def _tagnpay_bg_sync(p10: str):
