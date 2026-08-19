@@ -292,14 +292,22 @@ def _normalise_phone(p: str) -> str:
 async def admin_list_brand_catalog(auth=Depends(_verify_admin)):
     """Return distinct brand names and category names from the brands
     collection so the Admin UI can render dropdowns for slab overrides,
-    instead of free-text inputs (Point 7)."""
+    instead of free-text inputs (Point 7).
+
+    Point 10: also returns `staff_mapped_categories` + `staff_mapped_brands` — the
+    subset of categories / brands that actually have at least one retail-staff
+    record attached (via retail_staff.brand_name → brands.category). The Slabs
+    Point 8/9 dropdowns should use these subsets so admins only see options
+    that are relevant to their retailer staff base."""
     brands = []
     categories = set()
+    brand_to_cat: Dict[str, str] = {}
     async for b in _db.brands.find({}, {"_id": 0, "brand_name": 1, "category": 1}):
         bn = (b.get("brand_name") or "").strip()
         cat = (b.get("category") or "").strip()
         if bn:
             brands.append({"brand_name": bn, "category": cat})
+            brand_to_cat[bn.lower()] = cat
         if cat:
             categories.add(cat)
     # Sort + de-duplicate brand list
@@ -311,7 +319,22 @@ async def admin_list_brand_catalog(auth=Depends(_verify_admin)):
             continue
         seen.add(key)
         uniq.append(x)
-    return {"brands": uniq, "categories": sorted(categories, key=str.lower)}
+
+    # Point 10: derive the brand & category subsets that are actually in use by retail staff
+    staff_brand_set = set()
+    for sb in await _db.retail_staff.distinct("brand_name"):
+        if not sb:
+            continue
+        staff_brand_set.add(sb.strip())
+    staff_mapped_brands = sorted({b for b in staff_brand_set if b.lower() in brand_to_cat}, key=str.lower)
+    staff_mapped_categories = sorted({brand_to_cat[b.lower()] for b in staff_mapped_brands if brand_to_cat.get(b.lower())}, key=str.lower)
+
+    return {
+        "brands": uniq,
+        "categories": sorted(categories, key=str.lower),
+        "staff_mapped_brands": staff_mapped_brands,
+        "staff_mapped_categories": staff_mapped_categories,
+    }
 
 
 @staff_admin_router.post("/catalog/brand-category-mapping")

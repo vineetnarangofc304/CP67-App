@@ -27,7 +27,7 @@ export default function StaffIncentives() {
   const [managers, setManagers] = useState([]);
   const [mgrForm, setMgrForm] = useState({ name: '', phone: '', brands: '', email: '' });
   const [creatingMgr, setCreatingMgr] = useState(false);
-  const [catalog, setCatalog] = useState({ brands: [], categories: [] });   // Point 7: dropdown source
+  const [catalog, setCatalog] = useState({ brands: [], categories: [], staff_mapped_brands: [], staff_mapped_categories: [] });   // Point 7: dropdown source; Point 10: staff-mapped subsets
   const [uploadingMapping, setUploadingMapping] = useState(false);
   const [mappingResult, setMappingResult] = useState(null);
   const [pendingMappingFile, setPendingMappingFile] = useState(null);
@@ -63,7 +63,13 @@ export default function StaffIncentives() {
       setLeaderboard(l.leaderboard || []);
       setRedemptions(r.redemptions || []);
       setManagers(mg.managers || []);
-      setCatalog({ brands: cat.brands || [], categories: cat.categories || [] });
+      setCatalog({
+        brands: cat.brands || [],
+        categories: cat.categories || [],
+        // Point 10: subsets that are actually in use by retail staff
+        staff_mapped_brands: cat.staff_mapped_brands || [],
+        staff_mapped_categories: cat.staff_mapped_categories || [],
+      });
     } catch (e) {
       toast.error('Failed to load staff data');
     }
@@ -754,17 +760,19 @@ export default function StaffIncentives() {
                   />
 
                   {/* Point 8: Registration incentive — flat amount per category with __ALL__ universal fallback */}
+                  {/* Point 10: dropdown limited to categories actually mapped to retailer staff */}
                   <RegistrationByCategoryEditor
                     config={config}
                     setConfig={setConfig}
-                    categoryOptions={catalog.categories}
+                    categoryOptions={catalog.staff_mapped_categories}
                   />
 
                   {/* Point 9: Bill-upload incentive — value-based slabs per category with __ALL__ universal fallback */}
+                  {/* Point 10: dropdown limited to categories actually mapped to retailer staff */}
                   <BillValueSlabsEditor
                     config={config}
                     setConfig={setConfig}
-                    categoryOptions={catalog.categories}
+                    categoryOptions={catalog.staff_mapped_categories}
                   />
 
                   {/* Point 7: Brand ↔ Category mapping bulk upload */}
@@ -1031,6 +1039,11 @@ function RegistrationByCategoryEditor({ config, setConfig, categoryOptions }) {
       <div className="font-medium mb-2 flex items-center gap-2"><Award size={16} /> Point 8 · Registration Reward per Category</div>
       <div className="text-xs text-slate-600 mb-3">
         Flat ₹ reward per registration, resolved by the staff&apos;s brand category. Priority: <span className="font-mono">category → ALL → legacy slabs</span>.
+        {categoryOptions.length === 0 && (
+          <div className="mt-1 text-amber-700">
+            No retailer-staff-mapped categories yet — add staff whose brand is present in the Brand ↔ Category Mapping to see options here (Point 10).
+          </div>
+        )}
       </div>
       <div className="flex gap-2 mb-3">
         <select
@@ -1101,6 +1114,11 @@ function BillValueSlabsEditor({ config, setConfig, categoryOptions }) {
       <div className="font-medium mb-2 flex items-center gap-2"><Award size={16} /> Point 9 · Bill Upload Reward by Bill Value</div>
       <div className="text-xs text-slate-600 mb-3">
         ₹ reward per bill-upload picked by the <strong>bill value</strong> uploaded. Priority: <span className="font-mono">category → ALL → legacy slabs</span>.
+        {categoryOptions.length === 0 && (
+          <div className="mt-1 text-amber-700">
+            No retailer-staff-mapped categories yet — add staff whose brand is present in the Brand ↔ Category Mapping to see options here (Point 10).
+          </div>
+        )}
       </div>
       <div className="flex gap-2 mb-3">
         <select

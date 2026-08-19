@@ -636,3 +636,20 @@ Verified end-to-end by testing_agent iteration 49 (8 unit pytest + 3 API pytest 
 ### New data-testids
 `reg-by-category-editor`, `reg-by-category-new-key`, `reg-by-category-add`, `reg-by-category-amount-<key>`, `reg-by-category-remove-<key>`, `bill-value-slabs-editor`, `bill-value-slabs-new-key`, `bill-value-slabs-add`, `bill-value-slabs-remove-<key>`, `bill-value-slabs-addrow-<key>`, `bill-value-min-<k>-<i>`, `bill-value-max-<k>-<i>`, `bill-value-amt-<k>-<i>`.
 
+
+## Feb 19 2026 — Client Point 10 (Filter Slab Dropdowns to Staff-Mapped Categories)
+
+### Problem
+Point 8 (Registration Reward per Category) and Point 9 (Bill Upload Reward by Bill Value) dropdowns were sourced from the full brand-category catalog (all 22 categories in the brands collection). Admin found options that had zero retail staff mapped to them, causing noise and mis-configuration.
+
+### Fix
+- Backend `GET /admin/staff/catalog/brands-categories` now additionally returns:
+  - `staff_mapped_brands` — distinct brands that appear on at least one `retail_staff` row AND exist in the master brands collection.
+  - `staff_mapped_categories` — the categories of those staff-mapped brands.
+- Frontend Slabs tab wires **only** `staff_mapped_categories` into the two Point 8/9 editors' dropdowns.
+- Empty state: if there are zero mapped categories, both editors show an amber helper "No retailer-staff-mapped categories yet — add staff whose brand is present in the Brand ↔ Category Mapping" so admins know why the dropdown is empty.
+
+### Verified
+- Backend integration test `/app/backend/tests/test_point10_staff_mapped_dropdown.py` (1 test) PASS.
+- Live preview: full catalog has 22 categories, staff-mapped subset shows 11 — dropdown correctly trimmed (visual smoke screenshot captured).
+
