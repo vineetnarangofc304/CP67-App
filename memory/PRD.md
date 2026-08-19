@@ -653,3 +653,32 @@ Point 8 (Registration Reward per Category) and Point 9 (Bill Upload Reward by Bi
 - Backend integration test `/app/backend/tests/test_point10_staff_mapped_dropdown.py` (1 test) PASS.
 - Live preview: full catalog has 22 categories, staff-mapped subset shows 11 — dropdown correctly trimmed (visual smoke screenshot captured).
 
+
+## Feb 19 2026 — Client Points 36 & 37 (Admin diagnostics + Users source dropdown)
+
+Verified end-to-end: 5/5 pytest PASS + live curl + visual smoke on preview.
+
+### Point 37 — Users source dropdown reflects real data
+- **Root cause**: dropdown was hardcoded to 6 sources (Retailer, Food Court, Parking, Digital Screens, Social, Website). The DB actually had `SRC_APP`, `SRC_RWA`, `SRC_WHATSAPP`, `SRC_MARKETING`, `SRC_BRANDS` — none of them selectable.
+- **Fix**:
+  - New endpoint `GET /api/admin/users/sources` returns `{sources: [{code, label, count}, ...]}` — a merge of (a) distinct `first_touch_source` values from the users collection with live counts and (b) a curated shortlist (SRC_APP, SRC_BRANDS, SRC_FOODCOURT, SRC_PARKING, SRC_DIGITAL, SRC_SOCIAL, SRC_WEBSITE, SRC_RWA, SRC_OFFICE, SRC_WHATSAPP, SRC_MARKETING, SRC_REFERRAL) so admins can pre-filter for freshly rolled-out sources even at zero count.
+  - Users.jsx fetches this on mount and populates the source dropdown dynamically. Options show as `Label (count)` if count > 0.
+  - Live result on preview: dropdown now shows 12 sources with counts vs. 6 before.
+
+### Point 36 — Test message + alerts diagnostics
+- **Root cause**: `send_whatsapp_text` returned `True`/`False` — admin never saw *why* Karix might have dropped a message. Also, several WhatsApp bill-path insertion sites only pinged the legacy `ADMIN_PHONE` env constant, not the configured `ADMIN_ALERT_PHONES` list, so real bill alerts silently missed the ops number (9766692497).
+- **Fixes**:
+  1. New helper `send_whatsapp_text_diag(phone, message)` returns full Karix response (`status_code`, `mid`, response body, error). `send_whatsapp_text` still returns bool for backward compatibility.
+  2. `POST /api/admin/alerts/test` now returns `{success, accepted, total, phones, results[per-phone diag], hint}` — the `hint` explains the WhatsApp 24-hour session limitation so admin can distinguish "Karix accepted" from "phone actually received".
+  3. New endpoint `POST /api/admin/whatsapp/send-test` for ad-hoc plain-text send with the same diagnostic response.
+  4. New helper `insert_bill_and_alert(bill_dict)` — replaces every `db.bills.insert_one(...)` in the WhatsApp bill pipeline (12 sites). It inserts the doc AND fires `maybe_alert_admin` for `pending / pending_review / manual_review / rejected` states so the configured ops phones actually get pinged.
+  5. Bills admin UI: "Test Alert" button now surfaces Karix `mid` + the delivery hint via toast so admin can copy-paste the mid to check delivery in Karix dashboard.
+
+### Files touched
+- `/app/backend/server.py` (`send_whatsapp_text`, `send_whatsapp_text_diag`, `send_test_admin_alert`, new `send_test_whatsapp` endpoint, new `list_user_sources` endpoint, new `insert_bill_and_alert` helper, 12 insert-site swaps)
+- `/app/frontend/src/pages/Users.jsx` (dynamic source dropdown)
+- `/app/frontend/src/pages/Bills.jsx` (`sendTestAlert` surfaces mid+hint)
+
+### New tests
+- `/app/backend/tests/test_points_36_37.py` — 5 tests: sources endpoint returns curated + counted list, requires auth, alerts/test per-phone diag, send-test validation, send-test success.
+

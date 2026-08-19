@@ -121,11 +121,15 @@ const Bills = () => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (res.ok) {
-        const d = await res.json();
-        toast.success(`Test alert sent to ${(d.phones || []).join(', ')}`);
+      const d = await res.json();
+      if (res.ok && d.accepted > 0) {
+        // Point 36: surface Karix mid + hint so admin can debug delivery
+        const first = (d.results && d.results[0]) || {};
+        toast.success(`Karix accepted ${d.accepted}/${d.total} → ${(d.phones || []).join(', ')}${first.mid ? ` · mid: ${first.mid}` : ''}`, { duration: 8000 });
+        if (d.hint) toast.info(d.hint, { duration: 10000 });
       } else {
-        toast.error('Failed to send test alert');
+        const first = (d.results && d.results[0]) || {};
+        toast.error(`Test alert failed${first.error ? ` — ${first.error}` : ''}${first.status_code ? ` (Karix ${first.status_code})` : ''}`, { duration: 10000 });
       }
     } catch { toast.error('Network error sending test'); }
     setAlertBusy(false);

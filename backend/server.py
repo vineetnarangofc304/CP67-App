@@ -1092,6 +1092,49 @@ async def generate_qr_image(qr_code_id: str):
 
 # ======================== USER ROUTES ========================
 
+@api_router.get("/admin/users/sources")
+async def list_user_sources(payload: dict = Depends(verify_jwt_token)):
+    """Point 37: Return every distinct first_touch_source value in the users
+    collection with its user count so the Admin → Users source dropdown can
+    reflect the real data instead of a hardcoded shortlist. Also returns any
+    curated / well-known source codes even if they currently have zero users,
+    so admins can pre-filter for freshly rolled-out sources (e.g. SRC_OFFICE).
+    """
+    # 1. Distinct values actually present on users
+    counts: Dict[str, int] = {}
+    pipeline = [
+        {"$match": {"first_touch_source": {"$exists": True, "$nin": [None, ""]}}},
+        {"$group": {"_id": "$first_touch_source", "count": {"$sum": 1}}},
+    ]
+    async for row in db.users.aggregate(pipeline):
+        code = str(row["_id"] or "").strip()
+        if code:
+            counts[code] = int(row.get("count") or 0)
+
+    # 2. Curated shortlist so admins can filter for known sources even when unused
+    curated = [
+        "SRC_APP", "SRC_BRANDS", "SRC_FOODCOURT", "SRC_PARKING",
+        "SRC_DIGITAL", "SRC_SOCIAL", "SRC_WEBSITE", "SRC_RWA",
+        "SRC_OFFICE", "SRC_WHATSAPP", "SRC_MARKETING", "SRC_REFERRAL",
+    ]
+    for c in curated:
+        counts.setdefault(c, 0)
+
+    # 3. Human-friendly labels — falls back to trimmed code otherwise
+    LABELS = {
+        "SRC_APP": "App", "SRC_BRANDS": "Retailer", "SRC_FOODCOURT": "Food Court",
+        "SRC_PARKING": "Parking", "SRC_DIGITAL": "Digital Screens", "SRC_SOCIAL": "Social",
+        "SRC_WEBSITE": "Website", "SRC_RWA": "RWA", "SRC_OFFICE": "Office",
+        "SRC_WHATSAPP": "WhatsApp", "SRC_MARKETING": "Marketing", "SRC_REFERRAL": "Referral",
+    }
+    sources = [
+        {"code": code, "label": LABELS.get(code, code.replace("SRC_", "").title()), "count": cnt}
+        for code, cnt in counts.items()
+    ]
+    sources.sort(key=lambda x: (-x["count"], x["code"]))
+    return {"sources": sources, "total": len(sources)}
+
+
 @api_router.get("/users")
 async def get_users(
     skip: int = 0, 
@@ -4053,8 +4096,10 @@ async def update_admin_alert_config(body: AdminAlertPhonesUpdate,
 
 @api_router.post("/admin/alerts/test")
 async def send_test_admin_alert(payload: dict = Depends(verify_jwt_token)):
-    """Fire a test alert to the currently-configured phones so admin can verify
-    Karix delivery without waiting for a real bill event."""
+    """Point 36: fire a diagnostic bill alert to the configured phones and
+    return the exact Karix response per phone (status, mid, error). This
+    surfaces the WhatsApp Business API 24-hour session limitation so admin
+    can tell 'Karix accepted' apart from 'delivered'."""
     fake_bill = {
         "id": "TEST-" + str(uuid.uuid4())[:8],
         "user_phone": "919999999999",
@@ -4063,8 +4108,54 @@ async def send_test_admin_alert(payload: dict = Depends(verify_jwt_token)):
         "bill_no": "TEST-123",
         "rejection_reason": "This is a TEST alert triggered from admin panel"
     }
-    await send_admin_bill_alert("manual_review", fake_bill, "Manual test from admin panel")
-    return {"success": True, "phones": ADMIN_ALERT_PHONES}
+    # Compose the same message send_admin_bill_alert would send, but capture per-phone results here.
+    msg = (
+        "CP67 Bill Alert - MANUAL REVIEW (TEST)\n\n"
+        f"Customer: {fake_bill['user_phone']}\n"
+        f"Store: {fake_bill['store_name']}\n"
+        f"Amount: \u20b9{fake_bill['amount']}\n"
+        f"Bill No: {fake_bill['bill_no']}\n"
+        f"Bill ID: {fake_bill['id'][:8]}\n"
+        f"Reason: {fake_bill['rejection_reason']}\n"
+    )
+    results = []
+    for admin_phone in ADMIN_ALERT_PHONES:
+        to = _normalize_alert_phone(admin_phone)
+        if not to:
+            results.append({"phone": admin_phone, "success": False, "error": "invalid phone"})
+            continue
+        r = await send_whatsapp_text_diag(to, msg)
+        r["phone_input"] = admin_phone
+        r["phone_sent_to"] = to
+        results.append(r)
+    accepted = sum(1 for r in results if r.get("success"))
+    return {
+        "success": accepted > 0,
+        "accepted": accepted,
+        "total": len(results),
+        "phones": ADMIN_ALERT_PHONES,
+        "results": results,
+        "hint": "Karix returns 200 once the message is accepted. WhatsApp Business may still drop it if the recipient hasn't messaged your business number in the last 24 hours (session window) — in that case only pre-approved templates deliver.",
+    }
+
+
+@api_router.post("/admin/whatsapp/send-test")
+async def send_test_whatsapp(request: Request, payload: dict = Depends(verify_jwt_token)):
+    """Point 36: lightweight endpoint that sends a plain-text WhatsApp message
+    to an arbitrary number (defaults to caller-supplied phone) and returns the
+    full Karix response. Useful when the ops team wants to sanity-check a
+    specific number without touching bill-alert config."""
+    body = await request.json()
+    to = body.get("phone") or ""
+    message = (body.get("message") or "Test message from CP67 Mall admin panel — if you receive this, WhatsApp delivery is working.").strip()
+    to_norm = _normalize_alert_phone(to)
+    if not to_norm:
+        raise HTTPException(status_code=400, detail="phone required (10-digit or 12-digit E.164)")
+    r = await send_whatsapp_text_diag(to_norm, message)
+    r["phone_input"] = to
+    r["phone_sent_to"] = to_norm
+    r["hint"] = "If Karix returns 200 but the phone doesn't receive the message, the WhatsApp Business 24-hour session window has expired — send a template message or have the recipient message your business number first."
+    return r
 
 
 @app.on_event("startup")
@@ -4392,6 +4483,20 @@ async def maybe_alert_admin(bill_id: str, status: str, reason: Optional[str] = N
         logger.warning(f"maybe_alert_admin failed for {bill_id}/{status}: {e}")
 
 
+async def insert_bill_and_alert(bill_dict: dict) -> str:
+    """Point 36: single entry point for inserting a bill AND firing the admin alert
+    to ADMIN_ALERT_PHONES for pending/manual_review/rejected states. Prevents the
+    situation where a WhatsApp-only bill goes into pending state and never reaches
+    the configured ops number because the legacy path only pinged ADMIN_PHONE.
+    Returns the inserted bill id."""
+    await db.bills.insert_one(bill_dict)
+    bill_id = bill_dict.get("id")
+    status = bill_dict.get("status") or ""
+    if bill_id and status in ("pending", "pending_review", "manual_review", "rejected"):
+        asyncio.create_task(maybe_alert_admin(bill_id, status, bill_dict.get("rejection_reason")))
+    return bill_id
+
+
 async def send_otp_sms(phone_10: str, otp: str) -> dict:
     """Send OTP SMS via Karix HTTP API using DLT-approved template:
     'Your verification OTP is {#var#} Use this at CP67 Mall.'
@@ -4466,12 +4571,21 @@ async def verify_stored_otp(phone_10: str, otp: str) -> bool:
     return False
 
 
-async def send_whatsapp_text(phone: str, message: str):
-    """Send simple text WhatsApp message via Karix RCM API"""
+async def send_whatsapp_text(phone: str, message: str) -> bool:
+    """Send simple text WhatsApp message via Karix RCM API."""
+    r = await send_whatsapp_text_diag(phone, message)
+    return bool(r.get("success"))
+
+
+async def send_whatsapp_text_diag(phone: str, message: str) -> dict:
+    """Point 36: same as send_whatsapp_text but returns the full Karix response
+    (status_code, mid, response body) so admin diagnostics can surface exactly
+    what happened. Kept separate so the boolean contract of send_whatsapp_text
+    doesn't change and existing `if send_whatsapp_text(...)` checks keep working.
+    """
     if not KARIX_API_KEY:
         logger.error("Karix API key not configured")
-        return False
-    
+        return {"success": False, "error": "Karix API key not configured", "to": phone}
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -4505,11 +4619,24 @@ async def send_whatsapp_text(phone: str, message: str):
                     }
                 }
             )
-            logger.info(f"Karix text response: {response.status_code} - {response.text}")
-            return response.status_code == 200
+            body_text = response.text or ""
+            logger.info(f"Karix text response ({phone}): {response.status_code} - {body_text[:200]}")
+            ok = response.status_code == 200
+            mid = None
+            try:
+                mid = response.json().get("mid")
+            except Exception:
+                pass
+            return {
+                "success": ok,
+                "status_code": response.status_code,
+                "mid": mid,
+                "response": body_text[:400],
+                "to": phone,
+            }
     except Exception as e:
-        logger.error(f"Karix send error: {e}")
-        return False
+        logger.error(f"Karix send error to {phone}: {e}")
+        return {"success": False, "error": str(e), "to": phone}
 
 async def send_whatsapp_buttons(phone: str, body_text: str, buttons: list):
     """Send WhatsApp interactive button message via Karix RCM API
@@ -5180,7 +5307,7 @@ We're scanning your bill now. Please wait a moment..."""
                     image_url=image_url or None,  # keep original Karix URL so admin can retry download
                     rejection_reason="Image could not be downloaded from WhatsApp — manual review",
                 )
-                await db.bills.insert_one(stub_bill.model_dump())
+                await insert_bill_and_alert(stub_bill.model_dump())
             except Exception as _e:
                 logger.error(f"Failed to insert stub bill for {phone}: {_e}")
 
@@ -5252,7 +5379,7 @@ Thank you for being a valued Homeland Advantage member."""
                 image_url=f"data:image/jpeg;base64,{image_base64}",
                 image_hash=image_hash
             )
-            await db.bills.insert_one(bill_data.model_dump())
+            await insert_bill_and_alert(bill_data.model_dump())
             
             buttons = [
                 {"id": "upload_bill", "title": "Upload Bill"},
@@ -5323,7 +5450,7 @@ We appreciate your understanding! Please upload your recent bills to continue ea
                     ocr_confidence=confidence,
                     ocr_raw_data=ocr_data
                 )
-                await db.bills.insert_one(bill_data.model_dump())
+                await insert_bill_and_alert(bill_data.model_dump())
                 
                 buttons = [
                     {"id": "know_more", "title": "Know More"},
@@ -5366,7 +5493,7 @@ Keep shopping at CP67 Mall to earn more points & enjoy exclusive rewards."""
                     ocr_raw_data=ocr_data,
                     rejection_reason="Duplicate bill detected (same bill number and store)"
                 )
-                await db.bills.insert_one(bill_data.model_dump())
+                await insert_bill_and_alert(bill_data.model_dump())
                 
                 buttons = [
                     {"id": "upload_bill", "title": "Upload Bill"},
@@ -5447,7 +5574,7 @@ Please upload a valid CP67 Mall bill to earn points."""
                 ocr_confidence=confidence,
                 ocr_raw_data=ocr_data
             )
-            await db.bills.insert_one(bill_data.model_dump())
+            await insert_bill_and_alert(bill_data.model_dump())
             
             # Call TagnPay pending-bill API to log rejection
             try:
@@ -5500,7 +5627,7 @@ Thank you for being a valued Homeland Advantage member."""
                 ocr_confidence=confidence,
                 ocr_raw_data=ocr_data
             )
-            await db.bills.insert_one(bill_data.model_dump())
+            await insert_bill_and_alert(bill_data.model_dump())
             
             buttons = [
                 {"id": "upload_bill", "title": "Upload Bill"},
@@ -5539,7 +5666,7 @@ Thank you for your patience!"""
             )
             doc = bill_data.model_dump()
             doc["invoice_mobile"] = invoice_mobile_clean
-            await db.bills.insert_one(doc)
+            await insert_bill_and_alert(doc)
 
             admin_alert_msg = f""" *Mobile Mismatch Alert*
 
@@ -5593,7 +5720,7 @@ Happy shopping!"""
                 points_mobile=points_mobile,
                 points_mobile_source=points_mobile_source
             )
-            await db.bills.insert_one(bill_data.model_dump())
+            await insert_bill_and_alert(bill_data.model_dump())
             
             # Send admin notification for high value bill
             admin_alert_msg = f""" *High Value Bill Alert*
@@ -5654,7 +5781,7 @@ Thank you for your patience!"""
                     points_mobile=points_mobile,
                     points_mobile_source=points_mobile_source
                 )
-                await db.bills.insert_one(bill_data.model_dump())
+                await insert_bill_and_alert(bill_data.model_dump())
                 
                 # Send admin notification
                 admin_alert_msg = f""" *ATV Exceeded Alert*
@@ -5796,7 +5923,7 @@ Please review in the admin dashboard."""
             bill_dict["force_credited"] = True
             bill_dict["fundle_original_error"] = tagnpay_error
             bill_dict["rejection_reason"] = None  # cleared since we accepted
-        await db.bills.insert_one(bill_dict)
+        await insert_bill_and_alert(bill_dict)
 
         # Staff Incentive Sync — WhatsApp bill upload triggers attribution + registration activation
         try:
@@ -5935,7 +6062,7 @@ Happy Shopping!"""
                     image_url=_img,
                     rejection_reason=f"WhatsApp bill processing failed: {str(e)[:200]}",
                 )
-                await db.bills.insert_one(stub_bill.model_dump())
+                await insert_bill_and_alert(stub_bill.model_dump())
                 # Point 25: alert mall-ops so no failed WhatsApp bill sits unnoticed
                 asyncio.create_task(maybe_alert_admin(stub_bill.id, "manual_review",
                                                      f"WhatsApp bill processing failed: {str(e)[:120]}"))
@@ -6698,7 +6825,7 @@ We will verify it within 24–48 hours
 1 Upload Bill
 2 Redeem Points"""
     
-    await db.bills.insert_one(bill_data.model_dump())
+    await insert_bill_and_alert(bill_data.model_dump())
     
     # Log outbound response
     outbound_log = WhatsAppLog(

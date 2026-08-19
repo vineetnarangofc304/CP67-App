@@ -43,10 +43,26 @@ const Users = () => {
   const [userDetails, setUserDetails] = useState(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [showFullScreen, setShowFullScreen] = useState(false);
+  // Point 37: source dropdown must be dynamic — pull every distinct first_touch_source value from the API.
+  const [sourceOptions, setSourceOptions] = useState([]);
 
   useEffect(() => {
     fetchUsers();
   }, [pagination.skip, sourceFilter, customerTypeFilter]);
+
+  useEffect(() => {
+    // Fetch once on mount so the dropdown reflects reality even before the user list loads.
+    const loadSources = async () => {
+      try {
+        const r = await fetch(`${API_URL}/admin/users/sources`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (r.ok) {
+          const d = await r.json();
+          setSourceOptions(d.sources || []);
+        }
+      } catch { /* silent — dropdown will fall back to curated */ }
+    };
+    loadSources();
+  }, [API_URL, token]);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -194,12 +210,11 @@ const Users = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Sources</SelectItem>
-                    <SelectItem value="SRC_BRANDS">Retailer</SelectItem>
-                    <SelectItem value="SRC_FOODCOURT">Food Court</SelectItem>
-                    <SelectItem value="SRC_PARKING">Parking</SelectItem>
-                    <SelectItem value="SRC_DIGITAL">Digital Screens</SelectItem>
-                    <SelectItem value="SRC_SOCIAL">Social</SelectItem>
-                    <SelectItem value="SRC_WEBSITE">Website</SelectItem>
+                    {sourceOptions.map(s => (
+                      <SelectItem key={s.code} value={s.code} data-testid={`source-option-${s.code}`}>
+                        {s.label}{s.count > 0 ? ` (${s.count})` : ''}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
