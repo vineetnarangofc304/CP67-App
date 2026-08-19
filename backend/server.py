@@ -4119,16 +4119,22 @@ async def send_test_admin_alert(payload: dict = Depends(verify_jwt_token)):
         f"Bill ID: {fake_bill['id'][:8]}\n"
         f"Reason: {fake_bill['rejection_reason']}\n"
     )
+    sms_msg = f"CP67 Bill MANUAL REVIEW (TEST): cust {fake_bill['user_phone']}, {fake_bill['store_name']}, Amt \u20b9{fake_bill['amount']}"
     results = []
     for admin_phone in ADMIN_ALERT_PHONES:
         to = _normalize_alert_phone(admin_phone)
         if not to:
             results.append({"phone": admin_phone, "success": False, "error": "invalid phone"})
             continue
-        r = await send_whatsapp_text_diag(to, msg)
-        r["phone_input"] = admin_phone
-        r["phone_sent_to"] = to
-        results.append(r)
+        wa = await send_whatsapp_text_diag(to, msg)
+        sms = await send_sms_text(to[-10:] if len(to) >= 10 else to, sms_msg)
+        results.append({
+            "phone_input": admin_phone,
+            "phone_sent_to": to,
+            "whatsapp": wa,
+            "sms": sms,
+            "success": bool(wa.get("success") or sms.get("success")),
+        })
     accepted = sum(1 for r in results if r.get("success"))
     return {
         "success": accepted > 0,
@@ -4136,7 +4142,7 @@ async def send_test_admin_alert(payload: dict = Depends(verify_jwt_token)):
         "total": len(results),
         "phones": ADMIN_ALERT_PHONES,
         "results": results,
-        "hint": "Karix returns 200 once the message is accepted. WhatsApp Business may still drop it if the recipient hasn't messaged your business number in the last 24 hours (session window) — in that case only pre-approved templates deliver.",
+        "hint": "Alert fires via BOTH WhatsApp and SMS. If WhatsApp shows success:true but the phone doesn't receive it, the WhatsApp 24-hour session window is closed — SMS should still deliver.",
     }
 
 
@@ -4447,6 +4453,11 @@ async def send_admin_bill_alert(event: str, bill: dict, reason: Optional[str] = 
     """Fire-and-forget: notify configured mall-ops phones on bill state change.
 
     event: one of 'pending', 'manual_review', 'rejected'
+
+    Point 36 (Feb 2026): dual-channel — WhatsApp AND SMS to each ops phone so
+    the message survives a closed WhatsApp session window. SMS is best-effort;
+    Karix may reject on strict DLT match unless a dedicated bill-alert DLT
+    template is configured via KARIX_SMS_ALERT_DLT_TEMPLATE_ID.
     """
     if not ADMIN_ALERT_PHONES:
         return
@@ -4474,14 +4485,25 @@ async def send_admin_bill_alert(event: str, bill: dict, reason: Optional[str] = 
         )
         if rej:
             msg += f"Reason: {rej[:180]}\n"
+
+        # SMS variant — kept short, plain ASCII to survive DLT truncation.
+        sms_msg = f"CP67 Bill {pretty_event}: cust {user_phone}, {store}, Amt {amount_str}, Bill {bill_no}. Reason: {rej[:80] if rej else '-'}"
+
         for admin_phone in ADMIN_ALERT_PHONES:
             to = _normalize_alert_phone(admin_phone)
             if not to:
                 continue
+            # 1) WhatsApp
             try:
                 await send_whatsapp_text(to, msg)
             except Exception as e:
-                logger.warning(f"Admin alert send failed to {to}: {e}")
+                logger.warning(f"Admin alert (whatsapp) failed to {to}: {e}")
+            # 2) SMS (Point 36 — "put SMS all over")
+            try:
+                phone_10 = to[-10:] if len(to) >= 10 else to
+                await send_sms_text(phone_10, sms_msg)
+            except Exception as e:
+                logger.warning(f"Admin alert (sms) failed to {to}: {e}")
     except Exception as e:
         logger.warning(f"send_admin_bill_alert failed: {e}")
 
@@ -4573,8 +4595,9 @@ async def send_otp_whatsapp(phone_10: str, otp: str) -> dict:
     return await send_whatsapp_text_diag(phone_e164, text)
 
 
-# Point 11: default channel is WhatsApp per client request. Set to 'both' to also fire the SMS fallback.
-OTP_CHANNEL = os.environ.get("OTP_CHANNEL", "whatsapp").strip().lower()  # 'whatsapp' | 'sms' | 'both'
+# Point 11 / Point 36: default channel is BOTH per client direction ("put SMS all over") —
+# every OTP fires via WhatsApp AND SMS so delivery is guaranteed even if one channel drops.
+OTP_CHANNEL = os.environ.get("OTP_CHANNEL", "both").strip().lower()  # 'whatsapp' | 'sms' | 'both'
 
 
 async def send_login_otp(phone_10: str, otp: str) -> dict:
@@ -4591,6 +4614,46 @@ async def send_login_otp(phone_10: str, otp: str) -> dict:
         if results["sms"].get("success"):
             results["success"] = True
     return results
+
+
+# Point 36 (Feb 2026): ops bill alerts must also go via SMS so that when the WhatsApp
+# session window is closed (Karix accepts but WhatsApp drops), the ops team still gets
+# an SMS. If your Karix account has a dedicated DLT template for ops alerts, set
+# KARIX_SMS_ALERT_DLT_TEMPLATE_ID in .env; otherwise we reuse the existing OTP DLT template
+# as best-effort — Karix may reject on strict DLT match, but the try-and-log path
+# gives ops visibility either way.
+KARIX_SMS_ALERT_DLT_TEMPLATE_ID = os.environ.get('KARIX_SMS_ALERT_DLT_TEMPLATE_ID', '') or KARIX_SMS_DLT_TEMPLATE_ID
+
+
+async def send_sms_text(phone_10: str, message: str) -> dict:
+    """Send a generic SMS via the Karix SMS gateway. Uses KARIX_SMS_ALERT_DLT_TEMPLATE_ID
+    if configured, otherwise falls back to the OTP DLT template id (best-effort).
+    Returns the same diag shape as send_otp_sms."""
+    if not KARIX_SMS_API_KEY:
+        return {"success": False, "status_code": None, "error": "SMS gateway not configured"}
+    # Karix SMS API caps text; trim aggressively to be safe.
+    text = (message or "").strip()[:400]
+    params = {
+        "ver": "1.0",
+        "key": KARIX_SMS_API_KEY,
+        "encrpt": "0",
+        "dest": phone_10,
+        "send": KARIX_SMS_SENDER_ID,
+        "dlt_entity_id": KARIX_SMS_DLT_ENTITY_ID,
+        "dlt_template_id": KARIX_SMS_ALERT_DLT_TEMPLATE_ID,
+        "text": text,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(KARIX_SMS_API_URL, params=params)
+            body = (resp.text or "").strip()
+            logger.info(f"Karix SMS (alert) to {phone_10}: status={resp.status_code} body={body[:200]}")
+            body_upper = body.upper()
+            is_ok = resp.status_code == 200 and ("STATUSCODE=200" in body_upper or "PLATFORM ACCEPTED" in body_upper or body_upper.startswith("OK"))
+            return {"success": is_ok, "status_code": resp.status_code, "response": body[:400]}
+    except Exception as e:
+        logger.error(f"Karix SMS (alert) send error to {phone_10}: {e}")
+        return {"success": False, "error": str(e)}
 
 
 async def store_otp(phone_10: str, otp: str) -> None:

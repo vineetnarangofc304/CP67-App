@@ -65,14 +65,22 @@ def test_alerts_test_returns_per_phone_diagnostic():
     data = r.json()
     assert "results" in data and "accepted" in data and "total" in data
     assert data["total"] == len(data.get("phones", []))
-    assert "hint" in data and "24 hours" in data["hint"]
-    # Every result carries diagnostic fields
+    # Point 36 (updated): hint now explains the dual-channel WhatsApp + SMS behaviour
+    assert "hint" in data
+    assert "24-hour" in data["hint"] or "24 hours" in data["hint"]
+    assert "SMS" in data["hint"]
+    # Every result carries per-channel diagnostic fields (whatsapp + sms)
     for res in data["results"]:
-        assert set(res.keys()) >= {"success", "phone_input", "phone_sent_to"}
-        if res.get("success"):
-            # Karix should have echoed a mid + 200 status
-            assert res.get("status_code") == 200
-            assert res.get("mid")
+        assert set(res.keys()) >= {"success", "phone_input", "phone_sent_to", "whatsapp", "sms"}
+        wa = res.get("whatsapp") or {}
+        sms = res.get("sms") or {}
+        if wa.get("success"):
+            # Karix should have echoed a mid + 200 status on WhatsApp
+            assert wa.get("status_code") == 200
+            assert wa.get("mid")
+        if sms.get("success"):
+            assert sms.get("status_code") == 200
+        assert res.get("success") == bool(wa.get("success") or sms.get("success"))
 
 
 def test_whatsapp_send_test_requires_phone():

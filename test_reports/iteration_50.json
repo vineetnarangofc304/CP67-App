@@ -1,0 +1,37 @@
+{
+  "summary": "Point 36 'SMS all over' backend verification. Created /app/backend/tests/test_point36_sms_everywhere.py (10 tests) covering POST /api/admin/alerts/test dual-channel diagnostics, POST /api/admin/otp/send-test (otp_channel=both), and consumer /api/consumer/auth/send-otp regression. All 10 pass against the preview URL with LIVE Karix calls: alerts/test returned results[0].whatsapp {success:true, status_code:200, mid:4101526608...} AND results[0].sms {success:true, status_code:200, response:'...Statuscode=200 & Info=Platform Accepted'} for ops phone 9766692497; hint now reads 'Alert fires via BOTH WhatsApp and SMS...'. admin/otp/send-test returned otp_channel='both' with both channels success:true. Regression: test_point11_whatsapp_otp.py (4) + test_points_36_37.py (5) = 9/9 pass after I updated one STALE assertion in test_points_36_37.py (it asserted the old hint string '24 hours' and top-level mid/status_code; server intentionally now uses '24-hour' and nests mid/status_code under results[].whatsapp). Total 19/19 backend tests pass. No UI testing (backend-only request).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/admin/alerts/test", "issue": "send_sms_text early-return when KARIX_SMS_API_KEY is unset returns {success:false,error:...} with NO status_code key — the Bills.jsx toast and any client reading results[].sms.status_code will render undefined. Add status_code: null for shape consistency."},
+      {"endpoint": "send_admin_bill_alert (bill paths)", "issue": "SMS/WhatsApp results in the real bill-alert path are fire-and-forget and not persisted on the bill doc; ops has no audit trail of whether SMS was accepted for a given bill (only server logs). Consider storing per-channel accept status under bill.admin_alerts_sent."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_point36_sms_everywhere.py",
+    "/app/backend/tests/test_points_36_37.py",
+    "/app/test_reports/pytest/pytest_point36_sms.xml"
+  ],
+  "action_items": [
+    "Optional: return status_code: null in send_sms_text's 'SMS gateway not configured' branch for consistent client shape.",
+    "RISK (config, not code): KARIX_SMS_ALERT_DLT_TEMPLATE_ID is not set in backend/.env, so bill-alert SMS reuses the OTP DLT template id. Karix replies 'Platform Accepted' (200) but a DLT content mismatch can still be scrubbed by the operator — i.e. the same 'accepted but not delivered' symptom the user reported, now on SMS. Ask the client to register a dedicated ops-alert DLT template and set KARIX_SMS_ALERT_DLT_TEMPLATE_ID.",
+    "Ask user to confirm physical receipt on 9766692497 (2 live sends already fired during this test run)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is ~4700+ lines; OTP/SMS/alerts helpers should move to backend/services/notifications.py.",
+    "send_login_otp and the alerts/test endpoint duplicate the '(wa or sms) success' aggregation logic in 3 places — extract a helper.",
+    "OTP_CHANNEL and send_sms_text are defined AFTER the endpoints that reference them (line ~4600 vs ~4130); works at runtime but is fragile — group helper definitions above route registration."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_point36_sms_everywhere.py",
+    "/app/backend/tests/test_points_36_37.py"
+  ],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "not tested"},
+  "seed_data_creation": "None persistent. 2 live Karix sends (1 WhatsApp + 1 SMS per test group) and OTP rows for 9876543210 / 9876543288 in db.otp_codes (5-min TTL).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin / CP67Admin@2025",
+  "context_for_next_testing_agent": "Use /app/backend/tests/test_point36_sms_everywhere.py as the Point 36 regression suite. Keep live-send tests module-scoped (fixtures already reuse one response) to limit Karix spend. Ops alert phone is 9766692497 (from db.settings admin_alert_phones).",
+  "rca_of_the_issue": "Original bug: only WhatsApp was used and Karix's 200 'Successfully Accepted' does not guarantee WhatsApp delivery outside the 24-hour session window, so ops never received alerts. Fix verified: alerts/test and all bill-alert paths now also send SMS via Karix and the API surfaces per-channel success/status_code/mid, so 'accepted' vs 'delivered' is distinguishable. Residual risk is DLT template reuse for alert SMS."
+}

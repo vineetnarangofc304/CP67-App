@@ -123,13 +123,19 @@ const Bills = () => {
       });
       const d = await res.json();
       if (res.ok && d.accepted > 0) {
-        // Point 36: surface Karix mid + hint so admin can debug delivery
-        const first = (d.results && d.results[0]) || {};
-        toast.success(`Karix accepted ${d.accepted}/${d.total} → ${(d.phones || []).join(', ')}${first.mid ? ` · mid: ${first.mid}` : ''}`, { duration: 8000 });
-        if (d.hint) toast.info(d.hint, { duration: 10000 });
+        // Point 36: dual-channel — WhatsApp + SMS. Surface both statuses.
+        const r = (d.results && d.results[0]) || {};
+        const wa = r.whatsapp || {};
+        const sms = r.sms || {};
+        const parts = [];
+        if (wa.success) parts.push(`WhatsApp ✓ (mid ${wa.mid || '—'})`);
+        else parts.push(`WhatsApp ✗ (${wa.status_code || wa.error || 'failed'})`);
+        if (sms.success) parts.push(`SMS ✓ (${sms.status_code || 200})`);
+        else parts.push(`SMS ✗ (${sms.status_code || sms.error || 'failed'})`);
+        toast.success(`Test → ${(d.phones || []).join(', ')} · ${parts.join(' · ')}`, { duration: 12000 });
+        if (d.hint) toast.info(d.hint, { duration: 12000 });
       } else {
-        const first = (d.results && d.results[0]) || {};
-        toast.error(`Test alert failed${first.error ? ` — ${first.error}` : ''}${first.status_code ? ` (Karix ${first.status_code})` : ''}`, { duration: 10000 });
+        toast.error('Test alert failed — check backend logs', { duration: 8000 });
       }
     } catch { toast.error('Network error sending test'); }
     setAlertBusy(false);

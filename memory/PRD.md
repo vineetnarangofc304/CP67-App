@@ -704,3 +704,25 @@ User reported "No OTP is getting triggered, please send OTP via WhatsApp only". 
 ### New tests
 `/app/backend/tests/test_point11_whatsapp_otp.py` — 4 tests covering the public flow, admin diagnostic, and auth guardrails.
 
+
+## Feb 19 2026 — Bug fix: "SMS all over" (Point 36 delivery guarantee)
+
+### Bug
+User reported the "Karix returns 200… WhatsApp may still drop it" toast — the underlying WhatsApp 24-hour session limitation meant ops alerts + OTPs were "accepted" but not delivered. User's direction: **"yes put SMS all over"**.
+
+### Fix
+- **OTP dual-channel by default**: `OTP_CHANNEL` env now defaults to `both`. Every OTP fires via WhatsApp AND SMS. `/admin/otp/send-test` and `/consumer/auth/send-otp` both benefit automatically.
+- **Bill alerts dual-channel**: `send_admin_bill_alert()` now fires an SMS to each configured ops phone in addition to WhatsApp. Called by every WhatsApp bill-insert path via the earlier `insert_bill_and_alert` helper.
+- **New helper `send_sms_text(phone_10, message)`**: generic SMS via Karix using `KARIX_SMS_ALERT_DLT_TEMPLATE_ID` (falls back to the OTP DLT template ID as best-effort).
+- **Diagnostic surfaces**: `/admin/alerts/test` now returns `results[].whatsapp` + `results[].sms` per phone with individual status_code/mid/response. Bills.jsx test-alert toast surfaces both statuses.
+
+### Env
+- `KARIX_SMS_ALERT_DLT_TEMPLATE_ID` (optional) — provision a dedicated DLT template for ops bill-alert SMS. Without it, we reuse the OTP template ID as best-effort.
+
+### Verified
+- testing_agent iteration 50: **19/19 backend PASS** (10 new dual-channel tests + 9 regression). Live Karix: both WhatsApp AND SMS `Platform Accepted` for ops phone 9766692497.
+- Minor: `send_sms_text` early-return now includes `status_code: null` for shape consistency (client-side).
+
+### Residual risk (config, not code)
+`KARIX_SMS_ALERT_DLT_TEMPLATE_ID` is not set — bill-alert SMS reuses the OTP DLT template. Karix returns Platform Accepted but the operator may still scrub for content mismatch. Ask client to register a dedicated ops-alert DLT template.
+
