@@ -425,11 +425,31 @@ class TagnPayClient:
             temp_file_path = None
             if bill_image_base64:
                 # Decode base64 and save to temp file
-                image_data = base64.b64decode(bill_image_base64.split(',')[-1] if ',' in bill_image_base64 else bill_image_base64)
-                temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
-                temp_file.write(image_data)
-                temp_file.close()
-                temp_file_path = temp_file.name
+                # Point 38: defensive — strip data:/base64: prefix if caller
+                # forgot to strip it, and gracefully skip on decode failure
+                # instead of exploding with "Incorrect padding".
+                try:
+                    b64 = bill_image_base64
+                    if b64.startswith("data:"):
+                        b64 = b64.split(",", 1)[1] if "," in b64 else ""
+                    elif b64.startswith("base64:"):
+                        b64 = b64[7:]
+                    if b64:
+                        # Add padding if needed (Karix sometimes strips it)
+                        pad_len = (-len(b64)) % 4
+                        if pad_len:
+                            b64 = b64 + ("=" * pad_len)
+                        image_data = base64.b64decode(b64, validate=False)
+                    else:
+                        image_data = None
+                except Exception as e:
+                    logger.warning(f"earn_points: bill image not decodable, skipping attachment. err={e}")
+                    image_data = None
+                if image_data:
+                    temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
+                    temp_file.write(image_data)
+                    temp_file.close()
+                    temp_file_path = temp_file.name
             
             async with httpx.AsyncClient(timeout=25.0) as client:
                 # Build form data - pass store name from bill OCR to both brand fields
@@ -508,6 +528,46 @@ class TagnPayClient:
             return {"success": False, "error": str(e)}
 
 tagnpay_client = TagnPayClient()
+
+
+async def _resolve_bill_image_base64(bill: dict) -> Optional[str]:
+    """Point 38 (Feb 2026): Robustly turn a bill's image reference into pure base64
+    that TagnPay's earn_points endpoint can decode. Handles all three storage
+    variants we've used:
+      - `data:image/*;base64,<payload>` (new admin uploads)
+      - `base64:<payload>` (legacy prefix)
+      - `http(s)://...` (Karix media URL — download with Karix auth, then encode)
+    Returns None when there's no usable image so the caller can gracefully skip.
+    """
+    image_url = (bill.get("image_url") or "").strip()
+    if not image_url:
+        return None
+    if image_url.startswith("data:"):
+        try:
+            return image_url.split(",", 1)[1]
+        except Exception:
+            return None
+    if image_url.startswith("base64:"):
+        return image_url[7:]
+    if image_url.startswith("http"):
+        try:
+            async with httpx.AsyncClient(timeout=25.0) as cx:
+                headers = {}
+                key = os.environ.get("WHATSAPP_API_KEY", "")
+                if key:
+                    headers = {
+                        "Authentication": f"Bearer {key}",
+                        "Authorization": f"Bearer {key}",
+                    }
+                r = await cx.get(image_url, headers=headers)
+                if r.status_code != 200 and headers:
+                    r = await cx.get(image_url)
+                if r.status_code == 200 and r.content:
+                    return base64.b64encode(r.content).decode()
+        except Exception as e:
+            logger.warning(f"_resolve_bill_image_base64 fetch failed for {bill.get('id')}: {e}")
+    return None
+
 
 # ======================== CAMPAIGN ENGINE ========================
 
@@ -2933,6 +2993,15 @@ async def get_bill_image(bill_id: str, payload: dict = Depends(verify_jwt_token)
 
     if isinstance(raw, str) and raw.startswith("base64:"):
         normalized = f"data:image/jpeg;base64,{raw[7:]}"
+    elif isinstance(raw, str) and raw.startswith("data:"):
+        # Point 39: guard against corrupted / truncated data URLs that were
+        # persisted from a broken save. Anything under 200 bytes is a
+        # placeholder — return None so the UI shows the "unreadable" hint.
+        if len(raw) < 200:
+            normalized = None
+            fetch_error = "Stored image is a placeholder / corrupted (bad save). Ask the customer to resend the bill."
+        else:
+            normalized = raw
     elif isinstance(raw, str) and raw.startswith("http"):
         try:
             async with httpx.AsyncClient(timeout=20.0) as cx:
@@ -3022,13 +3091,17 @@ async def process_bill(bill_id: str, request: BillProcessRequest, background_tas
         bill_date = bill.get("bill_date") or "N/A"
         
         # Call TagnPay earn-points API
+        # Point 38: use the robust resolver so http:// image URLs are downloaded
+        # and re-encoded — the old ".split(',')[-1]" passed the URL as-is which
+        # made base64.b64decode explode with "Incorrect padding".
+        bill_image_b64 = await _resolve_bill_image_base64(bill)
         earn_result = await tagnpay_client.earn_points(
             mobile_number=mobile_10,
             bill_amount=bill_amount,
             bill_number=bill_no,
             bill_date=bill_date,
             store_name=store_name,
-            bill_image_base64=bill.get("image_url", "").split(",")[-1] if bill.get("image_url") else None
+            bill_image_base64=bill_image_b64,
         )
         
         logger.info(f"TagnPay earn-points for bill {bill_id}: {earn_result}")
@@ -3347,22 +3420,10 @@ async def _reprocess_bill_full_legacy_impl(bill_id: str, background_tasks: Backg
     bill_no = bill.get("bill_no", "")
     bill_date = bill.get("bill_date", "")
     amount = float(bill.get("amount", 0))
-    # Send the bill image to Fundle EXACTLY like the WhatsApp upload flow does.
-    # Fundle requires the image for verification — sending None makes it return
-    # "0 points" or "brand not found" even for valid bills.
-    image_url = bill.get("image_url", "") or ""
-    if image_url.startswith("data:"):
-        try:
-            image_base64 = image_url.split(",", 1)[1]
-        except Exception:
-            image_base64 = None
-    elif image_url.startswith("base64:"):
-        image_base64 = image_url[7:]
-    elif image_url:
-        # treat as raw base64 if no scheme prefix
-        image_base64 = image_url
-    else:
-        image_base64 = None
+    # Point 38: use the robust resolver so http:// URLs are downloaded and
+    # re-encoded — the old "treat as raw base64 if no scheme prefix" branch
+    # passed URLs into b64decode → "Incorrect padding" and reprocess failed.
+    image_base64 = await _resolve_bill_image_base64(bill)
 
     # STEP 3: Call TagnPay earn-points API
     earn_result = await tagnpay_client.earn_points(
@@ -4278,7 +4339,14 @@ async def _reprocess_after_brand_edit(bill_id: str, new_name: str, auto_fc: bool
         fundle_rejected_brand = res.get("action") != "approved" and auto_fc
         if fundle_rejected_brand:
             err_txt = str(res.get("error") or "").lower()
-            if ("brand" in err_txt) or ("match" in err_txt) or ("0 points" in err_txt) or ("not found" in err_txt):
+            # Point 38 follow-up: DON'T force-credit when Fundle refused because
+            # the bill image was missing/undecodable — a corrupted-image bill
+            # is exactly the population we cannot verify, so silently approving
+            # 50 pts would be worse than leaving it in manual_review.
+            image_missing = ("bill_file" in err_txt) or ("no file was submitted" in err_txt) or ("image" in err_txt and "missing" in err_txt)
+            if image_missing:
+                logger.info(f"edit-brand (bg): skipping force-credit fallback for {bill_id} — Fundle rejection was due to missing/corrupted image")
+            elif ("brand" in err_txt) or ("match" in err_txt) or ("0 points" in err_txt) or ("not found" in err_txt):
                 logger.info(f"edit-brand (bg): Fundle rejected '{new_name}'. Auto-force-credit fallback for bill {bill_id}")
                 updated_bill2 = await db.bills.find_one({"id": bill_id}, {"_id": 0})
                 if updated_bill2 and updated_bill2.get("status") in ("manual_review", "pending_review", "rejected"):

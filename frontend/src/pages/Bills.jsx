@@ -190,26 +190,39 @@ const Bills = () => {
     setPointsOverride('');
     setSendWhatsapp(true);
     setShowReviewDialog(true);
-    // Lazy-load the bill image so the list endpoint stays cheap.
-    // Point 24: even when bill.image_url is present in the list row, if it's
-    // a raw Karix HTTP URL or a `base64:` prefix, the <img> tag won't render
-    // it. Re-fetch through the normalized endpoint which server-side proxies
-    // the Karix media with Bearer auth and returns a data: URL.
-    const needsNormalize = !bill.image_url
-      || (typeof bill.image_url === 'string' &&
-          (bill.image_url.startsWith('base64:') || bill.image_url.startsWith('http')));
-    if (needsNormalize && bill.id) {
-      try {
-        const res = await fetch(`${API_URL}/bills/${bill.id}/image`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (res.ok) {
-          const d = await res.json();
-          setSelectedBill(prev => prev && prev.id === bill.id
-            ? { ...prev, image_url: d.image_url || null, image_fetch_error: d.fetch_error || null }
-            : prev);
-        }
-      } catch { /* ignore — bill detail still shows even without the image */ }
+    // Point 39 (Feb 2026): ALWAYS re-fetch the image through the normalized
+    // endpoint. Previously we only re-fetched for base64:/http URLs, but stale
+    // rows in the bill list can also carry a truncated data: URL from a bad
+    // save (< 200 bytes) which the browser tries to render as a broken image.
+    // Re-fetching is cheap (server-side cached) and eliminates the "image not
+    // opening" symptom the user hit on production.
+    if (!bill.id) return;
+    try {
+      const res = await fetch(`${API_URL}/bills/${bill.id}/image`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const url = d.image_url || null;
+        // Detect suspiciously small data URLs (broken/placeholder) so the UI can
+        // show a clear "unreadable" state instead of a blank <img>.
+        const looksPlaceholder = typeof url === 'string' && url.startsWith('data:') && url.length < 200;
+        setSelectedBill(prev => prev && prev.id === bill.id
+          ? {
+              ...prev,
+              image_url: looksPlaceholder ? null : url,
+              image_fetch_error: looksPlaceholder ? 'Stored image is a placeholder / corrupted. Ask the customer to resend the bill.' : (d.fetch_error || null)
+            }
+          : prev);
+      } else {
+        setSelectedBill(prev => prev && prev.id === bill.id
+          ? { ...prev, image_url: null, image_fetch_error: `Image endpoint returned HTTP ${res.status}` }
+          : prev);
+      }
+    } catch (e) {
+      setSelectedBill(prev => prev && prev.id === bill.id
+        ? { ...prev, image_url: null, image_fetch_error: 'Network error while loading image' }
+        : prev);
     }
   };
 

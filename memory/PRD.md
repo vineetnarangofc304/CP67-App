@@ -726,3 +726,30 @@ User reported the "Karix returns 200… WhatsApp may still drop it" toast — th
 ### Residual risk (config, not code)
 `KARIX_SMS_ALERT_DLT_TEMPLATE_ID` is not set — bill-alert SMS reuses the OTP DLT template. Karix returns Platform Accepted but the operator may still scrub for content mismatch. Ask client to register a dedicated ops-alert DLT template.
 
+
+## Feb 21 2026 — Client Points 38 & 39 (Fix Brand crash + Bill image not opening)
+
+Verified end-to-end by testing_agent iteration 51 (**24/24 backend PASS + full Playwright UI PASS**).
+
+### Point 38 — Fix Brand: "Incorrect padding"
+- **Root cause**: `/admin/bills/<id>/edit-brand` reprocess called Fundle earn_points with `bill.image_url` as base64. For bills whose stored URL was a raw Karix `https://…` or a corrupted `data:image/png;` (< 200 chars), `base64.b64decode` blew up with `binascii.Error: Incorrect padding`. Reprocess returned `{success:false, error:'Incorrect padding'}` and admin saw a scary red toast.
+- **Fixes**:
+  1. New helper `_resolve_bill_image_base64(bill)` handles all 3 storage variants (`data:` / `base64:` / `http`) and downloads Karix URLs with Bearer auth before base64-encoding.
+  2. `edit_bill_brand` inline-reprocess path uses the resolver (removed the buggy "else pass URL as base64" branch).
+  3. `TagnPayClient.earn_points` is now defensive: strips `data:` / `base64:` prefix, pads to nearest 4 chars, uses `validate=False`, gracefully skips the attachment (returns Fundle 400 which the caller handles) instead of crashing.
+  4. `_reprocess_after_brand_edit` no longer force-credits when Fundle rejects because of a missing/corrupted image (`bill_file`, `no file was submitted`) — a corrupted-image bill stays in manual_review so ops can request a re-upload from the customer.
+
+### Point 39 — Bill review image doesn't open
+- **Root cause**: `openReviewDialog` only re-fetched the image via `/bills/<id>/image` when the list-row URL looked like `base64:` or `http:`. Bills with a corrupted / very short `data:` URL (placeholders from prior bad saves) skipped the fetch, so the browser tried to render an invalid `<img>` and admin saw nothing.
+- **Fixes**:
+  1. `openReviewDialog` now **always** re-fetches through the normalized endpoint (server-side is cheap).
+  2. Backend `/bills/<id>/image` detects `< 200-byte` data URLs as placeholders → returns `image_url: null` + `fetch_error: "Stored image is a placeholder / corrupted…"`.
+  3. Frontend surfaces `image_fetch_error` in the empty state so admin knows the image is unrecoverable and to ask the customer to resend.
+
+### Data-testids reused
+`pending-bill-thumb-<billId>`, `bill-image-empty`, `bill-image-open`, `fix-brand-search`, `fix-brand-pick-<Brand>`, `fix-brand-use-typed`.
+
+### New/updated tests (all pass)
+- `/app/backend/tests/test_points_38_39.py` — 3 tests, defensive decode + endpoint placeholder flag + end-to-end edit-brand no-crash
+- `/app/backend/tests/test_iteration51_points_38_39.py` — 11 tests seeded from the testing agent covering all 4 image_url variants across 3 code paths + regression on the alerts endpoint
+
