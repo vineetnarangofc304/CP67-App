@@ -1026,3 +1026,33 @@ Three additional hot paths on the bills collection were pulling the ENTIRE bill 
 
 ### Action required from user
 Redeploy production. `process_bill`, `get_bill_details`, `get_bill_image`, and TagnPay approve for migrated bills all stop pulling multi-MB payloads on the primary read.
+
+## Session 23 (Feb 2026) — Scanner-loop timeout snowball hardening
+
+### Symptom (production)
+`_bill_alert_scanner_loop` runs every 60s. When maybe_alert_admin timed out on a bill, the bill was NOT marked alerted, so the scanner retried the SAME bills every cycle, snowballing timed-out Motor connections and starving user-facing endpoints (brand edits, health checks). Runs on both pods → 2x load.
+
+### Fixes (all in server.py)
+1. **In-memory failure cooldown** — `_ALERT_FAILURE_COOLDOWN[(bill_id, status)] = now + 300s` on any exception inside `maybe_alert_admin`. Subsequent calls with the same key return early with ZERO DB queries. Success clears the entry. `_prune_alert_failure_cooldown` GCs the map when it exceeds 1000 entries.
+2. **Scanner throttle** — `await asyncio.sleep(0.5)` between successive `maybe_alert_admin` calls inside `_bill_alert_scanner_loop`. Prevents the scanner from firing all queries simultaneously.
+3. **Fail-fast maxTimeMS** — Added `max_time_ms=5000` to `maybe_alert_admin`'s `find_one`. Scanner queries fail in 5s instead of holding a socket for the full 20s socketTimeoutMS, keeping connections available for user-facing operations.
+4. **Reduced per-cycle limit** — Scanner cursor `.limit(10)` per status (was 50), so a cycle triggers at most 30 concurrent reads instead of 150.
+
+Also added `import time` and `Tuple` to typing import (used by cooldown module state).
+
+### Verification (iteration_63.json)
+- 17/17 tests PASS (`/app/backend/tests/test_iteration63_alert_cooldown_throttle.py`).
+- Cooldown proven: forced-fail → next call = 0 DB reads; 300s +/-5s.
+- Keyed per (bill_id, status): different statuses on same bill still alerted.
+- Success path pops cooldown; expired entries allow retry.
+- `find_one` invoked with `max_time_ms=5000` + iter-61 projection.
+- Scanner: `.limit(10)` per status (3 x 10 = 30 max), N alerts → N `asyncio.sleep(0.5)` between them, cycle ends with `sleep(60)`.
+- Light regression: iter-61 + iter-62 fixes still work (GET /api/bills/{id}, /image, process approve+reject).
+
+### Known observations (not fixed this session)
+- Worst-case fully-failing cycle: 30 × (5s + 0.5s) = ~165s > 60s interval → cycles will drift/serialize. Cooldown makes this self-limiting after 1st failing cycle.
+- Any exception (even transient) registers a 5-min cooldown, so a real DB blip during a user-triggered `process_bill reject` can suppress that ops alert for 5 min. Scanner retries so no bill is lost.
+- `_ALERT_FAILURE_COOLDOWN` module state is per-pod — both pods learn independently. Acceptable because `admin_alerts_sent.<status>` on the doc is the ultimate dedup.
+
+### Action required from user
+Redeploy PREVIEW → PRODUCTION. Scanner will stop snowballing on Atlas hiccups; admin operations stay responsive under load.

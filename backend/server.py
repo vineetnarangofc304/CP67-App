@@ -8,9 +8,10 @@ import logging
 import asyncio
 import csv
 import random
+import time
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 import uuid
 from datetime import datetime, timezone, timedelta
 
@@ -4875,13 +4876,23 @@ async def maybe_alert_admin(bill_id: str, status: str, reason: Optional[str] = N
     """
     if not bill_id or status not in ("pending", "pending_review", "manual_review", "rejected"):
         return
+    # Feb 2026: 5-min in-memory cooldown for bills that timed out on the
+    # previous attempt. Without this, the 60s scanner loop retries the same
+    # legacy heavy bill every cycle, snowballing timed-out Motor connections
+    # and starving user-facing operations (brand edits, health checks).
+    cooldown_key = (bill_id, status)
+    now_ts = time.time()
+    cooled_until = _ALERT_FAILURE_COOLDOWN.get(cooldown_key)
+    if cooled_until and cooled_until > now_ts:
+        return
     try:
         # Feb 2026: project ONLY the fields needed by send_admin_bill_alert.
         # Legacy bills carry a multi-MB base64 image_url inline and pulling
         # the whole doc trips Atlas maxTimeMS / Motor read timeouts under
         # concurrent webhook+scanner load. This is the root cause of the
         # "maybe_alert_admin failed ... The read operation timed out" spam
-        # seen in production logs.
+        # seen in production logs. 5s max_time_ms means scanner queries fail
+        # fast instead of holding a socket for the full 20s socketTimeoutMS.
         b = await db.bills.find_one(
             {"id": bill_id},
             {
@@ -4894,6 +4905,7 @@ async def maybe_alert_admin(bill_id: str, status: str, reason: Optional[str] = N
                 "rejection_reason": 1,
                 "admin_alerts_sent": 1,
             },
+            max_time_ms=5000,
         )
         if not b:
             return
@@ -4905,8 +4917,35 @@ async def maybe_alert_admin(bill_id: str, status: str, reason: Optional[str] = N
             {"id": bill_id},
             {"$set": {f"admin_alerts_sent.{status}": datetime.now(timezone.utc).isoformat()}}
         )
+        # Success — clear any prior cooldown entry so subsequent status
+        # transitions on the same bill aren't accidentally suppressed.
+        _ALERT_FAILURE_COOLDOWN.pop(cooldown_key, None)
     except Exception as e:
+        # Register a 5-minute cooldown so the scanner skips this bill on
+        # its next cycle. Prevents timeout snowballing under Atlas hiccups.
+        _ALERT_FAILURE_COOLDOWN[cooldown_key] = now_ts + 300
+        # Opportunistic GC — the cooldown map is bounded by unique
+        # (bill_id, status) pairs but let's not let it grow unbounded in
+        # long-running processes.
+        if len(_ALERT_FAILURE_COOLDOWN) > 1000:
+            _prune_alert_failure_cooldown(now_ts)
         logger.warning(f"maybe_alert_admin failed for {bill_id}/{status}: {e}")
+
+
+# Feb 2026: (bill_id, status) → epoch-seconds until which this pair is
+# skipped by maybe_alert_admin. Populated on any exception (typically
+# Atlas MaxTimeMSExpired / read timeout) and cleared on the next
+# successful send. Process-local — each pod maintains its own map, which
+# is fine because dedup is ultimately enforced by the
+# admin_alerts_sent.<status> field on the bill doc itself.
+_ALERT_FAILURE_COOLDOWN: Dict[Tuple[str, str], float] = {}
+
+
+def _prune_alert_failure_cooldown(now_ts: float) -> None:
+    """Drop expired entries in-place to keep the cooldown map bounded."""
+    expired = [k for k, v in _ALERT_FAILURE_COOLDOWN.items() if v <= now_ts]
+    for k in expired:
+        _ALERT_FAILURE_COOLDOWN.pop(k, None)
 
 
 async def insert_bill_and_alert(bill_dict: dict) -> str:
@@ -9057,7 +9096,13 @@ async def _backfill_admin_alerts_sent():
 async def _bill_alert_scanner_loop():
     """Safety-net loop: every 60s finds bills in manual_review/pending_review/
     rejected whose current status hasn't been alerted yet, and fires the alert
-    via maybe_alert_admin (which dedupes)."""
+    via maybe_alert_admin (which dedupes).
+
+    Feb 2026: (a) limit is 10 per status (was 50) so each cycle triggers at
+    most 30 concurrent DB reads instead of 150 — prevents burst-starving
+    user-facing endpoints. (b) 0.5s pause between per-bill maybe_alert_admin
+    calls so we don't fire everything simultaneously against Atlas.
+    """
     ALERT_STATUSES = ("manual_review", "pending_review", "rejected")
     while True:
         try:
@@ -9065,12 +9110,15 @@ async def _bill_alert_scanner_loop():
                 cursor = db.bills.find(
                     {"status": status, f"admin_alerts_sent.{status}": {"$exists": False}},
                     {"_id": 0, "id": 1, "rejection_reason": 1}
-                ).limit(50)
+                ).limit(10)
                 async for b in cursor:
                     try:
                         await maybe_alert_admin(b["id"], status, b.get("rejection_reason"))
                     except Exception as _e:
                         logger.warning(f"scanner alert failed: {_e}")
+                    # Small pause between per-bill alerts so the scanner
+                    # doesn't burst up to N find_ones simultaneously.
+                    await asyncio.sleep(0.5)
         except Exception as e:
             logger.warning(f"bill alert scanner error: {e}")
         await asyncio.sleep(60)

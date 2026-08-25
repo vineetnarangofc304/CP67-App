@@ -1,0 +1,30 @@
+{
+  "summary": "Backend-only verification of iteration 63 scanner-loop snowball hardening. Created /app/backend/tests/test_iteration63_alert_cooldown_throttle.py (17 tests, all PASS) using the iteration-62 _DbProxy/_FindOneSpy pattern plus a fake-collection driver for _bill_alert_scanner_loop. Verified: (1) any exception inside maybe_alert_admin registers _ALERT_FAILURE_COOLDOWN[(bill_id,status)] = now+300 (measured 300s +/-5) and the next call with the SAME key returns early with ZERO find_one calls and no alert; (2) cooldown is keyed per (bill_id,status) - a different status on the same bill is still alerted; expired entries allow retry; (3) success path pops the cooldown entry; (4) maybe_alert_admin find_one is called with max_time_ms=5000 and the iteration-61 lean projection (no image_url/ocr_raw_data, _id:0); (5) _prune_alert_failure_cooldown drops only expired keys; (6) scanner loop runtime test with 25/3/12 seeded docs per status -> limit(10) requested for each of the 3 statuses (sum=30 max concurrent reads, previously 150), 23 bills alerted, exactly 23 x asyncio.sleep(0.5) throttles, cycle ends with sleep(60), lean cursor projection {_id:0,id:1,rejection_reason:1}, and the loop survives a per-bill alert exception. Light regression on iterations 61/62 passed: GET /api/bills/{id} (no image_url/ocr_raw_data, <20KB), GET /api/bills/{id}/image inline data-url byte-exact, _resolve_bill_image_base64 objstore branch, POST /api/bills/{id}/process approve + reject via HTTP (200, statuses persisted), /api/health 200. All TEST_ITER63_ seed data cleaned (verified 0 leftover bills/users).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "TagnPay /api/log-rejected-bill/ (third-party)", "issue": "Upstream Fundle/TagnPay returns 404 HTML for log-rejected-bill during reject flow. Handled gracefully (our endpoint still returns 200), pre-existing and outside iteration-63 scope, but rejection logs are not reaching the vendor."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration63_alert_cooldown_throttle.py",
+    "/app/test_reports/pytest/iter63.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Worst-case cycle duration grew: a fully-failing cycle can now take up to 30 x (5s max_time_ms + 0.5s sleep) = ~165s, exceeding the 60s interval, so cycles will drift/serialize. The cooldown makes this self-limiting after the first failing cycle, but consider capping total cycle time or moving the throttle sleep to only fire between successful sends.",
+    "_ALERT_FAILURE_COOLDOWN and _prune_alert_failure_cooldown are declared AFTER maybe_alert_admin (line ~4941 vs ~4873). Works at runtime, but move the declarations above the consumer for readability.",
+    "The cooldown is registered on ANY exception, so a transient DB blip on a user-triggered path (process_bill reject) suppresses that alert for 5 minutes. Acceptable because admin_alerts_sent is not written and the scanner retries, but note the up-to-5-min ops-notification delay.",
+    "cooldown_until is computed from now_ts captured BEFORE the DB call, so a 5s timeout yields an effective 295s window (cosmetic).",
+    "server.py is 9307 lines - well past the 700-line guideline; the alerting + scanner code is a natural module to extract."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration63_alert_cooldown_throttle.py"],
+  "success_rate": {"backend": "100% (17/17)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "TEST_ITER63_USER + ~12 TEST_ITER63_* bills with 200KB inline base64 images; all deleted in module teardown (verified 0 leftover).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin / CP67Admin@2025 from /app/memory/test_credentials.md",
+  "context_for_next_testing_agent": "Iteration 63 changes fully verified structurally and functionally in-process. Reusable helpers now exist in tests/test_iteration63_alert_cooldown_throttle.py: _FindOneSpy(raise_exc=...) to force maybe_alert_admin failures, and _FakeDb/_FakeBills/_FakeCursor + patched asyncio.sleep to drive one full _bill_alert_scanner_loop cycle deterministically (raise on sleep>=60 to exit). Remember to clear server._ALERT_FAILURE_COOLDOWN between tests (autouse fixture does it). Local Mongo cannot reproduce Atlas MaxTimeMSExpired; max_time_ms is asserted via the spy kwargs. Still-unfixed full-doc fetch: force_credit_preview uses find_one({'id':...},{'_id':0}) - same Atlas timeout risk.",
+  "rca_of_the_issue": "N/A - no defects found in this iteration's changes."
+}
