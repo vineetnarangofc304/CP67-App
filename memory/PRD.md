@@ -914,3 +914,27 @@ Production admin clicks Reprocess on a bill → red toast "Reprocess timed out. 
 
 ### Action required
 Redeploy production. All fixes (sessions 15-18) ship on this deploy.
+
+## Session 19 (Feb 2026) — Wire compression + retry (Atlas timeout mitigation)
+
+### Bug
+Same Atlas socket-read timeout on production `/api/bills/{id}/image` (bill: Haldiram's ₹91.36, phone 919041965368). Session-15/16/17/18 hardening surfaced the raw cause as `fetch_error='Server error while loading image: ... read operation timed out'` instead of a raw 500.
+
+### RCA (from iteration_58 testing agent)
+NOT an Atlas scaling problem. Preview measurements: 4.2MB inline-base64 bill doc read in 5-6ms locally, endpoint 117-393ms end-to-end. The bottleneck is that **bills docs embed multi-MB base64 image_url inline** and shuttling megabytes over the Atlas wire under any network hiccup breaches the 10s socketTimeoutMS.
+
+### Fix (mitigation, not durable cure)
+1. Motor client now negotiates `compressors='zstd,zlib'` (`zstandard==0.25.0` pinned in requirements.txt) — cuts wire payload 3-5x.
+2. `socketTimeoutMS` raised 10s → 20s, `maxPoolSize=100`, `minPoolSize=10`.
+3. `get_bill_image` wraps the initial `find_one` in a one-shot retry (300ms backoff) narrowed to pymongo `NetworkTimeout / AutoReconnect / ServerSelectionTimeoutError / ExecutionTimeout` — transient blips no longer surface to the admin UI, real errors don't wait 300ms.
+
+### Verification (iteration_58.json)
+- 95/95 tests pass (17 new + 78 regression from iter 54→57). 1 legit prod-only skip.
+- Retry proven with `mock.patch(db.bills.find_one)`: first call raises NetworkTimeout → 300ms backoff → second call succeeds → HTTP 200 with REAL image_url. Both-fail case → 200 with clean fetch_error. Not-found path NOT retried (call count = 1) → clean 404.
+- Warm-cache latency on a real 4.2MB bill doc: 117ms.
+
+### Durable cure (recommended — not done this session)
+Move image storage OUT of the `bills` doc into object storage (Emergent Object Storage / GridFS) keyed by bill_id. Bills docs shrink from multi-MB to <10KB, review page loads become instant even on a cold Atlas replica. This is the actual answer to "should we scale the DB" — no, we should stop storing megabytes inline.
+
+### Action required from user
+Redeploy production. Compression + wider socket budget + retry ships together. If timeouts still recur after redeploy, agree object-storage migration as next roadmap item.

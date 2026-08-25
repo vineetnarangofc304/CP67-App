@@ -272,7 +272,8 @@ class TestBackgroundTaskExecution:
         bill_id = reprocessable_bill["id"]
         # clear previous marker
         _run(server.db.bills.update_one({"id": bill_id},
-                                        {"$unset": {"reprocessing_finished_at": "", "reprocessing_error": ""}}))
+                                        {"$unset": {"reprocessing_finished_at": "", "reprocessing_error": "",
+                                                    "reprocessing_started_at": ""}}))
         r = client.post(f"{BASE_URL}/api/bills/{bill_id}/reprocess", json={"username": "admin"}, timeout=20)
         assert r.status_code == 200, r.text[:300]
         finished = None

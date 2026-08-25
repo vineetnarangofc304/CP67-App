@@ -83,7 +83,7 @@ class TestMotorClientOptions:
         opts = server.client.options
         assert opts.server_selection_timeout == 5.0
         assert opts.pool_options.connect_timeout == 5.0
-        assert opts.pool_options.socket_timeout == 10.0
+        assert opts.pool_options.socket_timeout == 20.0  # session-19: raised 10s -> 20s
         assert opts.pool_options.wait_queue_timeout == 5.0
         assert opts.retry_reads is True
         assert opts.retry_writes is True
@@ -91,7 +91,7 @@ class TestMotorClientOptions:
     def test_source_declares_timeouts(self):
         src = Path("/app/backend/server.py").read_text(encoding="utf-8")[:3000]
         for kw in ["serverSelectionTimeoutMS=5000", "connectTimeoutMS=5000",
-                   "socketTimeoutMS=10000", "waitQueueTimeoutMS=5000",
+                   "socketTimeoutMS=20000", "waitQueueTimeoutMS=5000",
                    "retryWrites=True", "retryReads=True"]:
             assert kw in src, f"missing {kw} in AsyncIOMotorClient init"
 

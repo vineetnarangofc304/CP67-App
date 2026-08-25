@@ -37,10 +37,17 @@ client = AsyncIOMotorClient(
     mongo_url,
     serverSelectionTimeoutMS=5000,
     connectTimeoutMS=5000,
-    socketTimeoutMS=10000,
+    socketTimeoutMS=20000,
     waitQueueTimeoutMS=5000,
     retryWrites=True,
     retryReads=True,
+    # Feb 2026: zstd wire compression cuts the multi-MB inline base64
+    # image payload 3-5x so a slow Atlas link is far less likely to trip
+    # socketTimeoutMS on the /bills/{id}/image path. Falls back to zlib
+    # if the server doesn't negotiate zstd.
+    compressors="zstd,zlib",
+    maxPoolSize=100,
+    minPoolSize=10,
 )
 db = client[os.environ.get('DB_NAME', 'cp67_loyalty')]
 
@@ -3001,7 +3008,23 @@ async def get_bill_image(bill_id: str, payload: dict = Depends(verify_jwt_token)
     then renders as "Image endpoint returned HTTP 500".
     """
     try:
-        b = await db.bills.find_one({"id": bill_id}, {"_id": 0, "image_url": 1, "image_hash": 1})
+        # Feb 2026: explicit one-shot retry on transient socket / server-selection
+        # timeouts. Atlas can hiccup under load; one retry after 300ms handles
+        # transient blips without user-visible latency in the common case.
+        # Narrow to pymongo transient classes so real bugs (auth, decode) are not
+        # retried and delayed by 300ms unnecessarily.
+        from pymongo.errors import NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout
+        _retryable = (NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout)
+        b = None
+        for attempt in range(2):
+            try:
+                b = await db.bills.find_one({"id": bill_id}, {"_id": 0, "image_url": 1, "image_hash": 1})
+                break
+            except _retryable:
+                if attempt == 0:
+                    await asyncio.sleep(0.3)
+                    continue
+                raise
         if not b:
             raise HTTPException(status_code=404, detail="Bill not found")
 

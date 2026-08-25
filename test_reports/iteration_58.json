@@ -1,0 +1,41 @@
+{
+  "summary": "Backend-only verification of session-19 mitigations on the admin bill-image path: Motor zstd/zlib compression, socketTimeoutMS 10s->20s, maxPoolSize=100/minPoolSize=10, and the one-shot 300ms retry inside GET /api/bills/{id}/image. Wrote 2 new suites (17 tests) plus re-ran the iteration 54-57 regression suites. Result: 95 passed, 1 skipped, 0 failed. Retry behaviour proven with mock.patch.object(server, 'db', ...): first find_one raising pymongo NetworkTimeout then succeeding returns HTTP 200 with the REAL image_url (exactly 2 find_one calls, ~300ms backoff observed); both-fail returns 200 with fetch_error='Server error while loading image: ...'; a legitimate not-found is NOT retried (1 call) and returns 404 detail='Bill not found'. Latency probe on a seeded 4.20MB inline-base64 bill: raw motor find_one 5-6ms, end-to-end /image 117-393ms (cold-first 393ms) — three orders of magnitude inside the 20s socket budget on preview.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "server.py:~40 (comment)", "issue": "Stale comment says 'Snappy on the wire cuts that 3-5x' while the code now negotiates compressors='zstd,zlib'. Cosmetic only, but misleading for the next session."},
+      {"endpoint": "/api/bills/{id}/image", "issue": "The retry loop catches bare `except Exception`, so non-transient failures (bad projection, auth error, decode error) are also retried once, adding a needless 300ms. Narrowing to pymongo.errors.NetworkTimeout/AutoReconnect/ServerSelectionTimeoutError would be tighter, but current behaviour is safe (max 2 attempts, 404 path unaffected)."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration58_compression_retry.py",
+    "/app/backend/tests/test_iteration58_large_image_latency.py",
+    "/app/test_reports/pytest/iteration_58_results.xml"
+  ],
+  "action_items": [
+    "Optional: fix the stale 'Snappy' comment near the AsyncIOMotorClient init (code uses zstd,zlib).",
+    "Optional: narrow the /image retry except clause to pymongo NetworkTimeout/AutoReconnect.",
+    "Product-level (real root cause, still open): bills store multi-MB base64 image_url inline in the doc. Compression + 20s timeout is a mitigation, not a fix. Recommend moving image payloads to object storage (S3/GridFS) and keeping only a key in the bill doc — that removes the multi-MB Atlas read from the admin review hot path entirely and would also cut Atlas egress. Based on preview numbers (4.2MB doc read in ~6ms locally, endpoint ~120ms warm), Atlas tier scaling is NOT indicated by CPU/latency of the query itself; the exposure is network transfer of the fat doc, which zstd already reduces 3-5x."
+  ],
+  "critical_code_review_comments": [
+    "pymongo 4.5.0 + zstandard 0.25.0 negotiate zstd correctly — verified via client.options.pool_options._compression_settings.compressors == ['zstd','zlib'] and a live read; no startup error in backend logs.",
+    "zstandard==0.25.0 is pinned in /app/backend/requirements.txt (verified by regex on the file).",
+    "get_bill_image's outer try/except still guarantees never-raw-500: both simulated retry exhaustion and generic errors return 200 + fetch_error.",
+    "404 path is evaluated after the retry loop on a successful (None) read, so not-found is not amplified into retries — confirmed by call counting.",
+    "server.py is ~9000 lines; still far past the 700-line guideline. Splitting into routers (bills, admin, whatsapp, loyalty) remains the biggest maintainability debt."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration58_compression_retry.py (new)",
+    "/app/backend/tests/test_iteration58_large_image_latency.py (new)",
+    "/app/backend/tests/test_iteration56_motor_timeouts.py (test-only: socket_timeout assertion 10.0 -> 20.0 to match session-19)",
+    "/app/backend/tests/test_iteration57_reprocess_hardening.py (test-only: background-reprocess test now also $unsets reprocessing_started_at, otherwise a leftover in-flight marker made the endpoint correctly return 409 and the test flaked)"
+  ],
+  "success_rate": {"backend": "100% (95 passed, 1 skipped, 0 failed across iteration 54-58 suites)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Ephemeral bills TEST_i58_* (one ~1KB data-URL bill, one 4.2MB data-URL bill) inserted and deleted by fixtures; verified 0 leftover TEST_i58 docs after the run.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin / CP67Admin@2025 from /app/memory/test_credentials.md",
+  "context_for_next_testing_agent": "Session-19 mitigations verified in preview. Retry proof technique: patch server.db with a fake object whose bills.find_one raises pymongo NetworkTimeout N times, then call `await server.get_bill_image(bill_id, payload={'role':'admin'})` directly on a single shared event loop (motor binds to the first loop). Two stale assertions in iteration_56/57 suites were updated (socket timeout 20s; unset reprocessing_started_at before re-triggering reprocess) — reuse those files as-is. Preview MONGO_URL is local mongodb, so preview latency numbers do NOT prove Atlas behaviour; the production Haldiram's bill is still not reproducible here. If the production timeout recurs, the remaining fix is to stop storing multi-MB base64 inline in bills docs.",
+  "rca_of_the_issue": "Production timeout root cause is unchanged: bills docs embed multi-MB base64 image_url, so a single find_one must pull megabytes over the Atlas wire; when Atlas/network is slow this exceeded socketTimeoutMS and the handler's outer except turned it into the 'Server error while loading image' fetch_error the admin saw. Session-19 reduces the probability (zstd wire compression 3-5x smaller payload, 20s instead of 10s budget, warm pool of 10 connections, one 300ms retry for transient blips) but does not remove the fat-document read. Preview measurements: 4.2MB doc find_one 5-6ms, /image endpoint 117-393ms — i.e. well under budget locally; the Atlas gap is network transfer, so object storage for images (or a projection that streams the image separately) is the durable fix rather than scaling the Atlas tier."
+}
