@@ -29,7 +29,19 @@ load_dotenv(ROOT_DIR / '.env')
 
 # MongoDB connection
 mongo_url = os.environ.get('MONGO_URL')
-client = AsyncIOMotorClient(mongo_url)
+# Feb 2026: explicit timeouts so pymongo fails fast on Atlas hiccups
+# (default socketTimeoutMS=None = wait forever). Without these the request
+# hangs past Cloudflare's edge timeout and the client sees a raw HTTP 500
+# from the ingress before our top-level try/except can return a clean JSON.
+client = AsyncIOMotorClient(
+    mongo_url,
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=10000,
+    waitQueueTimeoutMS=5000,
+    retryWrites=True,
+    retryReads=True,
+)
 db = client[os.environ.get('DB_NAME', 'cp67_loyalty')]
 
 # Create the main app
@@ -3018,7 +3030,11 @@ async def get_bill_image(bill_id: str, payload: dict = Depends(verify_jwt_token)
                 normalized = raw
         elif isinstance(raw, str) and raw.startswith("http"):
             try:
-                async with httpx.AsyncClient(timeout=20.0) as cx:
+                # Feb 2026: cap the remote WhatsApp/Karix media fetch at 8s so
+                # a hung upstream cannot hold the request past Cloudflare's
+                # ~30s edge timeout — that was the last unbounded wait that
+                # could still surface as a raw HTTP 500 to the admin UI.
+                async with httpx.AsyncClient(timeout=8.0) as cx:
                     headers = {}
                     if KARIX_API_KEY:
                         headers = {

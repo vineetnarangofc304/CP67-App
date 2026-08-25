@@ -878,3 +878,20 @@ Added `id_1` index specs to `ensure_db_indexes()` in `server.py` for all 14 affe
 
 ### Action required
 Redeploy production. Index creation runs at backend startup, so Atlas will only get `id_1` after the new build lands.
+
+## Session 17 (Feb 2026) — Motor + httpx timeouts (raw 500 elimination)
+
+### RCA
+Even after session-15 (top-level try/except) + session-16 (id_1 indexes), user still saw raw HTTP 500 on production. The remaining path: pymongo's default socketTimeoutMS=None (wait forever) and httpx's 20s Karix media fetch could exceed Cloudflare's edge timeout — the edge returned 5xx before FastAPI could respond with a caught-exception JSON.
+
+### Fix
+- Explicit AsyncIOMotorClient timeouts: serverSelectionTimeoutMS=5000, connectTimeoutMS=5000, socketTimeoutMS=10000, waitQueueTimeoutMS=5000, retryReads=True, retryWrites=True.
+- Reduced Karix media fetch httpx timeout from 20s → 8s in `get_bill_image`.
+
+### Verification (iteration_56.json)
+- 18/18 new tests + 29/29 regression (iter_54 + iter_55) PASS.
+- Exception simulation (patched `db.bills.find_one` to raise pymongo NetworkTimeout / ServerSelectionTimeoutError / AutoReconnect) confirms `/api/bills/{id}/image` returns clean 200-with-fetch_error and `/api/admin/bills/{id}/edit-brand` returns 500-with-JSON-detail (non-empty body).
+- 25-way concurrent image fetch: all 200, worst 1204ms.
+
+### Action required
+Redeploy production. All three layers of hardening (session 15 catch, session 16 indexes, session 17 timeouts) must ship together.

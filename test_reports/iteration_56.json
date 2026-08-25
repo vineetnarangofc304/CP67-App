@@ -1,0 +1,39 @@
+{
+  "summary": "Backend-only verification of session-17 Motor timeout hardening. Introspected server.client.options (serverSelectionTimeout=5.0s, connect=5.0s, socket=10.0s, waitQueue=5.0s, retryReads/Writes=True) and asserted the source kwargs. Verified GET /api/bills/{id}/image on all 18 preview bills: 100% clean HTTP 200 JSON {image_url,image_hash,fetch_error}, all <500ms; unknown id -> 404 detail='Bill not found' <500ms; 10 malformed/injection ids never produce a raw 500 (400/404/422 only); unauth -> 403. Exception simulation (patched db so find_one raises pymongo NetworkTimeout / ServerSelectionTimeoutError / AutoReconnect) confirmed get_bill_image returns a clean dict with fetch_error='Server error while loading image: ...' instead of propagating; edit_bill_brand converts the same exception into HTTPException(500) with a JSON detail (non-empty body). POST /api/admin/bills/{id}/edit-brand: reprocess=false -> 200 + persisted store_name (restored afterwards) <500ms, reprocess=true -> 200 reprocessed='queued' <500ms, unknown bill -> 404, blank name -> 400, missing name -> 422, unauth -> 403. 25-way concurrent image fetch: all 200, worst 1204ms. ensure_db_indexes() re-run twice in-process without error; id_1 index present on all 14 listed collections. Regression: iteration_54 (15/15) and iteration_55 (14/14) suites pass. No tracebacks or 500s in backend logs during the run. New suite: 18/18 + 1 passed/1 skipped.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "startup ensure_db_indexes", "issue": "Every boot logs IndexKeySpecsConflict warnings for otp_codes.phone and blocked_phones.phone (an existing UNIQUE index owns the auto-generated name 'phone_1'), so those two specs are silently never (re)created. Harmless today but noisy; pass an explicit name= or skip when an index on the same key already exists."},
+      {"endpoint": "GET /api/bills/{id}/image", "issue": "One legacy bill stores an unresolvable https image URL; endpoint correctly returns 200 with fetch_error='[Errno -2] Name or service not known' (desired behaviour, listed for visibility)."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration56_motor_timeouts.py",
+    "/app/backend/tests/test_iteration56_concurrency.py",
+    "/app/test_reports/pytest/iteration56_results.xml",
+    "/app/test_reports/pytest/iteration56_concurrency.xml",
+    "/app/test_reports/pytest/iteration56_regression.xml"
+  ],
+  "action_items": [
+    "Optional hardening before prod redeploy: reduce the Karix image fetch httpx timeout in get_bill_image from 20.0s to ~8s. The Motor timeouts cap DB stalls at 10s, but a hung remote media fetch can still hold the request ~20s+; the top-level try/except cannot save you if the ingress/Cloudflare edge times out first (this is exactly the raw-500 path the user reported).",
+    "Optional: give explicit names to the otp_codes.phone / blocked_phones.phone index specs to remove the recurring IndexKeySpecsConflict warnings on boot.",
+    "After prod redeploy, confirm on production Atlas that bills.id_1 actually exists (createIndex on a large prod collection can be slower) — preview only has 18 bills so the COLLSCAN-timeout theory cannot be load-proven here."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 9003 lines — well past the 700-line guidance; split into routers (bills, admin, parking, staff, whatsapp) to make future hardening reviews tractable.",
+    "get_bill_image's remote-fetch branch (httpx timeout=20.0) is now the longest tail in the handler and is unaffected by the new Motor timeouts; consider timeout=8.0 plus a size guard on r.content before base64 encoding.",
+    "edit_bill_brand's except-block still raises HTTP 500 (with JSON detail). That is intentional per the docstring, but if the goal is 'never a 500 in the UI', return 200 with an error field like get_bill_image does, or make the frontend read detail from the 500 body."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration56_motor_timeouts.py",
+    "/app/backend/tests/test_iteration56_concurrency.py"
+  ],
+  "success_rate": {"backend": "100% (18/18 new + 1 concurrency, 29/29 regression)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "None. One existing bill's store_name was temporarily set to TEST_I56_BRAND and restored to its original value within the same test.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin / CP67Admin@2025 via POST /api/admin/login (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "Preview DB holds only 18 bills; the production bill (MARKET NINETY NINE, Rs.667, 918559087340) is NOT present in preview, so that specific repro is untestable here (test_market_ninetynine_bill_if_present skips). Reusable suites: test_iteration54, test_iteration55, test_iteration56_motor_timeouts (includes in-process exception-simulation via mock.patch.object(server,'db',...) on a shared asyncio loop — reuse the _run helper, motor binds to the first loop), test_iteration56_concurrency. pymongo 4.5 exposes connect/socket/waitQueue timeouts under client.options.pool_options, not client.options directly.",
+  "rca_of_the_issue": "Preview cannot reproduce the production raw HTTP 500. Both endpoints return clean 200/404 in <500ms and remain clean when DB calls raise NetworkTimeout/ServerSelectionTimeoutError/AutoReconnect, proving the session-15 try/except + session-17 client timeouts work as designed in-process. The remaining production risk is an edge (Cloudflare/ingress) timeout that fires before FastAPI responds — the only remaining unbounded wait in get_bill_image is the 20s httpx Karix media fetch, so capping that is the highest-value follow-up."
+}
