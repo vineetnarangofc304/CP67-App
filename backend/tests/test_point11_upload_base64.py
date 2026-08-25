@@ -7,7 +7,7 @@ import uuid
 import requests
 import pytest
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://staff-points-engine.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://mall-engagement-hub.preview.emergentagent.com").rstrip("/")
 
 # Small valid JPEG bytes (1x1 pixel)
 TINY_JPEG = bytes.fromhex(

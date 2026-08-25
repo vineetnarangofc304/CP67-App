@@ -60,7 +60,7 @@
     "consumer_otp": "1234 (dev mode)",
     "admin_username": "admin",
     "admin_password": "CP67Admin@2025",
-    "api_base_url": "https://staff-points-engine.preview.emergentagent.com"
+    "api_base_url": "https://mall-engagement-hub.preview.emergentagent.com"
   },
   "seed_data_creation": "2 sample campaigns already in DB: 'Weekend Double Points' (multiplier 2x) and 'Food Court Festival Bonus' (spend_threshold)",
   "retest_needed": false,

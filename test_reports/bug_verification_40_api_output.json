@@ -1,5 +1,5 @@
 {
-  "base": "https://staff-points-engine.preview.emergentagent.com/api",
+  "base": "https://mall-engagement-hub.preview.emergentagent.com/api",
   "checks": [
     {
       "name": "admin_login",

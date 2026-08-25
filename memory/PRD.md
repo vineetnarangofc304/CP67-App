@@ -961,3 +961,32 @@ Bill.image_url now supports a new `objstore:<path>` prefix that points to Emerge
 1. Redeploy production (ships sessions 15-20 together).
 2. Call `POST /api/admin/bills/migrate-images-to-objstore` from the admin bearer token. Poll it 1-3 times until `queued=0` (fat inline bills drain in one batch of ≤500 per call).
 3. Every future admin bill review reads a <1KB Mongo doc + streams bytes over the objstore CDN — no more 10s+ Atlas timeouts.
+
+## Session 21 (Feb 2026) — maybe_alert_admin projection fix (production Atlas timeout)
+
+### Symptom (production logs)
+```
+maybe_alert_admin failed for <bill_id>/pending_review: The read operation timed out
+Executor error during find command: mall-rewards-1-test_database.bills :: caused by :: operation exceeded time limit (MaxTimeMSExpired)
+```
+
+### Root cause
+`maybe_alert_admin` at server.py:4828 did `db.bills.find_one({"id": bill_id}, {"_id": 0})` — this returns the ENTIRE bill document, including legacy multi-MB inline base64 `image_url` payloads that Session 20's migration has not yet drained. Under concurrent load (webhook status changes + 60s `_bill_alert_scanner_loop`), the cursor network transfer time exceeded Motor's socket read timeout / Atlas `maxTimeMS`.
+
+### Fix
+Added an explicit projection to fetch ONLY the 7 fields the alert consumer (`send_admin_bill_alert`) actually reads:
+- id, user_phone, store_name, amount, bill_no, rejection_reason, admin_alerts_sent
+
+Payload shrinks from multi-MB to a few hundred bytes on an indexed (id_1) point lookup.
+
+### Verification (iteration_61.json)
+- 19/19 tests PASS (`/app/backend/tests/test_iteration61_alert_projection.py`).
+- Projection contents verified structurally (image_url + _id no longer returned).
+- Alert payload unchanged, dedup per (bill_id, status) intact (1 send for 3 calls, independent per status).
+- HTTP regression on GET /api/bills, GET /api/bills/{id}, GET /api/bills/{id}/image, POST /api/bills/{id}/reprocess.
+
+### Known minor (not fixed this session)
+Dedup is read-then-write, not atomic. Concurrent webhook task + scanner loop can each send one alert before the marker persists. Recommendation: replace with a conditional `update_one({"id": bill_id, "admin_alerts_sent.<status>": {"$exists": False}}, {"$set": ...})` + `matched_count == 1` guard.
+
+### Action required from user
+Redeploy production. `maybe_alert_admin` will no longer transfer multi-MB payloads per invocation, killing the last remaining source of Atlas read-operation-timeout spam in the logs.

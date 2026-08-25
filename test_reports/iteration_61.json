@@ -1,0 +1,31 @@
+{
+  "summary": "Backend-only verification of the maybe_alert_admin projection fix (Atlas maxTimeMS / read-timeout root cause). Created /app/backend/tests/test_iteration61_alert_projection.py with 19 pytest cases: direct in-process tests of maybe_alert_admin (projection contents, dedup, per-status independence, guards, legacy 'backfill' marker), send_admin_bill_alert WhatsApp+SMS payload correctness, insert_bill_and_alert task firing, scanner-loop style projection flow, plus HTTP regression on GET /api/bills, GET /api/bills/{id}, GET /api/bills/{id}/image and POST /api/bills/{id}/reprocess. 19/19 passed. Seeded bills carried a ~900KB inline base64 image_url to prove the heavy field is no longer transferred; all TEST_ data cleaned up (verified 0 remaining).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "maybe_alert_admin (server.py ~4828)", "issue": "Dedup is read-then-write, not atomic. Two concurrent callers (webhook task + 60s scanner) can both read admin_alerts_sent.<status> as absent and each send one alert before the marker is persisted. Not introduced by this fix, but the scanner + create_task paths make it reachable. Suggested: replace the read/check with a single conditional update_one({'id': bill_id, 'admin_alerts_sent.<status>': {'$exists': False}}, {'$set': ...}) and only send when matched_count == 1."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration61_alert_projection.py",
+    "/app/test_reports/pytest/iteration61.xml"
+  ],
+  "action_items": [
+    "Optional hardening: make the maybe_alert_admin dedup atomic (conditional update_one before sending) to remove the in-flight duplicate-alert race between the webhook task and the 60s scanner loop."
+  ],
+  "critical_code_review_comments": [
+    "Projection in maybe_alert_admin is complete: send_admin_bill_alert only reads id, user_phone, store_name, amount, bill_no, rejection_reason — all are projected, plus admin_alerts_sent for dedup. No field regression.",
+    "bills collection has an id_1 index (verified), so the projected find_one is an indexed point lookup — the fix removes the multi-MB network transfer that caused the Atlas read timeouts.",
+    "_bill_alert_scanner_loop already projects only {id, rejection_reason}, so the scanner path is also payload-safe.",
+    "server.py is ~9200 lines — well over the 700-line guideline; consider splitting into routers/services modules (bills, admin, whatsapp, loyalty)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration61_alert_projection.py"],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Temporary bills with store_name TEST_Zara / TEST_HM / TEST_UnknownBrandXYZ and a ~900KB base64 image_url; all deleted in module teardown (count verified 0).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin / CP67Admin@2025 (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "Iteration 61 validated only the maybe_alert_admin projection fix + bill endpoint regression. Reusable pattern: import server in-process and drive an explicit shared event loop (motor binds to first loop) to unit-test alert helpers with mock.patch on server.send_admin_bill_alert / send_whatsapp_text / send_sms_text. Note that POST /api/bills/{id}/reprocess on a pending bill hits the live Fundle/TagnPay API (returns 'Mobile number is not registered') — harmless but real outbound traffic. Local Mongo cannot reproduce the Atlas maxTimeMS timeout; the projection was verified structurally instead.",
+  "rca_of_the_issue": "maybe_alert_admin fetched the entire bill document (find_one with only _id excluded). Legacy bills store a multi-MB base64 image_url inline, so under concurrent webhook + 60s scanner load the cursor network transfer exceeded Motor's socket read timeout / Atlas maxTimeMS, producing 'The read operation timed out' and 'MaxTimeMSExpired'. The fix projects the 7 fields the alert actually needs, reducing the payload to a few hundred bytes on an indexed (id_1) point lookup. Tests confirm image_url and _id are no longer returned, the alert payload is unchanged, and dedup per (bill_id, status) still works (1 send for 3 calls, independent per status, unaffected by the legacy 'backfill' marker)."
+}

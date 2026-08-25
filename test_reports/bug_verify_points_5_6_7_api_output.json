@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "api": "https://staff-points-engine.preview.emergentagent.com/api",
+  "api": "https://mall-engagement-hub.preview.emergentagent.com/api",
   "evidence": [
     {
       "step": "admin_login",

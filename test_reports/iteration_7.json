@@ -59,8 +59,8 @@
   },
   "test_credentials": {
     "admin": "admin / CP67Admin@2025",
-    "api_base_url": "https://staff-points-engine.preview.emergentagent.com",
-    "landing_page_url": "https://staff-points-engine.preview.emergentagent.com/app/program"
+    "api_base_url": "https://mall-engagement-hub.preview.emergentagent.com",
+    "landing_page_url": "https://mall-engagement-hub.preview.emergentagent.com/app/program"
   },
   "seed_data_creation": "None - used existing stores data",
   "retest_needed": true,

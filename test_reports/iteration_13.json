@@ -63,7 +63,7 @@
     "consumer_otp": "1234 (dev mode)",
     "admin_username": "admin",
     "admin_password": "CP67Admin@2025",
-    "api_base_url": "https://staff-points-engine.preview.emergentagent.com"
+    "api_base_url": "https://mall-engagement-hub.preview.emergentagent.com"
   },
   "seed_data_creation": "None - using existing 102 brands with 87 real logos",
   "retest_needed": false,
@@ -86,7 +86,7 @@
       "with_logos": 87,
       "without_logos": 15,
       "logo_storage": "/app/backend/uploads/brands/{brand_name}_logo.png",
-      "logo_url_format": "https://staff-points-engine.preview.emergentagent.com/api/uploads/brands/{brand_name}_logo.png",
+      "logo_url_format": "https://mall-engagement-hub.preview.emergentagent.com/api/uploads/brands/{brand_name}_logo.png",
       "brands_without_logos": ["Bath And Body Works", "Bhpc", "Biba", "Bira Taproom", "Chaayos", "Chai Choori", "Chique", "Da Milano", "Dayal Opticals", "Dayal Opticals Kiosk", "Fun City", "Gola Sizzlers", "Healthy Hut", "U.S. Polo Assn.", "Woodland"],
       "status": "Working"
     },

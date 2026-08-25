@@ -4,7 +4,7 @@ import re
 import time
 from pathlib import Path
 
-BASE_URL = "https://staff-points-engine.preview.emergentagent.com"
+BASE_URL = "https://mall-engagement-hub.preview.emergentagent.com"
 USERNAME = "admin"
 PASSWORD = "CP67Admin@2025"
 OUT_DIR = Path("/app/test_reports/ui_46")

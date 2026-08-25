@@ -13,12 +13,12 @@ try:
     print("Step 1: viewport set")
     page.on("dialog", lambda dialog: dialog.dismiss())
 
-    await page.goto("https://staff-points-engine.preview.emergentagent.com/login", wait_until="domcontentloaded")
+    await page.goto("https://mall-engagement-hub.preview.emergentagent.com/login", wait_until="domcontentloaded")
     await page.locator('[data-testid="login-username-input"]').fill("admin")
     await page.locator('[data-testid="login-password-input"]').fill("CP67Admin@2025")
     await page.locator('[data-testid="login-submit-btn"]').click()
     await page.wait_for_timeout(1000)
-    await page.goto("https://staff-points-engine.preview.emergentagent.com/staff-incentives", wait_until="domcontentloaded")
+    await page.goto("https://mall-engagement-hub.preview.emergentagent.com/staff-incentives", wait_until="domcontentloaded")
     await page.locator('[data-testid="staff-incentives-page"]').wait_for(timeout=20000)
     print("Step 2: logged in and opened staff incentives")
 

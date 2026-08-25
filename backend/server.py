@@ -4832,7 +4832,25 @@ async def maybe_alert_admin(bill_id: str, status: str, reason: Optional[str] = N
     if not bill_id or status not in ("pending", "pending_review", "manual_review", "rejected"):
         return
     try:
-        b = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+        # Feb 2026: project ONLY the fields needed by send_admin_bill_alert.
+        # Legacy bills carry a multi-MB base64 image_url inline and pulling
+        # the whole doc trips Atlas maxTimeMS / Motor read timeouts under
+        # concurrent webhook+scanner load. This is the root cause of the
+        # "maybe_alert_admin failed ... The read operation timed out" spam
+        # seen in production logs.
+        b = await db.bills.find_one(
+            {"id": bill_id},
+            {
+                "_id": 0,
+                "id": 1,
+                "user_phone": 1,
+                "store_name": 1,
+                "amount": 1,
+                "bill_no": 1,
+                "rejection_reason": 1,
+                "admin_alerts_sent": 1,
+            },
+        )
         if not b:
             return
         already = (b.get("admin_alerts_sent") or {}).get(status)

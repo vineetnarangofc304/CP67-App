@@ -61,7 +61,7 @@
     "consumer_phone": "9876543210",
     "consumer_otp": "1234 (dev mode)",
     "blocked_phone": "8146141325",
-    "api_base_url": "https://staff-points-engine.preview.emergentagent.com"
+    "api_base_url": "https://mall-engagement-hub.preview.emergentagent.com"
   },
   "seed_data_creation": "None - using existing test data",
   "retest_needed": false,
