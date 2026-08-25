@@ -1,0 +1,58 @@
+{
+  "summary": "Iteration 53 — verified Retailer Doc Points 11 (DLT WhatsApp OTP + admin test-OTP diagnostic), 12 (admin incentive report JSON + CSV with customer mobile), 13/14 (brand-matched bill attribution, one-scan-one-bill). Backend: 26/26 pytest pass (16 new live-API tests in test_iteration53_points_11_12_live.py + 10 existing unit tests in test_points_11_12_14_retailer.py). Frontend: admin login -> /staff-incentives -> Reports tab fully functional; all 15 report/test-otp data-testids render, type switch reloads, all filters (status/date/brand) narrow correctly, CSV downloads (retailer_incentives_bill_upload.csv), non-whitelisted OTP shows the expected inline failure. All 6 legacy tabs still render and are clickable. No console errors, no error-class elements. No blocking issues found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/admin/staff/retailer/test-otp", "issue": "Dead unreachable `return {\"success\": True}` at routes/staff.py:1738 after the real return — dead code, should be removed."},
+      {"endpoint": "/api/admin/staff/incentives/report", "issue": "`brand` filter is applied in Python AFTER the Mongo `.limit(limit)` cut, so a brand filter on a large data-set can silently miss rows beyond the first 1000 (5000 for CSV). Should filter by staff_ids in the Mongo query instead."},
+      {"endpoint": "/api/admin/staff/incentives/report", "issue": "`start_date` bound is built as `f\"{start_date}T00:00:00\"` (no timezone) while stored created_at is tz-aware ISO (`...+00:00`); string comparison works today but is fragile if any writer stores a different offset."},
+      {"endpoint": "/api/admin/staff/incentives/report", "issue": "`incentive_type` values other than registration/bill_upload are silently ignored (returns all) rather than 422 — acceptable but undocumented."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "StaffIncentives Reports table", "issue": "Brand cell renders a dangling separator ('Zara /') when staff_brand_category is empty/null. Should hide the ' / category' fragment when category is falsy.", "selector": "[data-testid=\"report-tbody\"] td:nth-child(3)", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "StaffIncentives > Reports tab", "issues": [
+        "Start Date / End Date use raw <input type=\"date\"> so the browser's native date picker appears (mm/dd/yyyy US format) instead of the shadcn Calendar/Popover used elsewhere in the admin — inconsistent and locale-confusing for an India-facing tool.",
+        "Type/Brand/Status use raw native <select> elements with `border rounded px-2 py-1` instead of the shadcn Select component used by other admin tabs — visually inconsistent (different height/typography from the adjacent shadcn Input date fields).",
+        "Backend supports a `staff_id` filter but the UI exposes no staff picker, so per-staff drill-down is only possible via API.",
+        "'Send Test OTP' block has no explicit success-state styling shown for the happy path (only tested failure path in UI); placeholder text contrast in test-otp-phone-input is light grey on pale-yellow card."
+      ]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration53_points_11_12_live.py",
+    "/app/backend/tests/test_points_11_12_14_retailer.py",
+    "/app/backend/tests/helper_seed_i53.py",
+    "/app/test_reports/pytest/iteration53_results.xml"
+  ],
+  "action_items": [
+    "LOW: remove dead `return {\"success\": True}` at routes/staff.py:1738.",
+    "LOW: move the report `brand` filter into the Mongo query (resolve matching staff_ids first) so it is applied before `limit`.",
+    "LOW: hide the ' / <category>' fragment in the Reports table Brand cell when staff_brand_category is empty.",
+    "LOW (design): replace native <select> and <input type=date> in the Reports filter row with shadcn Select + Calendar for consistency.",
+    "OPTIONAL: expose the backend-supported `staff_id` filter as a staff dropdown in the Reports tab.",
+    "OPTIONAL (Point 13 nuance): create_or_activate_bill_incentive still flips a customer's PENDING registration incentive to redeemable on ANY approved bill, even a brand-mismatched one. If the client intends registration incentive activation to also require a same-brand bill, this needs a decision — currently it does not."
+  ],
+  "critical_code_review_comments": [
+    "Point 14 logic verified correct: brand normalisation via re.sub(r'[^a-z0-9]+','') on lowercase, mismatch logs staff_attribution_misses{reason:'brand_mismatch', bill_brand, staff_brand} and inserts NO staff_incentives row, and the attribution is marked used=True in BOTH branches — so a second bill without a fresh QR scan gets no credit (explicitly covered by test_point14_second_bill_without_new_scan_gets_no_credit).",
+    "Point 11 verified: server.py:4665 uses exactly `Your verification OTP is {otp} Use this at CP67 Mall.` with no 'Homeland Advantage' / 'Valid for 5 minutes' suffix; send_login_otp fans out to WhatsApp + SMS (OTP_CHANNEL default 'both') and returns per-channel dicts. Live test-otp against a seeded whitelisted manager returned success=true with populated whatsapp+sms diagnostics.",
+    "Report/CSV responses correctly project {_id:0}; no ObjectId leakage. Both endpoints are auth-gated (401 without bearer token) — verified.",
+    "routes/staff.py is 1893 lines — exceeds the 700-line guideline; consider splitting admin-report / retailer-auth / attribution-engine into submodules.",
+    "admin_incentive_report_csv re-invokes admin_incentive_report directly as a Python coroutine (fine) but duplicates the whole filter signature; consider a shared params dataclass to avoid drift between the two routes."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration53_points_11_12_live.py",
+    "/app/backend/tests/helper_seed_i53.py"
+  ],
+  "success_rate": {"backend": "100% (26/26 pytest)", "frontend": "100% of tested flows (Reports tab, filters, CSV, test-OTP, 6-tab regression)"},
+  "seed_data_creation": "Temporarily seeded 1 registration incentive (cust 9811100053), 1 bill_upload incentive (cust 9811100054, bill QA53-001, brand Zara) and a TEST_QA Manager retailer_manager row to exercise the report + OTP success path. ALL seeded rows were deleted after testing (staff_incentives back to 0 documents). Re-seed with `python -c \"from dotenv import load_dotenv; load_dotenv('/app/backend/.env'); import runpy; runpy.run_path('tests/helper_seed_i53.py', run_name='__main__')\"` from /app/backend if UI data is needed again.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin: admin / CP67Admin@2025 (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "staff_incentives collection is EMPTY in the preview DB — the Reports tab will show 'No records match the filters.' until you seed. Use /app/backend/tests/helper_seed_i53.py (needs MONGO_URL/DB_NAME loaded via python-dotenv; do NOT `source /app/backend/.env`, line 7 breaks bash). Live API tests live in /app/backend/tests/test_iteration53_points_11_12_live.py and will pytest.skip (not fail) the row-shape assertions when no incentives are seeded. Report brand filter matches on retail_staff.brand_name, not bill store_name. Points 11/12/13/14 all verified green.",
+  "rca_of_the_issue": "No functional defect found. The only substantive risk is the report `brand` filter being applied post-`limit` in admin_incentive_report (routes/staff.py:1067) — with >1000 incentive rows a brand-filtered query would under-report because Mongo already truncated the cursor before the Python-side brand comparison. Not reproducible today (0 rows in DB) but will surface at scale."
+}

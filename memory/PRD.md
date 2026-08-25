@@ -793,3 +793,47 @@ Sub-points (a, b, c, g, h, i, j) — all shipped, all data-testids verified live
 - `/app/frontend/src/consumer/pages/TierJourney.jsx` (T&C block bullet contrast)
 - `/app/ios-build/CP67iOS/WebViewContainer.swift` (iPad picker anchor)
 - `/app/ios-build/CP67iOS/Info.plist` (version bump)
+
+## Aug 25 2026 — Client Retailer Doc Points 11, 12, 13, 14
+
+Verified end-to-end by testing_agent iteration 53 (**26/26 backend pytest PASS + 100% frontend Reports tab UI flows**). Low-priority defects flagged by iteration 53 (dead code, pre-limit brand filter, dangling separator) fixed in this session.
+
+### Point 11 — OTP not triggering; must fire via WhatsApp (DLT template)
+- `send_otp_whatsapp` in `/app/backend/server.py` now uses the exact DLT-approved wording: `"Your verification OTP is {otp} Use this at CP67 Mall."` — matches PEID 1701172802304667512 / Temp ID 1707172914885560615 / Header `CP67` (Service Implicit).
+- Retailer manager + staff `/auth/send-otp` routes now surface a per-channel `delivery: {whatsapp, sms, success}` object so admin sees Karix's real response instead of a silent boolean.
+- New admin diagnostic endpoint `POST /api/admin/staff/retailer/test-otp` — sends a real OTP to any whitelisted retailer manager phone and returns the delivery dict. Non-whitelisted phone returns a clear "Phone is not a whitelisted retailer manager" message.
+- Admin UI (`/staff-incentives` → Reports tab) has a **Point 11 · Test Retailer OTP (WhatsApp + SMS)** block with input + button + inline WA/SMS status-code readout.
+
+### Point 12 — Retailer incentive report (Registration vs Bill Upload, per staff, per customer mobile)
+- New endpoint `GET /api/admin/staff/incentives/report`:
+  - Query params: `incentive_type` (registration | bill_upload), `brand`, `status`, `staff_id`, `start_date`, `end_date`, `limit` (default 1000).
+  - Response: `{rows: [...], summary: {total, registration_count, bill_upload_count, total_amount, redeemable_amount}}`.
+  - Each row: id, type, status, amount, `customer_phone` (which mobile registered / uploaded), staff_code, staff_name, staff_phone, staff_brand, staff_brand_category, staff_store, created_at, approved_at. Bill-upload rows also carry bill_id, bill_value, bill_amount, bill_store, bill_status, bill_no.
+- CSV export: `GET /api/admin/staff/incentives/report.csv` — same query params, streams `retailer_incentives_report.csv` with 16 columns.
+- Admin UI: new **Reports tab** on `/staff-incentives` with Type/Brand/Status/Date filters, 4 KPI tiles (Registration Records, Bill Upload Records, Total Amount, Redeemable Amount), Customer Mobile column, and a "Download CSV" button.
+- Iter 53 fix: brand filter is now applied at the Mongo layer (resolves matching `staff_ids` first) so filters never silently drop rows past `limit`.
+
+### Points 13 & 14 — Brand-matched bill attribution ("last QR + matching bill")
+- `create_or_activate_bill_incentive` (in `/app/backend/routes/staff.py`) now enforces brand match: the bill's `store_name` must normalise-equal the attributed staff's `brand_name` (case-insensitive, `[^a-z0-9]` stripped). Examples: `"Nike"` ↔ `"NIKE"` ↔ `"Nike-Store"` ↔ `"nikestore"` all match; `"Nike"` ↔ `"Adidas"` does not.
+- Mismatch behaviour: NO row inserted into `staff_incentives`, one row logged in a new `staff_attribution_misses` collection (`{staff_id, bill_id, staff_brand, bill_brand, reason: "brand_mismatch"}`), and the attribution is still marked `used=True`. This is the client's "one scan, one bill decision" rule — a later bill without a fresh QR scan gets no credit even if it happens to match the retailer's brand.
+- Customer's original `first_touch_source` (registration source) has NO influence on subsequent bill incentives — attribution is derived only from the last unexpired unused `staff_attributions` window.
+
+### Data-testids added
+`tab-report`, `refresh-report-btn`, `download-report-csv-btn`, `test-otp-phone-input`, `send-test-otp-btn`, `test-otp-result`, `report-type-select`, `report-brand-select`, `report-status-select`, `report-start-date`, `report-end-date`, `apply-report-filters-btn`, `report-reg-count`, `report-bill-count`, `report-total-amount`, `report-redeemable-amount`, `report-tbody`.
+
+### Files touched
+- `/app/backend/server.py` (`send_otp_whatsapp` — DLT text)
+- `/app/backend/routes/staff.py` (retailer/staff send-otp diag, admin_test_retailer_otp, admin_incentive_report + .csv, brand-match in create_or_activate_bill_incentive, attribution_miss logging)
+- `/app/frontend/src/pages/StaffIncentives.jsx` (Reports tab + Test OTP block + report table)
+- `/app/backend/tests/test_points_11_12_14_retailer.py` (10 tests — brand normalisation matrix + end-to-end mismatch flow + match happy path + route registration)
+- Iter-53 seeded (agent-authored) `/app/backend/tests/test_iteration53_points_11_12_live.py` and `/app/backend/tests/helper_seed_i53.py`.
+
+### Iter-53 defects fixed in this session
+1. Dead unreachable `return {"success": True}` after `admin_test_retailer_otp` — removed.
+2. Report `brand` filter applied post-`limit` — moved to pre-Mongo (matches staff_ids first).
+3. Reports table Brand cell rendered `"Zara /"` when category was empty — now conditionally renders the `/ category` fragment only when non-empty.
+
+### Known open items from iter 53 (deferred, LOW/OPTIONAL)
+- Design polish: replace native `<select>` and `<input type=date>` in Reports filter row with shadcn Select + Calendar for visual consistency.
+- Optional: expose the backend-supported `staff_id` filter as a staff dropdown in the Reports tab.
+- OPTIONAL (Point 13 nuance): registration incentive still auto-activates on ANY approved bill — client may want to require same-brand bill for reg activation too. Not addressed pending client confirmation.

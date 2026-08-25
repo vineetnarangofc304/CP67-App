@@ -1017,6 +1017,165 @@ async def admin_update_redemption(redemption_id: str, patch: RedemptionStatusUpd
     return {"success": True, "redemption": doc}
 
 
+# ==================== POINT 12: RETAILER INCENTIVE REPORTS ====================
+
+@staff_admin_router.get("/incentives/report")
+async def admin_incentive_report(
+    incentive_type: Optional[str] = None,   # 'registration' | 'bill_upload' | None (all)
+    brand: Optional[str] = None,
+    status: Optional[str] = None,           # 'pending' | 'pending_verification' | 'redeemable' | 'cancelled' | 'redeemed'
+    staff_id: Optional[str] = None,
+    start_date: Optional[str] = None,       # ISO YYYY-MM-DD (inclusive)
+    end_date: Optional[str] = None,         # ISO YYYY-MM-DD (inclusive, end-of-day)
+    limit: int = 1000,
+    auth=Depends(_verify_admin),
+):
+    """Point 12 (Aug 2026): Retailer incentive earn report.
+
+    Returns each incentive record enriched with staff details (name, phone,
+    staff_code, brand) and, for bill_upload rows, the bill amount / status /
+    store name. Registration rows carry the customer mobile number (which
+    signed up under this staff QR); bill_upload rows carry both the customer
+    mobile and the bill_id/amount. Admin can filter by type / brand / status /
+    staff / date range and download as CSV via `?format=csv`.
+    """
+    q: Dict = {}
+    if incentive_type in ("registration", "bill_upload"):
+        q["type"] = incentive_type
+    if status:
+        q["status"] = status
+    if staff_id:
+        q["staff_id"] = staff_id
+    if start_date or end_date:
+        rng = {}
+        if start_date:
+            rng["$gte"] = f"{start_date}T00:00:00"
+        if end_date:
+            rng["$lte"] = f"{end_date}T23:59:59.999999+00:00"
+        q["created_at"] = rng
+
+    # Point 12 (iter 53 fix): apply brand filter at the Mongo layer BEFORE the limit,
+    # otherwise a filter on 1000+ staff can silently miss rows past the cursor cap.
+    if brand:
+        brand_norm = brand.strip().lower()
+        matched_staff_ids: List[str] = []
+        async for s in _db.retail_staff.find({}, {"_id": 0, "id": 1, "brand_name": 1}):
+            if (s.get("brand_name") or "").strip().lower() == brand_norm:
+                matched_staff_ids.append(s["id"])
+        if not matched_staff_ids:
+            return {"rows": [], "summary": {"total": 0, "registration_count": 0, "bill_upload_count": 0, "total_amount": 0, "redeemable_amount": 0}}
+        q["staff_id"] = {"$in": matched_staff_ids}
+
+    rows: List[Dict] = []
+    # Cache staff/bill lookups to keep this endpoint fast for large data-sets.
+    staff_cache: Dict[str, Dict] = {}
+    async for r in _db.staff_incentives.find(q, {"_id": 0}).sort("created_at", -1).limit(limit):
+        sid = r.get("staff_id")
+        if sid and sid not in staff_cache:
+            s = await _db.retail_staff.find_one({"id": sid}, {"_id": 0, "name": 1, "phone": 1, "staff_code": 1, "brand_name": 1, "brand_category": 1, "store_location": 1})
+            staff_cache[sid] = s or {}
+        s = staff_cache.get(sid) or {}
+
+        row = {
+            "id": r.get("id"),
+            "type": r.get("type"),
+            "status": r.get("status"),
+            "amount": r.get("amount"),
+            "customer_phone": r.get("customer_phone"),
+            "created_at": r.get("created_at"),
+            "approved_at": r.get("approved_at"),
+            "expires_at": r.get("expires_at"),
+            "staff_id": sid,
+            "staff_code": s.get("staff_code") or r.get("staff_code"),
+            "staff_name": s.get("name"),
+            "staff_phone": s.get("phone"),
+            "staff_brand": s.get("brand_name"),
+            "staff_brand_category": s.get("brand_category"),
+            "staff_store": s.get("store_location"),
+        }
+        if r.get("type") == "bill_upload":
+            bill_id = r.get("bill_id")
+            row["bill_id"] = bill_id
+            row["bill_value"] = r.get("bill_value")
+            if bill_id:
+                bill = await _db.bills.find_one(
+                    {"id": bill_id},
+                    {"_id": 0, "amount": 1, "store_name": 1, "status": 1, "bill_no": 1, "created_at": 1},
+                )
+                if bill:
+                    row["bill_amount"] = bill.get("amount") or row.get("bill_value")
+                    row["bill_store"] = bill.get("store_name")
+                    row["bill_status"] = bill.get("status")
+                    row["bill_no"] = bill.get("bill_no")
+        rows.append(row)
+
+    # Summary counts (respects filters)
+    summary = {
+        "total": len(rows),
+        "registration_count": sum(1 for x in rows if x["type"] == "registration"),
+        "bill_upload_count": sum(1 for x in rows if x["type"] == "bill_upload"),
+        "total_amount": sum(float(x.get("amount") or 0) for x in rows),
+        "redeemable_amount": sum(float(x.get("amount") or 0) for x in rows if x.get("status") == "redeemable"),
+    }
+    return {"rows": rows, "summary": summary}
+
+
+@staff_admin_router.get("/incentives/report.csv")
+async def admin_incentive_report_csv(
+    incentive_type: Optional[str] = None,
+    brand: Optional[str] = None,
+    status: Optional[str] = None,
+    staff_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 5000,
+    auth=Depends(_verify_admin),
+):
+    """CSV export of the same data returned by /incentives/report."""
+    data = await admin_incentive_report(
+        incentive_type=incentive_type, brand=brand, status=status, staff_id=staff_id,
+        start_date=start_date, end_date=end_date, limit=limit, auth=auth,
+    )
+    import csv
+    from io import StringIO
+    from fastapi.responses import Response
+
+    buf = StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "Type", "Staff Code", "Staff Name", "Staff Phone", "Brand", "Category", "Store",
+        "Customer Phone", "Amount", "Status",
+        "Bill No", "Bill Store", "Bill Amount", "Bill Status",
+        "Created At", "Approved At",
+    ])
+    for r in data["rows"]:
+        writer.writerow([
+            r.get("type") or "",
+            r.get("staff_code") or "",
+            r.get("staff_name") or "",
+            r.get("staff_phone") or "",
+            r.get("staff_brand") or "",
+            r.get("staff_brand_category") or "",
+            r.get("staff_store") or "",
+            r.get("customer_phone") or "",
+            r.get("amount") or 0,
+            r.get("status") or "",
+            r.get("bill_no") or "",
+            r.get("bill_store") or "",
+            r.get("bill_amount") or "",
+            r.get("bill_status") or "",
+            r.get("created_at") or "",
+            r.get("approved_at") or "",
+        ])
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="retailer_incentives_report.csv"'},
+    )
+
+
+
+
 # ==================== STAFF: LOGIN + DASHBOARD ====================
 
 class StaffOTPRequest(BaseModel):
@@ -1052,15 +1211,20 @@ async def staff_send_otp(payload: StaffOTPRequest):
             upsert=True,
         )
 
+    # Point 11 (Aug 2026): staff login OTP must ride WhatsApp (dual-channel via
+    # send_login_otp). Return per-channel diagnostics to help admin debug delivery.
+    delivery = {"whatsapp": None, "sms": None, "success": False}
     if _send_sms_otp is not None:
         try:
             r = await _send_sms_otp(phone, otp)
-            logger.info(f"Staff OTP SMS to {phone}: {r}")
+            if isinstance(r, dict):
+                delivery = r
+            logger.info(f"Staff OTP dispatch to {phone}: {r}")
         except Exception as e:
-            logger.error(f"staff SMS send failed for {phone}: {e}")
+            logger.error(f"staff OTP send failed for {phone}: {e}")
 
     logger.info(f"Staff OTP generated for {phone}: {otp}")  # dev observability
-    return {"success": True, "message": "OTP sent"}
+    return {"success": True, "message": "OTP sent", "delivery": delivery}
 
 
 @staff_router.post("/auth/verify-otp")
@@ -1270,7 +1434,15 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
       - If a matching active attribution exists → create a bill_upload incentive.
       - Additionally, if the customer has a pending registration incentive → activate it.
       - Status mapping: approved→approved(redeemable), pending/manual→pending_verification, rejected→cancelled.
-    Point 9: `bill_value` (₹) is used to pick the value-based slab reward. If not provided, we look it up from the bill record."""
+    Point 9: `bill_value` (₹) is used to pick the value-based slab reward. If not provided, we look it up from the bill record.
+    Point 14 (Aug 2026): Retailer bill incentive is now BRAND-MATCHED. The bill's
+    store_name must equal the attributed staff's brand_name (case-insensitive,
+    ignoring punctuation). If the customer scans Retailer A's QR but uploads
+    a bill for Retailer B, Retailer A gets NO incentive. The attribution is
+    still marked `used` so a later matching bill can't sneak in on the same
+    scan — one scan = one bill decision (the client's "immediately after"
+    rule from the spec doc).
+    """
     # 1. Try to find an active attribution
     attribution = await find_active_attribution(customer_phone)
     cfg = await get_staff_config()
@@ -1283,28 +1455,59 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
         if not already:
             staff_id = attribution["staff_id"]
             attributed_staff = await _db.retail_staff.find_one({"id": staff_id}, {"_id": 0}) or attribution
-            count_so_far = await _db.staff_incentives.count_documents({"staff_id": staff_id, "type": "bill_upload"})
-            # Point 9: derive bill_value if caller didn't pass it.
-            if not bill_value:
-                bill_doc = await _db.bills.find_one({"id": bill_id}, {"_id": 0, "amount": 1, "total_amount": 1, "bill_amount": 1})
-                if bill_doc:
+            # Point 14: enforce brand match between the bill and the staff's brand.
+            bill_doc = await _db.bills.find_one({"id": bill_id}, {"_id": 0, "amount": 1, "total_amount": 1, "bill_amount": 1, "store_name": 1, "brand": 1})
+            bill_brand = ""
+            if bill_doc:
+                bill_brand = (bill_doc.get("store_name") or bill_doc.get("brand") or "").strip()
+            staff_brand = (attributed_staff.get("brand_name") or "").strip()
+
+            def _norm(s: str) -> str:
+                return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+
+            brand_match = bool(bill_brand and staff_brand and _norm(bill_brand) == _norm(staff_brand))
+
+            if brand_match:
+                count_so_far = await _db.staff_incentives.count_documents({"staff_id": staff_id, "type": "bill_upload"})
+                if not bill_value and bill_doc:
                     bill_value = float(bill_doc.get("amount") or bill_doc.get("total_amount") or bill_doc.get("bill_amount") or 0)
-            amount = await _resolve_bill_upload_amount(cfg, attributed_staff, bill_value, count_so_far)
-            status = _status_from_bill(bill_status)
-            await _db.staff_incentives.insert_one({
-                "id": str(uuid.uuid4()),
-                "staff_id": staff_id,
-                "staff_code": attribution["staff_code"],
-                "customer_phone": customer_phone,
-                "type": "bill_upload",
-                "status": status,
-                "amount": amount,
-                "bill_id": bill_id,
-                "bill_value": bill_value,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "approved_at": datetime.now(timezone.utc).isoformat() if status == "redeemable" else None,
-            })
-            # Mark attribution as used
+                amount = await _resolve_bill_upload_amount(cfg, attributed_staff, bill_value, count_so_far)
+                status = _status_from_bill(bill_status)
+                await _db.staff_incentives.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "staff_id": staff_id,
+                    "staff_code": attribution["staff_code"],
+                    "customer_phone": customer_phone,
+                    "type": "bill_upload",
+                    "status": status,
+                    "amount": amount,
+                    "bill_id": bill_id,
+                    "bill_value": bill_value,
+                    "bill_brand": bill_brand,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "approved_at": datetime.now(timezone.utc).isoformat() if status == "redeemable" else None,
+                })
+                logger.info(f"Point 14: brand-matched incentive credited staff={staff_id} bill_brand='{bill_brand}' staff_brand='{staff_brand}'")
+            else:
+                # Log an attribution_miss row for reporting / audit — no incentive credited.
+                try:
+                    await _db.staff_attribution_misses.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "staff_id": staff_id,
+                        "staff_code": attribution["staff_code"],
+                        "customer_phone": customer_phone,
+                        "bill_id": bill_id,
+                        "bill_brand": bill_brand,
+                        "staff_brand": staff_brand,
+                        "reason": "brand_mismatch",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                except Exception as e:
+                    logger.warning(f"attribution miss log failed: {e}")
+                logger.info(f"Point 14: brand-mismatch, no credit. staff='{staff_brand}' bill='{bill_brand}' bill_id={bill_id}")
+
+            # Point 14: whether or not the bill matched, consume the attribution.
+            # This enforces "one scan = one bill decision" — later bills need a new QR scan.
             await _db.staff_attributions.update_one({"id": attribution["id"]}, {"$set": {"used": True}})
 
     # 2. If bill approved, activate any pending registration incentive for this customer
@@ -1501,6 +1704,48 @@ async def admin_delete_retailer_manager(manager_id: str, auth=Depends(_verify_ad
     return {"success": True}
 
 
+# Point 11 (Aug 2026): admin diagnostic — trigger a real OTP send to any retailer
+# manager phone and surface Karix per-channel response so admin can verify that
+# WhatsApp + SMS delivery is actually landing.
+class OTPTestPayload(BaseModel):
+    phone: str
+
+
+@staff_admin_router.post("/retailer/test-otp")
+async def admin_test_retailer_otp(payload: OTPTestPayload, auth=Depends(_verify_admin)):
+    phone = _normalise_phone(payload.phone)
+    if len(phone) != 10:
+        raise HTTPException(status_code=400, detail="Phone must be 10 digits")
+    mgr = await _db.retailer_managers.find_one({"phone": phone, "is_active": True}, {"_id": 0})
+    if not mgr:
+        return {"success": False, "message": "Phone is not a whitelisted retailer manager (or is inactive)"}
+
+    import random
+    otp = f"{random.randint(0, 999999):06d}"
+    if _store_otp is not None:
+        try:
+            await _store_otp(phone, otp)
+        except Exception as e:
+            logger.error(f"admin retailer test store_otp failed: {e}")
+
+    delivery = {"whatsapp": None, "sms": None, "success": False}
+    if _send_sms_otp is not None:
+        try:
+            r = await _send_sms_otp(phone, otp)
+            if isinstance(r, dict):
+                delivery = r
+        except Exception as e:
+            logger.error(f"admin retailer test OTP send failed for {phone}: {e}")
+
+    return {
+        "success": bool(delivery.get("success")),
+        "phone": phone,
+        "manager_name": mgr.get("name"),
+        "delivery": delivery,
+        "note": "OTP sent via WhatsApp + SMS. Ask retailer to check both channels.",
+    }
+
+
 # -------- Retailer manager auth (OTP) --------
 
 @staff_router.post("/retailer/auth/send-otp")
@@ -1524,14 +1769,20 @@ async def retailer_send_otp(payload: StaffOTPRequest):
             upsert=True,
         )
 
+    # Point 11 (Aug 2026): retailer OTP must ride WhatsApp (dual-channel WA+SMS via
+    # send_login_otp). Capture per-channel diagnostics so /admin/alerts/test type
+    # endpoints can surface delivery failures instead of silently swallowing them.
+    delivery = {"whatsapp": None, "sms": None, "success": False}
     if _send_sms_otp is not None:
         try:
-            await _send_sms_otp(phone, otp)
+            r = await _send_sms_otp(phone, otp)
+            if isinstance(r, dict):
+                delivery = r
         except Exception as e:
-            logger.error(f"retailer SMS send failed for {phone}: {e}")
+            logger.error(f"retailer OTP send failed for {phone}: {e}")
 
-    logger.info(f"Retailer OTP generated for {phone}: {otp}")
-    return {"success": True, "message": "OTP sent"}
+    logger.info(f"Retailer OTP generated for {phone}: {otp} delivery={delivery}")
+    return {"success": True, "message": "OTP sent", "delivery": delivery}
 
 
 @staff_router.post("/retailer/auth/verify-otp")

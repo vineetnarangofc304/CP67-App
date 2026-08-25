@@ -4659,7 +4659,10 @@ async def send_otp_whatsapp(phone_10: str, otp: str) -> dict:
     for cold registrations enable OTP_SMS_FALLBACK to also send an SMS.
     """
     phone_e164 = f"91{phone_10}" if len(phone_10) == 10 else phone_10
-    text = f"Your verification OTP is {otp} Use this at Homeland Advantage. Valid for 5 minutes."
+    # Point 11 (Aug 2026): Match the DLT-approved SMS template wording exactly so
+    # consumer + retailer login OTP messages are consistent across WhatsApp and SMS.
+    # Template ref: PEID 1701172802304667512 / Temp ID 1707172914885560615 / Header CP67.
+    text = f"Your verification OTP is {otp} Use this at CP67 Mall."
     return await send_whatsapp_text_diag(phone_e164, text)
 
 

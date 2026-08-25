@@ -39,6 +39,19 @@ export default function StaffIncentives() {
   const [showUnmappedOnly, setShowUnmappedOnly] = useState(false); // Point 35
   const [staffUnmappedCount, setStaffUnmappedCount] = useState(0); // Point 35: server-computed
   const [reassignStaff, setReassignStaff] = useState(null); // Point 35: modal for in-place brand fix
+  // Point 12 (Aug 2026): Incentive Reports — separate reg vs bill records with customer mobile.
+  const [reportRows, setReportRows] = useState([]);
+  const [reportSummary, setReportSummary] = useState({ total: 0, registration_count: 0, bill_upload_count: 0, total_amount: 0, redeemable_amount: 0 });
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportType, setReportType] = useState('registration'); // 'registration' | 'bill_upload'
+  const [reportBrand, setReportBrand] = useState('');
+  const [reportStatus, setReportStatus] = useState('');
+  const [reportStart, setReportStart] = useState('');
+  const [reportEnd, setReportEnd] = useState('');
+  // Point 11 (Aug 2026): test OTP send diagnostics for retailer manager
+  const [testOtpPhone, setTestOtpPhone] = useState('');
+  const [testOtpResult, setTestOtpResult] = useState(null);
+  const [testOtpBusy, setTestOtpBusy] = useState(false);
 
   const api = (path, opts = {}) => fetch(`${API_URL}${path}`, {
     ...opts,
@@ -76,6 +89,84 @@ export default function StaffIncentives() {
   };
 
   useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, []);
+
+  // Point 12 (Aug 2026): Load retailer incentive report (registrations vs bill uploads).
+  const loadReport = async () => {
+    setReportLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (reportType) params.set('incentive_type', reportType);
+      if (reportBrand) params.set('brand', reportBrand);
+      if (reportStatus) params.set('status', reportStatus);
+      if (reportStart) params.set('start_date', reportStart);
+      if (reportEnd) params.set('end_date', reportEnd);
+      params.set('limit', '2000');
+      const r = await api(`/admin/staff/incentives/report?${params.toString()}`);
+      if (r.status === 401 || r.status === 403) { handle401(); return; }
+      const d = await r.json();
+      if (r.ok) {
+        setReportRows(d.rows || []);
+        setReportSummary(d.summary || { total: 0, registration_count: 0, bill_upload_count: 0, total_amount: 0, redeemable_amount: 0 });
+      } else {
+        toast.error(d.detail || 'Failed to load report');
+      }
+    } catch (e) {
+      toast.error('Failed to load report');
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const downloadReportCsv = () => {
+    const params = new URLSearchParams();
+    if (reportType) params.set('incentive_type', reportType);
+    if (reportBrand) params.set('brand', reportBrand);
+    if (reportStatus) params.set('status', reportStatus);
+    if (reportStart) params.set('start_date', reportStart);
+    if (reportEnd) params.set('end_date', reportEnd);
+    params.set('limit', '10000');
+    fetch(`${API_URL}/admin/staff/incentives/report.csv?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(res => {
+        if (res.status === 401 || res.status === 403) { handle401(); return null; }
+        if (!res.ok) throw new Error('csv fetch failed');
+        return res.blob();
+      })
+      .then(blob => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `retailer_incentives_${reportType || 'all'}.csv`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+      })
+      .catch(() => toast.error('CSV download failed'));
+  };
+
+  const sendTestOtp = async () => {
+    const phone = (testOtpPhone || '').replace(/\D/g, '').slice(-10);
+    if (phone.length !== 10) { toast.error('Enter a 10-digit phone'); return; }
+    setTestOtpBusy(true);
+    setTestOtpResult(null);
+    try {
+      const r = await api('/admin/staff/retailer/test-otp', { method: 'POST', body: JSON.stringify({ phone }) });
+      if (r.status === 401 || r.status === 403) { handle401(); return; }
+      const d = await r.json();
+      setTestOtpResult(d);
+      if (d.success) toast.success('OTP dispatched — check WhatsApp + SMS');
+      else toast.error(d.message || 'OTP dispatch failed');
+    } catch (e) {
+      toast.error('Failed to send test OTP');
+    } finally {
+      setTestOtpBusy(false);
+    }
+  };
+
+  useEffect(() => { if (tab === 'report') loadReport(); /* eslint-disable-next-line */ }, [tab, reportType]);
+
+
 
   const submitCreate = async () => {
     if (!form.name || !form.phone || !form.brand_name) {
@@ -327,6 +418,7 @@ export default function StaffIncentives() {
             <TabsTrigger value="managers" data-testid="tab-managers"><Users size={16} className="mr-1" /> Retailer Logins</TabsTrigger>
             <TabsTrigger value="leaderboard" data-testid="tab-leaderboard"><Trophy size={16} className="mr-1" /> Leaderboard</TabsTrigger>
             <TabsTrigger value="redemptions" data-testid="tab-redemptions"><Wallet size={16} className="mr-1" /> Redemptions</TabsTrigger>
+            <TabsTrigger value="report" data-testid="tab-report"><FileText size={16} className="mr-1" /> Reports</TabsTrigger>
             <TabsTrigger value="config" data-testid="tab-config"><Settings size={16} className="mr-1" /> Slabs</TabsTrigger>
           </TabsList>
 
@@ -849,6 +941,174 @@ export default function StaffIncentives() {
               </Card>
             )}
           </TabsContent>
+
+          {/* POINT 12 · REPORTS TAB */}
+          <TabsContent value="report">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Retailer Incentive Report</CardTitle>
+                <div className="flex gap-2 items-center">
+                  <Button variant="outline" size="sm" onClick={loadReport} data-testid="refresh-report-btn">
+                    <RefreshCw size={16} className="mr-1" /> Refresh
+                  </Button>
+                  <Button size="sm" onClick={downloadReportCsv} data-testid="download-report-csv-btn">
+                    <FileText size={16} className="mr-1" /> Download CSV
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Test OTP diagnostics (Point 11) */}
+                <div className="mb-4 p-3 rounded-md bg-amber-50 border border-amber-200">
+                  <div className="text-sm font-medium mb-2">Point 11 · Test Retailer OTP (WhatsApp + SMS)</div>
+                  <div className="flex gap-2 items-center flex-wrap">
+                    <Input
+                      placeholder="Retailer manager phone (10 digits)"
+                      value={testOtpPhone}
+                      onChange={e => setTestOtpPhone(e.target.value)}
+                      className="max-w-xs"
+                      data-testid="test-otp-phone-input"
+                    />
+                    <Button size="sm" onClick={sendTestOtp} disabled={testOtpBusy} data-testid="send-test-otp-btn">
+                      {testOtpBusy ? 'Sending…' : 'Send Test OTP'}
+                    </Button>
+                    {testOtpResult && (
+                      <div className="text-xs text-slate-700" data-testid="test-otp-result">
+                        {testOtpResult.success ? '✅' : '❌'} {testOtpResult.message || (testOtpResult.success ? 'Sent' : 'Failed')}
+                        {testOtpResult.delivery && (
+                          <span className="ml-2 font-mono">
+                            WA: {testOtpResult.delivery.whatsapp?.status_code ?? 'n/a'}, SMS: {testOtpResult.delivery.sms?.status_code ?? 'n/a'}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Filters */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+                  <div>
+                    <Label>Type</Label>
+                    <select
+                      value={reportType}
+                      onChange={e => setReportType(e.target.value)}
+                      className="w-full border rounded px-2 py-1 text-sm"
+                      data-testid="report-type-select"
+                    >
+                      <option value="registration">Registration</option>
+                      <option value="bill_upload">Bill Upload</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Brand</Label>
+                    <select
+                      value={reportBrand}
+                      onChange={e => setReportBrand(e.target.value)}
+                      className="w-full border rounded px-2 py-1 text-sm"
+                      data-testid="report-brand-select"
+                    >
+                      <option value="">All brands</option>
+                      {(catalog.staff_mapped_brands || catalog.brands || []).map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Status</Label>
+                    <select
+                      value={reportStatus}
+                      onChange={e => setReportStatus(e.target.value)}
+                      className="w-full border rounded px-2 py-1 text-sm"
+                      data-testid="report-status-select"
+                    >
+                      <option value="">All statuses</option>
+                      <option value="pending">Pending</option>
+                      <option value="pending_verification">Pending Verification</option>
+                      <option value="redeemable">Redeemable</option>
+                      <option value="redeemed">Redeemed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Start Date</Label>
+                    <Input type="date" value={reportStart} onChange={e => setReportStart(e.target.value)} data-testid="report-start-date" />
+                  </div>
+                  <div>
+                    <Label>End Date</Label>
+                    <Input type="date" value={reportEnd} onChange={e => setReportEnd(e.target.value)} data-testid="report-end-date" />
+                  </div>
+                </div>
+                <Button size="sm" onClick={loadReport} data-testid="apply-report-filters-btn" className="mb-3">Apply Filters</Button>
+
+                {/* KPI tiles */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <div className="p-3 rounded-md bg-blue-50 border border-blue-200">
+                    <div className="text-xs text-slate-600">Registration Records</div>
+                    <div className="text-2xl font-bold text-blue-700" data-testid="report-reg-count">{reportSummary.registration_count || 0}</div>
+                  </div>
+                  <div className="p-3 rounded-md bg-emerald-50 border border-emerald-200">
+                    <div className="text-xs text-slate-600">Bill Upload Records</div>
+                    <div className="text-2xl font-bold text-emerald-700" data-testid="report-bill-count">{reportSummary.bill_upload_count || 0}</div>
+                  </div>
+                  <div className="p-3 rounded-md bg-amber-50 border border-amber-200">
+                    <div className="text-xs text-slate-600">Total Amount</div>
+                    <div className="text-2xl font-bold text-amber-700" data-testid="report-total-amount">₹{Math.round(reportSummary.total_amount || 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-3 rounded-md bg-purple-50 border border-purple-200">
+                    <div className="text-xs text-slate-600">Redeemable Amount</div>
+                    <div className="text-2xl font-bold text-purple-700" data-testid="report-redeemable-amount">₹{Math.round(reportSummary.redeemable_amount || 0).toLocaleString()}</div>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr className="text-left">
+                        <th className="p-2">Staff Code</th>
+                        <th className="p-2">Staff Name</th>
+                        <th className="p-2">Brand</th>
+                        <th className="p-2">Customer Mobile</th>
+                        <th className="p-2">Amount</th>
+                        <th className="p-2">Status</th>
+                        {reportType === 'bill_upload' && <th className="p-2">Bill</th>}
+                        <th className="p-2">Created</th>
+                      </tr>
+                    </thead>
+                    <tbody data-testid="report-tbody">
+                      {reportLoading && (
+                        <tr><td colSpan={reportType === 'bill_upload' ? 8 : 7} className="text-center p-6 text-slate-500">Loading…</td></tr>
+                      )}
+                      {!reportLoading && reportRows.length === 0 && (
+                        <tr><td colSpan={reportType === 'bill_upload' ? 8 : 7} className="text-center p-6 text-slate-500">No records match the filters.</td></tr>
+                      )}
+                      {!reportLoading && reportRows.map(r => (
+                        <tr key={r.id} className="border-b hover:bg-slate-50">
+                          <td className="p-2 font-mono text-xs">{r.staff_code}</td>
+                          <td className="p-2">{r.staff_name}</td>
+                          <td className="p-2">{r.staff_brand}{r.staff_brand_category ? <span className="text-xs text-slate-400"> / {r.staff_brand_category}</span> : null}</td>
+                          <td className="p-2 font-mono">{r.customer_phone || '—'}</td>
+                          <td className="p-2">₹{r.amount || 0}</td>
+                          <td className="p-2">
+                            <span className={`text-xs px-2 py-0.5 rounded ${r.status === 'redeemable' ? 'bg-emerald-100 text-emerald-800' : r.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>{r.status}</span>
+                          </td>
+                          {reportType === 'bill_upload' && (
+                            <td className="p-2 text-xs">
+                              {r.bill_no ? <div className="font-mono">{r.bill_no}</div> : null}
+                              {r.bill_store ? <div className="text-slate-500">{r.bill_store}</div> : null}
+                              {r.bill_amount ? <div className="text-slate-500">₹{r.bill_amount}</div> : null}
+                            </td>
+                          )}
+                          <td className="p-2 text-xs text-slate-500">{r.created_at?.split('T')[0]}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+
         </Tabs>
 
         {/* QR MODAL */}
