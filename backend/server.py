@@ -3336,31 +3336,58 @@ async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks,
     polls the bills list to see the updated status.
 
     Set `?wait=true` to run synchronously (legacy behaviour) — may take 20-60s.
+
+    Feb 2026 hardening: top-level try/except so any Mongo hiccup / hang
+    surfaces as a JSON body instead of a raw HTTP 500 (which the admin UI
+    then renders as "Reprocess timed out").
     """
-    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
-    if not bill:
-        raise HTTPException(status_code=404, detail="Bill not found")
-    if bill.get("status") not in ["pending_review", "rejected", "manual_review"]:
-        raise HTTPException(status_code=400, detail="Only pending/rejected/manual-review bills can be reprocessed")
+    try:
+        bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+        if not bill:
+            raise HTTPException(status_code=404, detail="Bill not found")
+        if bill.get("status") not in ["pending_review", "rejected", "manual_review"]:
+            raise HTTPException(status_code=400, detail="Only pending/rejected/manual-review bills can be reprocessed")
+        # Feb 2026: reject double-clicks — if a reprocess is already in flight
+        # for this bill (started but not finished), return 409 rather than
+        # queue a duplicate background credit pipeline. Stale guard: after
+        # 2 minutes we assume the previous run crashed and allow retry.
+        started = bill.get("reprocessing_started_at")
+        finished = bill.get("reprocessing_finished_at")
+        if started and not finished:
+            try:
+                started_dt = datetime.fromisoformat(started.replace("Z", "+00:00"))
+                age_seconds = (datetime.now(timezone.utc) - started_dt).total_seconds()
+            except Exception:
+                age_seconds = 0
+            if age_seconds < 120:
+                raise HTTPException(status_code=409, detail="A reprocess is already running for this bill. Please refresh in ~15s.")
 
-    # Mark reprocessing_started_at so UI can show a spinner
-    await db.bills.update_one(
-        {"id": bill_id},
-        {"$set": {"reprocessing_started_at": datetime.now(timezone.utc).isoformat(),
-                  "reprocessing_by": payload.get("username") or "admin"}}
-    )
+        # Mark reprocessing_started_at so UI can show a spinner
+        await db.bills.update_one(
+            {"id": bill_id},
+            {"$set": {"reprocessing_started_at": datetime.now(timezone.utc).isoformat(),
+                      "reprocessing_by": payload.get("username") or "admin"}}
+        )
 
-    if not wait:
-        background_tasks.add_task(_do_reprocess_bill_bg, bill_id)
-        return {
-            "success": True,
-            "reprocessed": "queued",
-            "bill_id": bill_id,
-            "message": "Reprocess queued. Refresh the list in ~15 seconds to see the result."
-        }
+        if not wait:
+            background_tasks.add_task(_do_reprocess_bill_bg, bill_id)
+            return {
+                "success": True,
+                "reprocessed": "queued",
+                "bill_id": bill_id,
+                "message": "Reprocess queued. Refresh the list in ~15 seconds to see the result."
+            }
 
-    # Legacy synchronous path
-    return await _do_reprocess_bill_sync(bill_id, background_tasks)
+        # Legacy synchronous path
+        return await _do_reprocess_bill_sync(bill_id, background_tasks)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"reprocess_bill failed for bill_id={bill_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Reprocess server error: {str(e)[:200]}"
+        )
 
 
 async def _do_reprocess_bill_bg(bill_id: str):

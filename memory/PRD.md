@@ -895,3 +895,22 @@ Even after session-15 (top-level try/except) + session-16 (id_1 indexes), user s
 
 ### Action required
 Redeploy production. All three layers of hardening (session 15 catch, session 16 indexes, session 17 timeouts) must ship together.
+
+## Session 18 (Feb 2026) — Reprocess endpoint hardening (Admin "Reprocess timed out")
+
+### Bug
+Production admin clicks Reprocess on a bill → red toast "Reprocess timed out. Refresh — the bill may still be processing." Same COLLSCAN + edge-timeout family as sessions 15-17 — `find_one({'id': bill_id})` + `update_one({'id': bill_id})` without the id_1 index blew past the frontend's 15s AbortController budget.
+
+### Fix
+- Top-level try/except on `/api/bills/{bill_id}/reprocess` — any Mongo hiccup now returns HTTP 500 with a JSON `detail` body instead of an empty 500 (which the frontend renders as the same "timeout" toast because `res.json()` throws).
+- Added 409 in-flight guard: if `reprocessing_started_at` is set and `reprocessing_finished_at` is null AND `age < 120s`, reject the double-click. Stale-lock protection: after 2 minutes we allow retry (handles the crashed-mid-reprocess case).
+- Session-16 id_1 indexes + session-17 Motor timeouts (already committed) resolve the underlying latency.
+
+### Verification (iteration_57.json)
+- 30/30 new + 78 across the full 54→57 regression PASS.
+- Queued path: 44-58ms (well inside the 15s abort).
+- Exception sim (NetworkTimeout / ServerSelectionTimeoutError / AutoReconnect / ExecutionTimeout / generic RuntimeError patched into `find_one`) → JSON 500, never empty.
+- Background task confirmed to actually execute — bill moved `rejected → approved` and `reprocessing_finished_at` stamped.
+
+### Action required
+Redeploy production. All fixes (sessions 15-18) ship on this deploy.

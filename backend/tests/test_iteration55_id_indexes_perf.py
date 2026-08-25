@@ -165,7 +165,16 @@ def test_ensure_db_indexes_idempotent(mongo):
     sys.path.insert(0, "/app/backend")
     before = {c: set(mongo[c].index_information()) for c in ID_INDEX_COLLECTIONS}
     from server import ensure_db_indexes
-    asyncio.run(ensure_db_indexes())
+    # Use a persistent loop (not asyncio.run) — asyncio.run closes the loop that
+    # motor's global client binds to, breaking later suites in the same process.
+    try:
+        loop = asyncio.get_event_loop_policy().get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    loop.run_until_complete(ensure_db_indexes())
     after = {c: set(mongo[c].index_information()) for c in ID_INDEX_COLLECTIONS}
     for c in ID_INDEX_COLLECTIONS:
         assert "id_1" in after[c]

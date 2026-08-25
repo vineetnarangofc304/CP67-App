@@ -1,0 +1,40 @@
+{
+  "summary": "Backend-only verification of the session-17/18 hardening on POST /api/bills/{bill_id}/reprocess. New suite /app/backend/tests/test_iteration57_reprocess_hardening.py (30 tests, all pass): queued path returns HTTP 200 {success:true, reprocessed:'queued', bill_id, message} in 44-58ms (5x repeat worst 47ms, well inside the frontend 15s abort); reprocessing_started_at + reprocessing_by='admin' verified persisted in Mongo; unknown id -> 404 JSON detail='Bill not found' in 43ms; non-reprocessable bill (approved) -> 400 JSON detail; unauth -> 403; 9 malformed/injection ids (path traversal, %00, 300-char, {\"$ne\":null}, script tag) never produce a raw 500 (400/404/422 only). Exception simulation via mock.patch.object(server,'db',...): pymongo NetworkTimeout / ServerSelectionTimeoutError / AutoReconnect / ExecutionTimeout and a generic RuntimeError raised from find_one -> HTTPException(500) with JSON detail 'Reprocess server error: ...'; failure isolated to update_one (find_one OK) also -> JSON 500; HTTPException(404) is correctly re-raised and NOT swallowed into 500; source assertion confirms the top-level try/except + logger.exception. Background task confirmed to actually execute after the response: reprocessing_finished_at stamped (2026-08-25T11:14:35Z) and bill status moved rejected -> approved within a few seconds, reprocessing_error=None. GET /api/bills with 5 status/date-range filter combinations: all HTTP 200 in 72-153ms, no _id leakage, status filter correctly applied. Regression: iteration_54 + 55 + 56_motor_timeouts + 56_concurrency + 57 run together = 78 passed, 1 skipped (skip = production MARKET NINETY NINE bill absent from preview). No tracebacks/500s in backend logs during the run.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/bills/{bill_id}/reprocess", "issue": "No in-flight guard: consecutive/concurrent calls on the same bill are each accepted (200 queued) while a previous background reprocess may still be running. Sequentially this self-limits (2nd call gets 400 once status flips to approved), but truly concurrent clicks could run the credit pipeline twice for the same bill. Consider rejecting when reprocessing_started_at is set and reprocessing_finished_at is null (e.g. 409)."},
+      {"endpoint": "POST /api/bills/{bill_id}/reprocess", "issue": "Background failures are only visible via the reprocessing_error field on the bill doc; the queued 200 response gives the admin UI no way to surface a failed background reprocess other than polling. Non-blocking observation."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration57_reprocess_hardening.py",
+    "/app/test_reports/pytest/iteration57_results.xml"
+  ],
+  "action_items": [
+    "No blocking fixes required for the reprocess hardening — preview behaviour matches the intended contract (fast 200 queued, JSON 404/400, never a raw empty 500). Safe to redeploy to production together with the session-16 id_1 indexes.",
+    "Optional: add an in-flight guard (409 when reprocessing_started_at set and reprocessing_finished_at null) to avoid duplicate background credit pipelines on double-clicks."
+  ],
+  "critical_code_review_comments": [
+    "reprocess_bill try/except is correct: HTTPException re-raised first, generic Exception logged via logger.exception and converted to HTTPException(500, detail='Reprocess server error: ...') with detail truncated to 200 chars — verified by simulation, no empty-body 500 possible from the handler body.",
+    "_do_reprocess_bill_bg wraps the pipeline in try/except and always stamps reprocessing_finished_at (success or error), so the UI polling loop can never hang forever — good.",
+    "/app/backend/server.py is ~9020 lines; it should be split into routers/services modules (bills, admin, loyalty, parking, staff). This is now the main maintainability risk in the repo.",
+    "Test-infra: iteration_55's asyncio.run(ensure_db_indexes()) closed the loop that motor's global client binds to, breaking iteration_56 when suites ran in one process. Fixed to use a persistent loop; iteration_57 also reuses the already-installed loop."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration57_reprocess_hardening.py",
+    "/app/backend/tests/test_iteration55_id_indexes_perf.py"
+  ],
+  "success_rate": {"backend": "100% (78 passed, 1 skipped across iterations 54-57)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "No new seed data. Testing reprocessed real preview bills: one bill (TEST-9a76ed183e) legitimately moved rejected -> approved as a result of a successful reprocess, and reprocessing_started_at/finished_at markers were set on it. Preview DB still has 11 rejected + 4 manual_review + 3 approved bills, so the suite remains repeatable.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin: admin / CP67Admin@2025 (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "Reusable suites: test_iteration54, test_iteration55, test_iteration56_motor_timeouts, test_iteration56_concurrency, test_iteration57_reprocess_hardening. All of them share one asyncio loop for motor calls — never use asyncio.run() in these files or motor's global client loop gets closed. Run with `python -m pytest tests/<files> -p no:randomly -q -o addopts=\"\"`. The production repro bill (MARKET NINETY NINE, Rs.667, 918559087340) is still not present in preview, so that specific case remains untestable here. Preview reprocess latency baseline: ~50ms queued, ~100ms bills list.",
+  "rca_of_the_issue": "Original production symptom (red 'Reprocess timed out' toast) came from the reprocess handler's find_one/update_one on {'id': bill_id} doing a COLLSCAN without the id_1 index, exceeding the frontend's 15s AbortController; the frontend also renders a raw HTTP 500 (empty body, res.json() throws) as the same timeout toast. Preview now has the session-16 id_1 indexes + session-17 Motor timeouts + the new top-level try/except, and verification confirms: 50ms responses, and any Mongo exception is converted to a parseable JSON 500 body instead of an empty 500. Fix is safe to deploy."
+}
