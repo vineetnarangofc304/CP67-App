@@ -66,7 +66,7 @@ async def _current_consumer(creds: HTTPAuthorizationCredentials = Depends(_secur
         payload = _jwt.decode(creds.credentials, _JWT_SECRET, algorithms=["HS256"])
     except Exception:
         raise HTTPException(401, "Invalid token")
-    if payload.get("role") != "consumer":
+    if payload.get("role") != "consumer" and payload.get("type") != "consumer":
         raise HTTPException(403, "Consumer only")
     return payload
 

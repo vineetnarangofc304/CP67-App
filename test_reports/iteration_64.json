@@ -1,0 +1,50 @@
+{
+  "summary": "Iteration 64 verification of the deployment fix (DISABLE_ESLINT_PLUGIN=true / ESLINT_NO_DEV_ERRORS=true in /app/frontend/.env). (1) DEPLOYMENT FIX CONFIRMED: `CI=true yarn build` now completes with exit 0 in 17.11s ('Compiled successfully.', main.e37e5d7e.js 407.78 kB gz) - previously aborted on react-hooks/exhaustive-deps warnings-as-errors. (2) No runtime regression: dev server still 'Compiled successfully', preview root returns 200, no page errors in either app. (3) Consumer PWA login (/app -> Sign In -> 9876543210 -> OTP 1234) works end-to-end, lands on /app/home; Explore/Wallet/Profile tabs all render real data. (4) Admin login (admin / CP67Admin@2025) works, dashboard + /bills load, and the iteration-62 Bill Review modal opens correctly with full detail (store, bill no, amount, customer info, system flags, points override, reject/approve actions) and zero 4xx/5xx requests. (5) Regression: /api/health 200 healthy; iteration 61/62/63 suites all pass 57/57; /api/bills list projection still lean (no image_url/ocr_raw_data/_id). Two PRE-EXISTING defects found during the smoke (not caused by the .env change): consumer popups endpoints always 403 due to a JWT claim mismatch, and 6 broken images on the consumer home from stale cross-environment seed URLs.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/consumer/popups/active, POST /api/consumer/popups/dismiss", "issue": "Always returns 403 {'detail':'Consumer only'} even with a freshly issued, valid consumer JWT. _current_consumer in /app/backend/routes/admin_diy.py:69 checks payload.get('role') != 'consumer', but consumer tokens minted in routes/consumer.py:356 carry {'type':'consumer'} and no 'role' claim. Result: in-app popups can NEVER be shown or dismissed for any consumer - the whole popup/in-app-message feature configured in Admin App Controls is dead. Fix: check payload.get('type') (or accept either claim) to match routes/consumer.py get_current_consumer.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/consumer/auth/send-otp", "issue": "Upstream TagnPay returns 'Mobile number is deactivated!!' (201) and validate-cust-send-otp returns 400 for the test phone; local dev OTP bypass (1234) still succeeds so login is unaffected, but the vendor OTP path is failing for this number. Pre-existing, third-party."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ConsumerApp home (banners / hot deals / featured stores / events)", "issue": "6 of 7 images on /app/home are broken (naturalWidth=0, alt text rendered). 4 point at OTHER preview environments that no longer exist: https://brand-sync-staging.preview.emergentagent.com/banner-vipul-goyal.jpeg, banner-vivek-samtani.jpg, https://fundle-loyalty-cp67.preview.emergentagent.com/api/uploads/brands/21110bec-...cover.png. 2 hot-deal images have src=\"\" (empty string), which also triggers the React warning 'An empty string was passed to the src attribute... may cause the browser to download the whole page again'. Stale/absolute-URL seed data - should be re-seeded with relative/current-host URLs, and img rendering should be guarded so an empty/missing src renders a placeholder instead of <img src=\"\">.", "selector": "img[alt='Vipul Goyal Live'], img[alt='TEST_HotDeal_29_35'], img[alt='Adidas']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Consumer in-app popup on /app/home", "issue": "InAppPopup.jsx fetches /popups/active which always 403s (see backend critical). The component swallows the failure silently (if (r.ok)), so the feature fails with no signal - popups never appear.", "affected_selectors": ["InAppPopup"]}
+    ],
+    "design_issues": [
+      {"screen": "Consumer /app/home tier card", "issues": ["Name and tier caption run together with no separator: renders as 'TestYou've reached the top tier'.", "Card shows tier badge 'BRONZE' while the caption claims 'You've reached the top tier' - contradictory copy for a 0-point Bronze user (Wallet correctly shows '0% to Silver, 2,500 pts to go')."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration64_smoke.py",
+    "/app/test_reports/pytest/iter64_smoke.xml",
+    "/app/test_reports/pytest/iter64_regression.xml",
+    "/app/backend/tests/test_iteration61_alert_projection.py",
+    "/app/backend/tests/test_iteration62_bill_projections.py",
+    "/app/backend/tests/test_iteration63_alert_cooldown_throttle.py"
+  ],
+  "action_items": [
+    "HIGH: Fix _current_consumer in /app/backend/routes/admin_diy.py:69 to read the 'type' claim (consumer tokens have type='consumer', not role='consumer') so /api/consumer/popups/active and /popups/dismiss stop 403ing.",
+    "MEDIUM: Re-seed consumer banner/hot-deal/brand/event images - 6 of 7 point at dead cross-environment absolute URLs or are empty strings; guard <img> so an empty src renders a placeholder.",
+    "LOW: Fix the /app/home tier card copy - missing space in 'TestYou've reached the top tier' and 'top tier' text shown for a BRONZE user.",
+    "LOW (cleanup, not blocking): craco.config.js still has the eslint.configure block while DISABLE_ESLINT_PLUGIN=true, so both dev and build print 'Cannot find ESLint plugin (ESLintWebpackPlugin)'. Harmless on the installed craco version but consider `eslint: { enable: false }` for clarity."
+  ],
+  "critical_code_review_comments": [
+    "Auth-claim divergence is a systemic risk: routes/consumer.py issues {'type':'consumer'} while routes/admin_diy.py validates payload['role']. Extract ONE shared consumer-auth dependency and import it everywhere instead of re-implementing per router - this bug class will recur on the next consumer router.",
+    "InAppPopup.jsx swallows non-2xx responses (`if (r.ok)`) and the catch is empty, which is exactly why a 100%-failing endpoint went unnoticed. Log/surface non-ok statuses at least to console for consumer fetches.",
+    "DISABLE_ESLINT_PLUGIN=true unblocks deployment but permanently hides the 15+ react-hooks/exhaustive-deps warnings. Recommended follow-up: keep the flag for deploy safety AND fix the underlying hook dependency arrays, since stale-closure bugs are real runtime risks, not just lint noise.",
+    "server.py remains ~9.3k lines (carried over from iteration 63) - still well past the 700-line guideline."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration64_smoke.py"],
+  "success_rate": {"backend": "98% (63/64: 57/57 iter61-63 regression + 6/7 iter64 smoke; the 1 failure is the popups/active 403 defect)", "frontend": "90% (build-under-CI, consumer login, all 4 consumer tabs, admin login, bills list and Bill Review modal all pass; broken images + dead popup endpoint are the gaps)"},
+  "seed_data_creation": "None created. Reused existing 'Test User' (9876543210) and pre-existing pending bills; no data mutated (Bill Review modal opened and cancelled without approve/reject).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin / CP67Admin@2025; consumer 9876543210 / OTP 1234 (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "The deployment ESLint fix is verified working - do not re-test `CI=true yarn build` (exit 0, 17.11s). Route gotchas for future scripts: consumer PWA is at /app (root '/' is the ADMIN login), and /app lands on /app/welcome - you must click get_by_text('Sign In', exact=True) before the phone input appears; phone input is input[type='tel'], button 'Send OTP', then 6 OTP boxes (input[maxlength='1']) where filling just '1234' into the first 4 boxes still enables 'Verify & Continue' and logs in (dev bypass - worth flagging as its own validation gap). Consumer API paths are /api/consumer/auth/send-otp, /api/consumer/auth/verify-otp, /api/consumer/profile (NOT /send-otp or /me). On the admin /bills page, do NOT use button:has-text('Review') - it matches the 'Pending Review' tab; use button:has-text('Review & Process'). Bill thumbnails intentionally lazy-load ('Click to view bill image', iteration-62 design). New reusable suite: /app/backend/tests/test_iteration64_smoke.py (health, admin login +/-, consumer OTP login +/-, bills lean projection, popups/active). The popups/active 403 test is the ONLY failing test and is a real product defect - it should pass once the 'role' vs 'type' claim fix lands.",
+  "rca_of_the_issue": "Deployment failure RCA (fixed & verified): Emergent's deploy pipeline sets CI=true, which makes react-scripts treat all ESLint warnings as errors; the 15+ react-hooks/exhaustive-deps warnings therefore aborted `yarn build` before any deploy step ran, producing 'not run: an earlier deploy step failed' for every subsequent step. Adding DISABLE_ESLINT_PLUGIN=true (CRA's official switch to skip the ESLint webpack plugin) plus ESLINT_NO_DEV_ERRORS=true to /app/frontend/.env removes the lint stage from the build graph entirely. Confirmed correct and side-effect-free: ESLint is compile-time only, the emitted bundle is unaffected, dev server and production build both report 'Compiled successfully', and all runtime smoke tests (consumer login + 4 tabs, admin login + Bill Review modal, 57/57 backend regression) pass. Secondary RCA (new, unfixed): /api/consumer/popups/active 403s because routes/admin_diy.py:69 asserts payload['role']=='consumer' while the token factory at routes/consumer.py:356 emits {'type':'consumer'} with no 'role' key - a claim-name mismatch between two independently written auth dependencies, so the check can never succeed for any real token."
+}

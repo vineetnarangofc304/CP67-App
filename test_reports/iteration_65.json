@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 65 backend-only verification of the one-line auth-claim fix in /app/backend/routes/admin_diy.py:69 (_current_consumer now accepts role=='consumer' OR type=='consumer'). Wrote /app/backend/tests/test_iteration65_consumer_popups_auth.py (15 tests) covering GET /api/consumer/popups/active, POST /api/consumer/popups/dismiss with a real consumer JWT (9876543210/1234), an end-to-end create->see->dismiss->hidden flow, and privilege-escalation guards. All 15 passed. Regression run of iteration 61/62/63/64 suites: 64/64 passed (test_iteration64_smoke.py::test_consumer_popups_active_with_valid_token now PASSES, previously 403).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration65_consumer_popups_auth.py",
+    "/app/test_reports/pytest/iteration65_results.xml",
+    "/app/test_reports/pytest/iteration65_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Verified no privilege escalation: audited all JWT factories (routes/consumer.py create_consumer_token -> type=consumer; routes/staff.py _make_staff_token -> role=retail_staff; _make_retailer_token -> role=retailer_manager; server.py create_jwt_token -> admin role). Only consumer tokens satisfy the widened check, so admin/staff/retailer tokens are still rejected with 403 on /api/consumer/popups/*.",
+    "Non-blocking: two parallel JWT decode helpers exist (admin_diy._current_consumer and consumer.get_current_consumer) with divergent claim expectations - this divergence caused the original bug. Recommend admin_diy import consumer.get_current_consumer instead of duplicating the decode/claim logic so a future token-shape change can't silently break routes again.",
+    "Non-blocking: admin_diy.py reads JWT_SECRET with a hardcoded fallback ('cp67-secret-key-2025'). Prefer failing fast on a missing env var instead of a default secret."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration65_consumer_popups_auth.py"
+  ],
+  "success_rate": {"backend": "100% (15/15 new, 64/64 regression)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Created and deleted one temporary popup titled TEST_iter65_popup via /api/admin/diy/popups (cleaned up in module teardown). Consumer 9876543210 has popup_dismissals rows for that popup id plus one throwaway TEST_nonexistent_<uuid> id - harmless, no production data touched.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Fix at admin_diy.py:69 is confirmed working. New regression suite: /app/backend/tests/test_iteration65_consumer_popups_auth.py (run with -p no:xdist if xdist plugin issues appear). Consumer JWTs carry {'sub','phone','type':'consumer'} with NO 'role' claim - use type when writing consumer auth tests. Admin token = /api/admin/login {admin, CP67Admin@2025}. Frontend/Playwright was intentionally skipped per request; iteration_64 build/UI smoke was not re-run.",
+  "rca_of_the_issue": "Root cause (already fixed by main agent): admin_diy._current_consumer duplicated auth-claim validation and asserted payload['role']=='consumer', while consumer.create_consumer_token emits {'type':'consumer'} with no 'role' claim, so every consumer request to /api/consumer/popups/* got 403 'Consumer only'. The widened OR check resolves it; verified 200 responses and confirmed non-consumer token shapes (admin/staff/retailer/garbage/absent) still get 403/401."
+}
