@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 62 backend-only verification of the bills-collection large-field projection fixes. Wrote /app/backend/tests/test_iteration62_bill_projections.py (21 tests, all passing) combining HTTP tests against the public preview URL and in-process handler tests (with a db proxy that records bills.find_one filter+projection args) to structurally prove the projections. Verified: process_bill approve (primary find_one excludes image_url+ocr_raw_data; approve branch re-fetches ONLY image_url via {_id:0,image_url:1}; TagnPay earn_points receives valid decodable base64 of the seeded 500KB image; status=approved, points_issued persisted, user balance incremented, WhatsApp buttons task queued, outbound whatsapp_log written); process_bill reject (no find_one anywhere requests image_url; status=rejected with admin_rejection_reason + system_rejection_reason from bill.rejection_reason; _log_reject_bg, maybe_alert_admin and send_whatsapp_buttons background tasks queued); real HTTP approve on a 500KB-image bill returned 200 in 5.9s (previously 500 @10.8s in prod) and real HTTP reject returned 200; GET /api/bills/{id} returns bill+user with NO image_url, NO ocr_raw_data, no _id and <20KB payload; GET /api/bills/{id}/image serves data:, base64:, objstore: (mocked object-storage) shapes, returns 200-with-fetch_error for unreachable http: and empty image_url, 404 for unknown bill, and source contains max_time_ms=25000; _resolve_bill_image_base64 objstore:<path> branch returns correct base64 and gracefully returns None when object storage yields nothing; iteration-61 maybe_alert_admin projection + per-(bill,status) dedup still intact. Auth guard (401/403 unauthenticated) and 404 paths verified. All TEST_ITER62_ seed data (bills, user, whatsapp logs) cleaned up; backend logs show no 500s/Traceback/MaxTimeMSExpired during the run.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/bills/{id}/process", "issue": "Primary find_one projection is {image_url:0, ocr_raw_data:0} without _id:0, so the returned bill dict carries an ObjectId. Harmless today (bill is never serialized into the response) but one field added to the response body would raise a JSON-encoding 500. Add \"_id\": 0."},
+      {"endpoint": "POST /api/bills/{id}/reprocess", "issue": "Guard fetch at server.py:3482 still pulls the FULL doc ({_id:0}) including multi-MB inline image_url, though it only reads status/reprocessing_started_at/reprocessing_finished_at — same Atlas maxTimeMS exposure the iteration fixed elsewhere."},
+      {"endpoint": "GET /api/admin/bills/{id}/force-credit-preview", "issue": "server.py:4552 fetches the full doc but only uses amount + store_name — should project {_id:0, amount:1, store_name:1}. Endpoint returns 200 locally (verified)."},
+      {"endpoint": "POST /api/admin/bills/{id}/force-credit and /edit-brand", "issue": "server.py:4575, 4662, 4610, 4630, 4701, 4718, 3538, 3561, 3593 all fetch the whole bill doc. The reprocess-pipeline ones legitimately need image_url, but force-credit's initial status check and reprocess-legacy (3593 has no projection at all, so _id leaks) do not."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration62_bill_projections.py",
+    "/app/test_reports/pytest/pytest_iter62.xml"
+  ],
+  "action_items": [
+    "Optional hardening: add \"_id\": 0 to the process_bill primary find_one projection.",
+    "Optional hardening: apply the same targeted projections to reprocess_bill's guard fetch (3482), force-credit-preview (4552) and force-credit's status check (4575); add {_id:0} to reprocess-legacy (3593).",
+    "No functional defects found in the four fixes under test — safe to ship."
+  ],
+  "critical_code_review_comments": [
+    "process_bill reject branch reads bill.get('ocr_raw_data', {}).get('extraction_notes') — ocr_raw_data is now excluded by projection so this silently always resolves to '' (system_rejection_reason now falls back to bill.rejection_reason only). Verified rejection_reason is populated, so behaviour is acceptable, but the dead ocr_raw_data lookup should be removed or the field projected in explicitly if the OCR note is still wanted in system_rejection_reason.",
+    "get_bill_image's finally block references `raw`/`normalized` which are unbound if the try body raises before assignment; the surrounding try/except swallows the NameError so no user impact, but it hides migration scheduling failures — initialise both to None before the try.",
+    "server.py is 9258 lines — well past the 700-line guideline; the bills/admin-bills handlers should be split into routers/modules to make projection regressions like this easier to audit."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration62_bill_projections.py"],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "TEST_ITER62_USER (phone 919876543210 clone) + ~10 TEST_ITER62_* bills with 500KB inline base64 image_url, base64: prefix, objstore: path, empty and unreachable-http image shapes. All deleted in module teardown; verified 0 leftovers.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin / CP67Admin@2025 (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "Reusable helpers in test_iteration62_bill_projections.py: _DbProxy/_FindOneSpy context manager records every bills.find_one (filter, projection) for in-process handler calls — needed because motor's db.bills returns a fresh collection object per access, so mock.patch.object(server.db.bills, 'find_one') silently does nothing (this is why iteration-61-style spies can pass vacuously). Local Mongo does NOT reproduce Atlas MaxTimeMSExpired, so projections are asserted structurally. Remaining full-doc bill fetches are listed in backend_issues.minor if the main agent projects them next.",
+  "rca_of_the_issue": "Confirmed fix: process_bill/get_bill_details previously transferred the whole bill doc (multi-MB legacy inline base64 image_url + ocr_raw_data) over the Atlas wire, tripping MaxTimeMSExpired/Motor read timeouts under load. The exclusion projections now keep those payloads off the primary reads, and approve re-fetches only image_url with {_id:0,image_url:1}; get_bill_image gets 25s maxTimeMS headroom for the legacy inline transfer plus a background objstore migration so the next read is <1KB."
+}

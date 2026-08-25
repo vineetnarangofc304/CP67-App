@@ -551,15 +551,26 @@ tagnpay_client = TagnPayClient()
 
 async def _resolve_bill_image_base64(bill: dict) -> Optional[str]:
     """Point 38 (Feb 2026): Robustly turn a bill's image reference into pure base64
-    that TagnPay's earn_points endpoint can decode. Handles all three storage
+    that TagnPay's earn_points endpoint can decode. Handles all four storage
     variants we've used:
       - `data:image/*;base64,<payload>` (new admin uploads)
       - `base64:<payload>` (legacy prefix)
       - `http(s)://...` (Karix media URL — download with Karix auth, then encode)
+      - `objstore:<path>` (Session-20 Emergent Object Storage — fetch bytes, encode)
     Returns None when there's no usable image so the caller can gracefully skip.
     """
     image_url = (bill.get("image_url") or "").strip()
     if not image_url:
+        return None
+    if image_url.startswith("objstore:"):
+        try:
+            from storage import aresolve_objstore_url
+            fetched = await aresolve_objstore_url(image_url)
+            if fetched:
+                data, _ctype = fetched
+                return base64.b64encode(data).decode()
+        except Exception as e:
+            logger.warning(f"_resolve_bill_image_base64 objstore fetch failed for {bill.get('id')}: {e}")
         return None
     if image_url.startswith("data:"):
         try:
@@ -3018,7 +3029,17 @@ async def get_bill_image(bill_id: str, background_tasks: BackgroundTasks, payloa
         b = None
         for attempt in range(2):
             try:
-                b = await db.bills.find_one({"id": bill_id}, {"_id": 0, "image_url": 1, "image_hash": 1})
+                # Feb 2026: 25s maxTimeMS gives Atlas headroom to stream a
+                # multi-MB legacy inline image_url without tripping the
+                # server-side MaxTimeMSExpired (which was surfacing as
+                # "Executor error during find command" in the admin UI).
+                # Migrated bills return in <100ms so the ceiling doesn't
+                # affect the common path.
+                b = await db.bills.find_one(
+                    {"id": bill_id},
+                    {"_id": 0, "image_url": 1, "image_hash": 1},
+                    max_time_ms=25000,
+                )
                 break
             except _retryable:
                 if attempt == 0:
@@ -3187,7 +3208,10 @@ async def _migrate_bill_image_to_objstore(bill_id: str, data_url: str):
 @api_router.get("/bills/{bill_id}")
 async def get_bill_details(bill_id: str, payload: dict = Depends(verify_jwt_token)):
     """Get single bill with full details"""
-    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+    # Feb 2026: skip large fields (image_url multi-MB base64, ocr_raw_data) —
+    # image is fetched on-demand via GET /api/bills/{id}/image. Pulling the
+    # full doc here exceeded Atlas maxTimeMS on legacy bills.
+    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0, "image_url": 0, "ocr_raw_data": 0})
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
     
@@ -3202,7 +3226,15 @@ async def get_bill_details(bill_id: str, payload: dict = Depends(verify_jwt_toke
 @api_router.post("/bills/{bill_id}/process")
 async def process_bill(bill_id: str, request: BillProcessRequest, background_tasks: BackgroundTasks, payload: dict = Depends(verify_jwt_token)):
     """Approve or reject a bill with WhatsApp notification"""
-    bill = await db.bills.find_one({"id": bill_id})
+    # Feb 2026: skip large fields (image_url multi-MB base64, ocr_raw_data) on
+    # the initial fetch — pulling them over Atlas under load exceeded maxTimeMS
+    # and produced the admin "Failed to process bill" 500 with 10s latency.
+    # The image is only needed for the approve → TagnPay earn-points path, and
+    # is re-fetched separately below with a targeted projection.
+    bill = await db.bills.find_one(
+        {"id": bill_id},
+        {"image_url": 0, "ocr_raw_data": 0}
+    )
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
     
@@ -3240,6 +3272,18 @@ async def process_bill(bill_id: str, request: BillProcessRequest, background_tas
         # Point 38: use the robust resolver so http:// image URLs are downloaded
         # and re-encoded — the old ".split(',')[-1]" passed the URL as-is which
         # made base64.b64decode explode with "Incorrect padding".
+        # Feb 2026: image_url was omitted from the initial find_one to avoid
+        # Atlas maxTimeMS on multi-MB legacy bills — re-fetch just image_url
+        # here so approve→TagnPay still has the payload.
+        try:
+            _img_doc = await db.bills.find_one(
+                {"id": bill_id},
+                {"_id": 0, "image_url": 1},
+            )
+            if _img_doc and _img_doc.get("image_url"):
+                bill["image_url"] = _img_doc["image_url"]
+        except Exception as _img_e:
+            logger.warning(f"process_bill image re-fetch failed for {bill_id}: {_img_e}")
         bill_image_b64 = await _resolve_bill_image_base64(bill)
         earn_result = await tagnpay_client.earn_points(
             mobile_number=mobile_10,

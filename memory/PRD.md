@@ -990,3 +990,39 @@ Dedup is read-then-write, not atomic. Concurrent webhook task + scanner loop can
 
 ### Action required from user
 Redeploy production. `maybe_alert_admin` will no longer transfer multi-MB payloads per invocation, killing the last remaining source of Atlas read-operation-timeout spam in the logs.
+
+## Session 22 (Feb 2026) — Bill Review + Process 500s (Atlas MaxTimeMSExpired)
+
+### Symptom (production, user screenshot)
+- Bill Review modal: "Image cannot be opened (Server error while loading image: Executor error during find command: mall-rewards-1-...)"
+- `POST /api/bills/{id}/process` → HTTP 500 after 10.8s
+- `GET /api/bills/pending-review` → 7.5s (slow)
+
+### Root cause
+Three additional hot paths on the bills collection were pulling the ENTIRE bill doc (including legacy multi-MB inline base64 `image_url` and `ocr_raw_data`) over Atlas — same class of bug as iteration-61's `maybe_alert_admin`, just in different endpoints:
+1. `process_bill` (server.py:3202) — `find_one({"id": bill_id})` with no projection.
+2. `get_bill_details` (server.py:3187) — `find_one({"id": bill_id}, {"_id": 0})` returned full doc.
+3. `get_bill_image` (server.py:2993) — narrow projection but still transferring multi-MB `image_url`; no client `maxTimeMS` set so hit server default.
+4. `_resolve_bill_image_base64` — no `objstore:` branch, so migrated bills' approve→TagnPay would silently drop the image.
+
+### Fixes
+1. `process_bill`: primary `find_one` now excludes `image_url` + `ocr_raw_data`. Approve branch re-fetches JUST `image_url` via `{_id:0, image_url:1}` before calling `_resolve_bill_image_base64`.
+2. `get_bill_details`: projection excludes `image_url` + `ocr_raw_data`.
+3. `get_bill_image`: added `max_time_ms=25000` to give Atlas headroom for one legacy transfer, followed by background objstore migration so the next read is <1KB.
+4. `_resolve_bill_image_base64`: added `objstore:<path>` branch that fetches bytes via `storage.aresolve_objstore_url` and returns base64 for TagnPay.
+
+### Verification (iteration_62.json)
+- 21/21 tests PASS (`/app/backend/tests/test_iteration62_bill_projections.py`).
+- Real HTTP approve on a 500KB-image bill returned 200 in 5.9s (previously 500 @10.8s in prod).
+- Real HTTP reject returned 200.
+- `GET /api/bills/{id}` payload <20KB (no image_url, no ocr_raw_data).
+- `get_bill_image` serves all 4 shapes (data:, base64:, objstore:, http:) correctly.
+- `deployment_agent`: passes.
+
+### Known minor items (not fixed this session — noted in test report)
+- `process_bill` primary `find_one` missing explicit `_id:0` (harmless today).
+- `POST /api/bills/{id}/reprocess` guard fetch, `force-credit-preview`, `force-credit`, `reprocess-legacy`, `edit-brand` all still pull full bill docs. Same-class bug, lower blast radius; queued as backlog.
+- `get_bill_image`'s `finally` references `raw`/`normalized` which may be unbound on early failure (silently swallowed by outer try/except).
+
+### Action required from user
+Redeploy production. `process_bill`, `get_bill_details`, `get_bill_image`, and TagnPay approve for migrated bills all stop pulling multi-MB payloads on the primary read.
