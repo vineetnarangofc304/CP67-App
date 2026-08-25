@@ -2982,61 +2982,98 @@ async def get_bill_image(bill_id: str, payload: dict = Depends(verify_jwt_token)
       • https://... (Karix)  → fetched server-side with Karix Bearer auth and
         returned as data:image/jpeg;base64,... so the admin browser doesn't
         hit 401/403 loading a signed WhatsApp media URL.
+
+    Feb 2026 hardening: wrap the whole handler in try/except so any edge case
+    (bad legacy row shape, mongo hiccup, oversized fetch response) surfaces
+    as a 200-with-fetch_error rather than a blind HTTP 500 that the admin UI
+    then renders as "Image endpoint returned HTTP 500".
     """
-    b = await db.bills.find_one({"id": bill_id}, {"_id": 0, "image_url": 1, "image_hash": 1})
-    if not b:
-        raise HTTPException(status_code=404, detail="Bill not found")
+    try:
+        b = await db.bills.find_one({"id": bill_id}, {"_id": 0, "image_url": 1, "image_hash": 1})
+        if not b:
+            raise HTTPException(status_code=404, detail="Bill not found")
 
-    raw = b.get("image_url") or ""
-    normalized = raw
-    fetch_error: Optional[str] = None
+        raw = b.get("image_url") or ""
+        normalized = raw if isinstance(raw, str) else ""
+        fetch_error: Optional[str] = None
 
-    if isinstance(raw, str) and raw.startswith("base64:"):
-        normalized = f"data:image/jpeg;base64,{raw[7:]}"
-    elif isinstance(raw, str) and raw.startswith("data:"):
-        # Point 39: guard against corrupted / truncated data URLs that were
-        # persisted from a broken save. Anything under 200 bytes is a
-        # placeholder — return None so the UI shows the "unreadable" hint.
-        if len(raw) < 200:
-            normalized = None
-            fetch_error = "Stored image is a placeholder / corrupted (bad save). Ask the customer to resend the bill."
+        if isinstance(raw, str) and raw.startswith("base64:"):
+            payload_b64 = raw[7:]
+            # Apply the same <200-byte corrupted-placeholder guard as the
+            # data: branch so legacy short base64 payloads also surface
+            # the friendly "unreadable" hint.
+            if len(payload_b64) < 200:
+                normalized = None
+                fetch_error = "Stored image is a placeholder / corrupted (bad save). Ask the customer to resend the bill."
+            else:
+                normalized = f"data:image/jpeg;base64,{payload_b64}"
+        elif isinstance(raw, str) and raw.startswith("data:"):
+            # Point 39: guard against corrupted / truncated data URLs that were
+            # persisted from a broken save. Anything under 200 bytes is a
+            # placeholder — return None so the UI shows the "unreadable" hint.
+            if len(raw) < 200:
+                normalized = None
+                fetch_error = "Stored image is a placeholder / corrupted (bad save). Ask the customer to resend the bill."
+            else:
+                normalized = raw
+        elif isinstance(raw, str) and raw.startswith("http"):
+            try:
+                async with httpx.AsyncClient(timeout=20.0) as cx:
+                    headers = {}
+                    if KARIX_API_KEY:
+                        headers = {
+                            "Authentication": f"Bearer {KARIX_API_KEY}",
+                            "Authorization": f"Bearer {KARIX_API_KEY}",
+                        }
+                    r = await cx.get(raw, headers=headers)
+                    if r.status_code != 200 and headers:
+                        # Fallback without auth (some CDN URLs work anonymously)
+                        r = await cx.get(raw)
+                    if r.status_code == 200 and r.content:
+                        ctype = r.headers.get("content-type", "image/jpeg").split(";")[0].strip() or "image/jpeg"
+                        b64 = base64.b64encode(r.content).decode()
+                        normalized = f"data:{ctype};base64,{b64}"
+                        # Persist so the admin doesn't wait on Karix again next time
+                        # and the image survives even if the signed URL expires.
+                        # Skip the write when the encoded payload would exceed
+                        # Mongo's 16MB doc cap — the download still serves.
+                        try:
+                            if len(normalized) < 15 * 1024 * 1024:
+                                await db.bills.update_one({"id": bill_id}, {"$set": {"image_url": normalized}})
+                        except Exception:
+                            pass
+                    else:
+                        fetch_error = f"HTTP {r.status_code}"
+                        normalized = None
+            except Exception as e:
+                fetch_error = str(e)[:120]
+                normalized = None
         else:
-            normalized = raw
-    elif isinstance(raw, str) and raw.startswith("http"):
-        try:
-            async with httpx.AsyncClient(timeout=20.0) as cx:
-                headers = {}
-                if KARIX_API_KEY:
-                    headers = {
-                        "Authentication": f"Bearer {KARIX_API_KEY}",
-                        "Authorization": f"Bearer {KARIX_API_KEY}",
-                    }
-                r = await cx.get(raw, headers=headers)
-                if r.status_code != 200 and headers:
-                    # Fallback without auth (some CDN URLs work anonymously)
-                    r = await cx.get(raw)
-                if r.status_code == 200 and r.content:
-                    ctype = r.headers.get("content-type", "image/jpeg").split(";")[0].strip() or "image/jpeg"
-                    b64 = base64.b64encode(r.content).decode()
-                    normalized = f"data:{ctype};base64,{b64}"
-                    # Persist so the admin doesn't wait on Karix again next time
-                    # and the image survives even if the signed URL expires.
-                    try:
-                        await db.bills.update_one({"id": bill_id}, {"$set": {"image_url": normalized}})
-                    except Exception:
-                        pass
-                else:
-                    fetch_error = f"HTTP {r.status_code}"
-                    normalized = None
-        except Exception as e:
-            fetch_error = str(e)[:120]
-            normalized = None
+            # Unknown / missing shape — return None with a diagnostic message
+            # so the UI can show the "unreadable" state.
+            if not raw:
+                normalized = None
+                fetch_error = "No image on record for this bill."
+            else:
+                normalized = None
+                fetch_error = "Unrecognised image format on record."
 
-    return {
-        "image_url": normalized,
-        "image_hash": b.get("image_hash"),
-        "fetch_error": fetch_error,
-    }
+        return {
+            "image_url": normalized,
+            "image_hash": b.get("image_hash"),
+            "fetch_error": fetch_error,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"get_bill_image failed for bill_id={bill_id}: {e}")
+        # Return 200-with-error so the admin UI shows the friendly hint
+        # instead of an opaque HTTP 500.
+        return {
+            "image_url": None,
+            "image_hash": None,
+            "fetch_error": f"Server error while loading image: {str(e)[:120]}",
+        }
 
 @api_router.get("/bills/{bill_id}")
 async def get_bill_details(bill_id: str, payload: dict = Depends(verify_jwt_token)):
@@ -4373,92 +4410,106 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
 
     Returns immediately in the default (background) mode — poll the bill row
     for updated status via GET /api/bills.
+
+    Feb 2026 hardening: wrap the whole handler so any unexpected exception
+    (mongo hiccup, background task registration error) becomes a 500 with
+    a JSON body — the admin UI then shows a readable toast instead of the
+    empty "Brand edit failed (HTTP 500)".
     """
-    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
-    if not bill:
-        raise HTTPException(status_code=404, detail="Bill not found")
-    new_name = (payload_body.new_store_name or "").strip()
-    if not new_name:
-        raise HTTPException(status_code=400, detail="new_store_name is required")
+    try:
+        bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+        if not bill:
+            raise HTTPException(status_code=404, detail="Bill not found")
+        new_name = (payload_body.new_store_name or "").strip()
+        if not new_name:
+            raise HTTPException(status_code=400, detail="new_store_name is required")
 
-    old_name = bill.get("store_name")
-    audit_note = f"Brand name updated: '{old_name}' → '{new_name}' by admin"
+        old_name = bill.get("store_name")
+        audit_note = f"Brand name updated: '{old_name}' → '{new_name}' by admin"
 
-    await db.bills.update_one(
-        {"id": bill_id},
-        {"$set": {
-            "store_name": new_name,
-            "brand_edited_at": datetime.now(timezone.utc).isoformat(),
-            "brand_edited_by": payload.get("username") or "admin",
-            "admin_notes": audit_note,
-            # Mark as reprocessing so admin UI can show a spinner
-            "reprocessing_started_at": datetime.now(timezone.utc).isoformat() if payload_body.reprocess else None,
-        }}
-    )
-
-    if not payload_body.reprocess:
-        return {"success": True, "reprocessed": False, "store_name": new_name}
-
-    # Default: queue background reprocess and return immediately
-    if not payload_body.wait_for_result:
-        background_tasks.add_task(
-            _reprocess_after_brand_edit,
-            bill_id, new_name, payload_body.auto_force_credit_on_fundle_reject
+        await db.bills.update_one(
+            {"id": bill_id},
+            {"$set": {
+                "store_name": new_name,
+                "brand_edited_at": datetime.now(timezone.utc).isoformat(),
+                "brand_edited_by": payload.get("username") or "admin",
+                "admin_notes": audit_note,
+                # Mark as reprocessing so admin UI can show a spinner
+                "reprocessing_started_at": datetime.now(timezone.utc).isoformat() if payload_body.reprocess else None,
+            }}
         )
+
+        if not payload_body.reprocess:
+            return {"success": True, "reprocessed": False, "store_name": new_name}
+
+        # Default: queue background reprocess and return immediately
+        if not payload_body.wait_for_result:
+            background_tasks.add_task(
+                _reprocess_after_brand_edit,
+                bill_id, new_name, payload_body.auto_force_credit_on_fundle_reject
+            )
+            return {
+                "success": True,
+                "reprocessed": "queued",
+                "store_name": new_name,
+                "message": "Brand updated. Reprocessing in background — refresh the list in ~10 seconds to see the result."
+            }
+
+        # Sync path (legacy) — waits for Fundle. Kept for admins who need immediate result.
+        updated_bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+        res = await _reprocess_single_bill(
+            updated_bill, re_ocr=False, send_whatsapp_flag=True,
+            background_tasks=background_tasks
+        )
+
+        # ---- Auto-fallback: if Fundle still rejects, force-credit locally ----
+        fundle_rejected_brand = (
+            res.get("action") != "approved"
+            and payload_body.auto_force_credit_on_fundle_reject
+        )
+        if fundle_rejected_brand:
+            err_txt = str(res.get("error") or "").lower()
+            # Only fallback on brand-mismatch errors; leave other errors as-is
+            if ("brand" in err_txt) or ("match" in err_txt) or ("0 points" in err_txt) or ("not found" in err_txt):
+                logger.info(f"edit-brand: Fundle rejected '{new_name}'. Auto-force-credit fallback for bill {bill_id}")
+                # Reload bill (status may have been updated by the reprocess)
+                updated_bill2 = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+                # Only force-credit if the bill is still in a pending-ish state
+                if updated_bill2 and updated_bill2.get("status") in ("manual_review", "pending_review", "rejected"):
+                    fc = await _reprocess_single_bill(
+                        updated_bill2, re_ocr=False, send_whatsapp_flag=True,
+                        background_tasks=background_tasks,
+                        force_credit=True, force_credit_percent=0.0
+                    )
+                    return {
+                        "success": fc.get("action") == "approved",
+                        "reprocessed": True,
+                        "store_name": new_name,
+                        "action": fc.get("action"),
+                        "status": fc.get("status"),
+                        "points": fc.get("points", 0),
+                        "fallback": "force_credit",
+                        "fundle_error": res.get("error"),
+                        "error": fc.get("error"),
+                    }
+
         return {
-            "success": True,
-            "reprocessed": "queued",
+            "success": res.get("action") == "approved",
+            "reprocessed": True,
             "store_name": new_name,
-            "message": "Brand updated. Reprocessing in background — refresh the list in ~10 seconds to see the result."
+            "action": res.get("action"),
+            "status": res.get("status"),
+            "points": res.get("points", 0),
+            "error": res.get("error"),
         }
-
-    # Sync path (legacy) — waits for Fundle. Kept for admins who need immediate result.
-    updated_bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
-    res = await _reprocess_single_bill(
-        updated_bill, re_ocr=False, send_whatsapp_flag=True,
-        background_tasks=background_tasks
-    )
-
-    # ---- Auto-fallback: if Fundle still rejects, force-credit locally ----
-    fundle_rejected_brand = (
-        res.get("action") != "approved"
-        and payload_body.auto_force_credit_on_fundle_reject
-    )
-    if fundle_rejected_brand:
-        err_txt = str(res.get("error") or "").lower()
-        # Only fallback on brand-mismatch errors; leave other errors as-is
-        if ("brand" in err_txt) or ("match" in err_txt) or ("0 points" in err_txt) or ("not found" in err_txt):
-            logger.info(f"edit-brand: Fundle rejected '{new_name}'. Auto-force-credit fallback for bill {bill_id}")
-            # Reload bill (status may have been updated by the reprocess)
-            updated_bill2 = await db.bills.find_one({"id": bill_id}, {"_id": 0})
-            # Only force-credit if the bill is still in a pending-ish state
-            if updated_bill2 and updated_bill2.get("status") in ("manual_review", "pending_review", "rejected"):
-                fc = await _reprocess_single_bill(
-                    updated_bill2, re_ocr=False, send_whatsapp_flag=True,
-                    background_tasks=background_tasks,
-                    force_credit=True, force_credit_percent=0.0
-                )
-                return {
-                    "success": fc.get("action") == "approved",
-                    "reprocessed": True,
-                    "store_name": new_name,
-                    "action": fc.get("action"),
-                    "status": fc.get("status"),
-                    "points": fc.get("points", 0),
-                    "fallback": "force_credit",
-                    "fundle_error": res.get("error"),
-                    "error": fc.get("error"),
-                }
-
-    return {
-        "success": res.get("action") == "approved",
-        "reprocessed": True,
-        "store_name": new_name,
-        "action": res.get("action"),
-        "status": res.get("status"),
-        "points": res.get("points", 0),
-        "error": res.get("error"),
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"edit_bill_brand failed for bill_id={bill_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Brand edit server error: {str(e)[:200]}"
+        )
 
 
 # Karix API Key

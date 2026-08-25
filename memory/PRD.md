@@ -837,3 +837,25 @@ Verified end-to-end by testing_agent iteration 53 (**26/26 backend pytest PASS +
 - Design polish: replace native `<select>` and `<input type=date>` in Reports filter row with shadcn Select + Calendar for visual consistency.
 - Optional: expose the backend-supported `staff_id` filter as a staff dropdown in the Reports tab.
 - OPTIONAL (Point 13 nuance): registration incentive still auto-activates on ANY approved bill — client may want to require same-brand bill for reg activation too. Not addressed pending client confirmation.
+
+---
+
+## Session 15 (Feb 2026) — Prod HTTP 500 hardening (Admin Bills)
+
+### Bug reports (production only — https://mall-rewards-1.emergent.host)
+1. "Brand edit failed (HTTP 500)" when correcting a bill's brand via `POST /api/admin/bills/{bill_id}/edit-brand`.
+2. "Image cannot be opened (Image endpoint returned HTTP 500). The WhatsApp media link may have expired." when opening a bill in the review dialog via `GET /api/bills/{bill_id}/image`.
+
+### RCA (from iteration_54 testing report)
+Production is running pre-hardening code. Direct probing showed prod returns raw text/plain `Internal Server Error` even for a **non-existent** bill id, whereas current preview code returns clean JSON 404. Definitive proof that production ≠ preview build.
+
+### Fix applied (preview code, needs redeploy)
+- `get_bill_image` (server.py ~2974) wrapped in top-level try/except → returns `200 {image_url, image_hash, fetch_error}` for every input shape, including unknown/legacy schemes. Also applies the <200-byte corrupted-placeholder guard consistently to the `base64:` branch (was previously only on `data:` branch). Persist-back-to-Mongo skipped when encoded payload >15MB to avoid BSON 16MB doc limit.
+- `edit_bill_brand` (server.py ~4362) wrapped in top-level try/except → still raises `404`/`400`/`422` for validation, but any unexpected exception now returns `500` with a JSON `detail` body instead of an unhandled crash.
+
+### Verification
+- `iteration_54.json`: 15/15 pytests pass on preview. No endpoint ever returns raw 500. Also proved production returns raw 500 for the identical calls → user must redeploy.
+- Reusable regression suite: `/app/backend/tests/test_iteration54_bill_image_editbrand.py` (seeds its own bill shapes via pymongo).
+
+### Action required from user
+**Redeploy production** — preview code is verified correct. Once prod is on the new build, both errors will surface as friendly JSON responses (or 200-with-hint for the image endpoint).

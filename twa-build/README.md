@@ -70,7 +70,7 @@ $ANDROID_HOME/build-tools/<version>/apksigner sign \
 ## Digital Asset Links
 
 `assetlinks.json` is auto-deployed at:
-`https://staff-incentive-lab.preview.emergentagent.com/.well-known/assetlinks.json`
+`https://staff-points-engine.preview.emergentagent.com/.well-known/assetlinks.json`
 
 It is required so the TWA opens without the Chrome address bar.
 

@@ -1,0 +1,34 @@
+{
+  "summary": "Backend-only verification of the two hardened endpoints (GET /api/bills/{bill_id}/image and POST /api/admin/bills/{bill_id}/edit-brand) on the PREVIEW deployment. Created /app/backend/tests/test_iteration54_bill_image_editbrand.py with 15 pytest cases covering admin JWT login, all image_url shapes (valid data:image, <200-byte corrupted placeholder, empty string, missing field, unrecognised scheme, unknown bill 404, real seeded sample bill), and edit-brand (reprocess=false persistence, reprocess=true queued/non-blocking, 404 unknown bill, 400 empty name, 422 missing field, 422 wrong types, 403 unauthenticated). ALL 15 PASSED on preview - no endpoint returned a raw/empty HTTP 500; every response carried a JSON body. Additionally probed PRODUCTION (https://mall-rewards-1.emergent.host) read-only: admin login works (200), /api/admin/me and /api/users work (200), but /api/bills (unfiltered), /api/bills/{id}/image (real bill AND non-existent id) all return raw text/plain 'Internal Server Error' (HTTP 500) and /api/admin/bills/{unknown}/edit-brand returns raw 500 instead of 404 - proving PROD is running stale pre-hardening code. Preview returns 200/404 with JSON for the identical calls. Conclusion: preview is correct; production must be redeployed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/bills/{bill_id}/image", "issue": "The <200-byte placeholder guard only applies to image_url values starting with 'data:'. Legacy rows stored as 'base64:<short payload>' (e.g. bill TEST-9a76ed183e, 99 chars total) are wrapped into a data URL and returned with fetch_error=null, so the admin UI renders a 1x1/corrupt image instead of the friendly 'placeholder / corrupted' hint. Suggest applying the same length check after the base64: unwrap."},
+      {"endpoint": "GET /api/bills (PRODUCTION only)", "issue": "On prod, the unfiltered bills list 500s while ?status=manual_review returns 200 - some prod bill document breaks the list serializer. Not reproducible on preview (all shapes 200). Re-verify after redeploy; if it persists, the list endpoint needs the same defensive wrapper."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration54_bill_image_editbrand.py",
+    "/app/test_reports/pytest/i54_results.xml"
+  ],
+  "action_items": [
+    "REDEPLOY production (https://mall-rewards-1.emergent.host) - it is serving pre-hardening code; every /api/bills/{id}/image call there returns raw text/plain 500 (even for a non-existent bill id, which preview correctly answers 404 JSON).",
+    "Optional hardening: apply the <200-byte corrupted-placeholder check to the 'base64:' branch of get_bill_image so short legacy payloads also surface fetch_error.",
+    "After redeploy, re-run GET /api/bills (unfiltered) on prod - it currently 500s while status-filtered queries succeed."
+  ],
+  "critical_code_review_comments": [
+    "get_bill_image: the base64: branch skips the length/corruption guard used by the data: branch - inconsistent handling of the same defect class.",
+    "KARIX_API_KEY is defined at line ~4508, well below its use at line ~3015; it works only because both are module-level, but it is fragile - move the constant to the config block near the top.",
+    "server.py is 8961 lines - well past the 700-line guideline; bills/admin/whatsapp routers should be split into modules.",
+    "backend.err.log shows a transient 'SyntaxError: expected except or finally block' at server.py:4500 during this session's edit; the current file compiles and the service is healthy, but it confirms the edit-brand try/except was momentarily unbalanced - worth a syntax check in CI before deploy."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration54_bill_image_editbrand.py", "/app/test_reports/iteration_54.json"],
+  "success_rate": {"backend": "100% (15/15 preview)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Inserted 7 temporary bills TEST-I54-* (valid data:image, <200B corrupted data:image, empty image_url, missing image_url field, ftp:// unrecognised scheme, 2 edit-brand targets) directly into db.bills; all deleted in the session-scoped fixture teardown.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin: admin / CP67Admin@2025 via POST /api/admin/login (works on both preview and prod)",
+  "context_for_next_testing_agent": "Reusable regression suite at /app/backend/tests/test_iteration54_bill_image_editbrand.py seeds its own bill shapes via pymongo, so it does not depend on pre-existing rows. Preview endpoints for bills image + edit-brand are fully hardened (no raw 500s). Production is stale and needs a redeploy; the only remaining preview gap is the base64: short-payload guard.",
+  "rca_of_the_issue": "The user's HTTP 500s are reproducible ONLY on production, not preview. Prod admin auth and other authenticated routes (/api/users, /api/admin/me) work, so the failure is bills-route specific and pre-dates the Feb-2026 top-level try/except wrappers: prod's /api/bills/{id}/image returns raw 500 even for a non-existent bill id, whereas the current code returns a JSON 404 - definitive evidence prod is running an older build. Preview, running the hardened code, returns 200-with-fetch_error for every degenerate image shape and JSON 4xx for validation errors, and edit-brand with reprocess=true returns in <1s with reprocessed='queued' (background worker confirmed running in backend logs). Mitigation: redeploy production."
+}

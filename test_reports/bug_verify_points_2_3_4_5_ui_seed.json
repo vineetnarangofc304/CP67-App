@@ -1,6 +1,6 @@
 {
-  "base": "https://staff-incentive-lab.preview.emergentagent.com",
-  "api": "https://staff-incentive-lab.preview.emergentagent.com/api",
+  "base": "https://staff-points-engine.preview.emergentagent.com",
+  "api": "https://staff-points-engine.preview.emergentagent.com/api",
   "brand": "QA-UI-Retailer-432505",
   "category": "QA-UI-Category-432505",
   "staff_name": "QA UI Staff 432505",

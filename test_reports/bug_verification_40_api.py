@@ -19,7 +19,7 @@ from pymongo import MongoClient
 ROOT = Path('/app')
 FRONT_ENV = dotenv_values(ROOT / 'frontend' / '.env')
 BACK_ENV = dotenv_values(ROOT / 'backend' / '.env')
-BASE = (FRONT_ENV.get('REACT_APP_BACKEND_URL') or 'https://staff-incentive-lab.preview.emergentagent.com').rstrip('/') + '/api'
+BASE = (FRONT_ENV.get('REACT_APP_BACKEND_URL') or 'https://staff-points-engine.preview.emergentagent.com').rstrip('/') + '/api'
 ADMIN_USER = 'admin'
 ADMIN_PASS = 'CP67Admin@2025'
 TEST_PHONE = '9100011122'

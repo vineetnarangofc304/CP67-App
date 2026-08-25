@@ -6,7 +6,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://staff-incentive-lab.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://staff-points-engine.preview.emergentagent.com').rstrip('/')
 
 # Expected floor distribution based on fix
 EXPECTED_FLOOR_COUNTS = {

@@ -64,7 +64,7 @@
     "consumer_otp": "1234 (dev mode)",
     "admin_username": "admin",
     "admin_password": "CP67Admin@2025",
-    "api_base_url": "https://staff-incentive-lab.preview.emergentagent.com"
+    "api_base_url": "https://staff-points-engine.preview.emergentagent.com"
   },
   "seed_data_creation": "Footfall entry created for 2026-01-15 with count 5500",
   "retest_needed": false,

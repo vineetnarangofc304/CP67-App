@@ -16,7 +16,7 @@
     ],
     "integration_issues": [
       {"flow": "Home hero -> Tier T&C", "issue": "Broken navigation: click on T&C leaves user on /app/home (route mismatch). Feature 41b is functionally incomplete.", "affected_selectors": ["[data-testid=\"tier-tnc-link\"]"]},
-      {"flow": "Home banners / brand images", "issue": "Pre-existing (not from this batch): several image requests fail - https://brand-sync-staging.preview.emergentagent.com/banner-vipul-goyal.jpeg, banner-vivek-samtani.jpg and https://fundle-loyalty-cp67.preview.emergentagent.com/api/uploads/brands/...cover.png (cross-preview hardcoded hosts, 404/failed). Also React console error: 'An empty string was passed to the src attribute' on /app/home.", "affected_selectors": ["[data-testid=\"home-banners\"]", "[data-testid=\"featured-stores\"]"]}
+      {"flow": "Home banners / brand images", "issue": "Pre-existing (not from this batch): several image requests fail - https://staff-points-engine.preview.emergentagent.com/banner-vipul-goyal.jpeg, banner-vivek-samtani.jpg and https://staff-points-engine.preview.emergentagent.com/api/uploads/brands/...cover.png (cross-preview hardcoded hosts, 404/failed). Also React console error: 'An empty string was passed to the src attribute' on /app/home.", "affected_selectors": ["[data-testid=\"home-banners\"]", "[data-testid=\"featured-stores\"]"]}
     ],
     "design_issues": [
       {"screen": "Tier Journey T&C block", "issues": ["dark-on-dark bullet text, unreadable"]},

@@ -14,5 +14,5 @@
     "retailer_managers_deleted": 1,
     "brands_deleted": 0
   },
-  "base": "https://staff-incentive-lab.preview.emergentagent.com/api"
+  "base": "https://staff-points-engine.preview.emergentagent.com/api"
 }
