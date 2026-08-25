@@ -8864,6 +8864,28 @@ async def ensure_db_indexes():
         ("users", "customer_type", {}),
         ("users", "first_touch_source", {}),
         ("users", "kyc_status", {}),
+        # Feb 2026: `id` is the primary lookup key on every doc in the app
+        # (bills.id, users.id, brands.id, etc.) — without these indexes
+        # find_one({"id": ...}) forces a full collection scan and on Atlas
+        # with growing collections triggers "read operation timed out"
+        # (the user's production HTTP 500 root cause on Admin Bills).
+        ("users", "id", {}),
+        ("bills", "id", {}),
+        ("brands", "id", {}),
+        ("stores", "id", {}),
+        ("campaigns", "id", {}),
+        ("coupons", "id", {}),
+        ("staff", "id", {}),
+        ("staff_incentives", "id", {}),
+        # Also index `id` on the remaining collections that are looked up
+        # by application id — pre-empting the same COLLSCAN timeout pattern
+        # as bills/users hit on production Atlas.
+        ("parking_sessions", "id", {}),
+        ("parking_coupons", "id", {}),
+        ("sync_jobs", "id", {}),
+        ("bulk_reprocess_jobs", "id", {}),
+        ("app_settings", "id", {}),
+        ("staff_attributions", "id", {}),
         ("bills", "created_at", {}),
         ("bills", "status", {}),
         ("bills", "user_id", {}),

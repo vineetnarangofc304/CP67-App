@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 55 backend-only verification of the `id`-index fix. Confirmed id_1 indexes exist on bills, users, brands, stores, campaigns, coupons, staff, staff_incentives; verified bills.id lookups now use IXSCAN (no COLLSCAN) via explain; verified GET /api/bills/{id}/image (valid=200, unknown=404), repeated image calls, and POST /api/admin/bills/{id}/edit-brand?reprocess=false all complete well under the 500ms budget; confirmed ensure_db_indexes() is idempotent both in-process and across a real supervisor backend restart. Re-ran the full iteration_54 regression suite: no regressions. Total 29/29 backend tests passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "startup ensure_db_indexes()", "issue": "Benign pre-existing WARNING on every boot: 'Index otp_codes.phone skip / blocked_phones.phone skip — IndexKeySpecsConflict' because those collections already have a UNIQUE phone_1 index while the spec requests a non-unique one. Harmless but noisy; consider naming or marking those specs unique."},
+      {"endpoint": "N/A (code review)", "issue": "Collections still queried by find_one({'id': ...}) without an id index: parking_sessions (growing), sync_jobs, bulk_reprocess_jobs, app_settings. parking_sessions in particular can grow large on production and will hit the same COLLSCAN timeout pattern."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration55_id_indexes_perf.py",
+    "/app/backend/tests/test_iteration54_bill_image_editbrand.py",
+    "/app/test_reports/pytest/iteration55_results.xml"
+  ],
+  "action_items": [
+    "Optional hardening before prod redeploy: add ('parking_sessions','id'), ('sync_jobs','id'), ('bulk_reprocess_jobs','id') to ensure_db_indexes() to prevent the same COLLSCAN timeout on those paths.",
+    "Optional: silence the otp_codes.phone / blocked_phones.phone IndexKeySpecsConflict boot warnings by declaring them unique in index_specs.",
+    "Production: redeploy is required — the index creation runs at backend startup, so Atlas will only get id_1 after deploy. Verify post-deploy with db.bills.getIndexes() on Atlas."
+  ],
+  "critical_code_review_comments": [
+    "ensure_db_indexes() correctly creates each index independently inside try/except so one conflict cannot block the rest — good. Verified via boot logs that failures are warnings only and 'DB indexes ensured' still logs.",
+    "Index creation at startup is fine for small/medium collections, but on a large production bills collection createIndex is foreground-blocking on the collection; if bills grows very large consider creating the index out-of-band on Atlas first."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration55_id_indexes_perf.py"],
+  "success_rate": {"backend": "100% (29/29)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "One temporary bill doc id prefix TEST-I55-* with an inline base64 image; deleted in fixture teardown (verified 0 leftovers). Iteration_54 suite seeds/cleans its own TEST-I54-* docs (verified 0 leftovers).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin: admin / CP67Admin@2025 (from /app/memory/test_credentials.md) — login works, returns token.",
+  "context_for_next_testing_agent": "Perf/index suite lives at /app/backend/tests/test_iteration55_id_indexes_perf.py (index existence per collection, explain-plan IXSCAN check, <500ms latency budget on image + edit-brand, ensure_db_indexes idempotency). Note edit-brand payload field is `new_store_name`, not `brand_name`. Preview bills collection is tiny (18 docs) so latency numbers here are not a proxy for production Atlas volume — the explain-plan IXSCAN assertion is the meaningful signal.",
+  "rca_of_the_issue": "bills had no index on the application-level `id` field, so every find_one({'id': bill_id}) was a COLLSCAN; on production Atlas with growing volume this exceeded the pymongo socket read timeout and surfaced as fetch_error 'read operation timed out' in /api/bills/{id}/image. Fix (id_1 indexes added in ensure_db_indexes) is verified in preview: explain now shows IXSCAN for bills.id and all 8 target collections have id_1."
+}

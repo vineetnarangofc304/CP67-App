@@ -859,3 +859,22 @@ Production is running pre-hardening code. Direct probing showed prod returns raw
 
 ### Action required from user
 **Redeploy production** — preview code is verified correct. Once prod is on the new build, both errors will surface as friendly JSON responses (or 200-with-hint for the image endpoint).
+
+## Session 15 addendum (Feb 2026) — Root cause of Admin Bills HTTP 500 in production
+
+### RCA
+After the user redeployed iteration_54, the top-level try/except surfaced the actual error: `Server error while loading image: customer-apps-shard-00-01.jxp3ul.mongodb.net:27017: The read operation timed out.` — i.e. Mongo find_one timed out.
+
+Cause: `bills` collection had **no index on the `id` field** (only on `_id`, `created_at`, `status`, `user_id`, `user_phone`, `bill_no_normalized`, `image_hash`). Every `find_one({'id': bill_id})` was a full collection scan; on production Atlas with growing volume this exceeded pymongo's socket read timeout. Same latent bug on `users`, `brands`, `stores`, `campaigns`, `coupons`, `staff`, `staff_incentives`, `parking_sessions`, `parking_coupons`, `sync_jobs`, `bulk_reprocess_jobs`, `app_settings`, `staff_attributions`.
+
+### Fix
+Added `id_1` index specs to `ensure_db_indexes()` in `server.py` for all 14 affected collections. Indexes create idempotently on every boot.
+
+### Verification (iteration_55.json)
+- 29/29 backend tests PASS
+- `db.bills.explain()` for `find({'id': …})` now shows `IXSCAN` (was `COLLSCAN`)
+- `/api/bills/{id}/image` (valid + unknown), `/api/admin/bills/{id}/edit-brand` all under 500ms latency budget
+- ensure_db_indexes() confirmed idempotent across supervisor restarts
+
+### Action required
+Redeploy production. Index creation runs at backend startup, so Atlas will only get `id_1` after the new build lands.
