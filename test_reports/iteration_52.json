@@ -1,0 +1,47 @@
+{
+  "summary": "Frontend-only verification of Point 41 (a,b,c,g,h,i,j) consumer PWA overhaul + static verification of Point 40 iOS iPad picker fix + backend regression for Points 38/39. Logged in on preview with reviewer phone 9999999999 / OTP 123456 (new user -> completed onboarding). 41a tagline, 41b tier badge gradient, 41c points-to-next-tier text, 41g complete-profile CTA (Interests removed), 41h Brands Directory + 4th Floor, 41i T&C chip + smooth scroll block, 41j referral section all render/work. TWO real defects found: (1) CRITICAL - the hero 'T&C' link navigates to /app/tier which is NOT a registered route (real route is /app/tier-journey), so the catch-all redirects the user back to /app/home; (2) the new Tier T&C block text is unreadable (dark text #2E2219 on dark #12141A card, contrast ~1.1:1). Also found a tier-threshold data inconsistency: Home hardcodes Silver at 500 pts ('You are 500 points away from Silver') while backend /api/consumer/tier-info returns next_at=2500 and the tier table on the Tier Journey page shows Silver from 2500.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/consumer/tier-info", "issue": "Returns next_at=2500 for Silver while Home.jsx TIER_META hardcodes 500 - front/back thresholds disagree (informational, backend value looks correct)"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Home.jsx hero tier T&C link", "issue": "navigate('/app/tier') is not a defined route (ConsumerApp.jsx line 234 registers 'tier-journey'); the catch-all Route path='*' redirects back to /app/home. Verified twice: clicking the chip and direct goto /app/tier both stay/return on /app/home. Fix to '/app/tier-journey'.", "selector": "[data-testid=\"tier-tnc-link\"]", "priority": "CRITICAL"},
+      {"component": "TierJourney.jsx T&C block", "issue": "Bullet text colour rgb(46,34,25) on card background rgb(18,20,26) => contrast ~1.1:1, text is effectively invisible (see screenshot). Heading 'TIER TERMS & CONDITIONS' is gold and readable, the 5 bullets are not.", "selector": "[data-testid=\"tier-tnc-block\"]", "priority": "HIGH"},
+      {"component": "Home.jsx tier progress text", "issue": "Hardcoded thresholds (Bronze<500) contradict live tier config; user sees 'You are 500 points away from Silver' on /app/home but the Tier Journey table + API say Silver starts at 2500. Should read thresholds from /api/consumer/tier-info.", "selector": "[data-testid=\"tier-progress-text\"]", "priority": "HIGH"},
+      {"component": "Profile.jsx complete-profile CTA", "issue": "Sub-line 'Add Date of Birth, Email, Address and earn +500 pts' renders in pale gold on the gold-tinted (rgba(212,175,55,0.18)) banner - very low contrast, barely legible on mobile. Title is fine.", "selector": "[data-testid=\"complete-profile-cta\"]", "priority": "MEDIUM"},
+      {"component": "Profile.jsx referral copy button", "issue": "Clicking Copy gives no visual confirmation (button text stays 'Copy', no toast). Cannot tell if clipboard write succeeded.", "selector": "[data-testid=\"referral-copy-btn\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Home hero -> Tier T&C", "issue": "Broken navigation: click on T&C leaves user on /app/home (route mismatch). Feature 41b is functionally incomplete.", "affected_selectors": ["[data-testid=\"tier-tnc-link\"]"]},
+      {"flow": "Home banners / brand images", "issue": "Pre-existing (not from this batch): several image requests fail - https://brand-sync-staging.preview.emergentagent.com/banner-vipul-goyal.jpeg, banner-vivek-samtani.jpg and https://fundle-loyalty-cp67.preview.emergentagent.com/api/uploads/brands/...cover.png (cross-preview hardcoded hosts, 404/failed). Also React console error: 'An empty string was passed to the src attribute' on /app/home.", "affected_selectors": ["[data-testid=\"home-banners\"]", "[data-testid=\"featured-stores\"]"]}
+    ],
+    "design_issues": [
+      {"screen": "Tier Journey T&C block", "issues": ["dark-on-dark bullet text, unreadable"]},
+      {"screen": "Profile", "issues": ["CTA sub-text low contrast", "Phone shown unformatted as 919999999999"]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/pytest/pytest_iter51.xml", "/app/test_reports/ui_52b", "/app/test_reports/ui_52d", "/app/test_reports/ui_52e"],
+  "action_items": [
+    "Home.jsx line 156: change navigate('/app/tier') to navigate('/app/tier-journey') (or add a /app/tier route alias)",
+    "TierJourney.jsx tier-tnc-block: fix bullet text colour for the dark card (use rgba(255,255,255,0.8) or light gold)",
+    "Home.jsx: derive next-tier threshold from /api/consumer/tier-info instead of hardcoded 500/2000/5000 - currently shows a wrong number to users",
+    "Profile.jsx complete-profile CTA: darken the sub-line text for contrast on the gold banner",
+    "Optional: add copied-state feedback on referral-copy-btn"
+  ],
+  "critical_code_review_comments": [
+    "Route strings duplicated as literals across pages (Wallet uses /app/tier-journey, Home uses /app/tier) - centralise consumer route paths in one constants module to prevent this class of bug",
+    "Tier thresholds duplicated in Home.jsx TIER_META and backend tier config - single source of truth needed",
+    "Banner/brand image URLs point at other preview hosts (brand-sync-staging, fundle-loyalty-cp67) - should be relative/API-served URLs"
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (15/15 regression tests in tests/test_points_38_39.py + tests/test_iteration51_points_38_39.py)", "frontend": "86% (6/7 Point 41 items pass; 41b T&C navigation fails)"},
+  "seed_data_creation": "Consumer account 9999999999 created via dev OTP bypass and onboarded with name 'QA Reviewer', gender Male (no other data changed)",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "Consumer 9999999999 / OTP 123456 (works; user now onboarded so login lands directly on /app/home)",
+  "context_for_next_testing_agent": "Point 40 static verification PASSED all four assertions: WebViewContainer.swift launchCamera (lines 157-170) sets modalPresentationStyle=.fullScreen and popoverPresentationController.sourceView/sourceRect; launchGallery sets both for PHPickerViewController (187-198) and the iOS<14 UIImagePickerController fallback (205-216); Info.plist has CFBundleShortVersionString=1.0.1 and CFBundleVersion=2. Verified UI values: 41a tagline gold rgb(212,175,55) with 'CP67's Loyalty Programme' + 'Shop. Scan. Earn.'; 41b badge data-testid=tier-badge-bronze with linear-gradient(135deg,#B87333,#E0A570); 41c 'You are 500 points away from Silver' (value wrong vs backend); 41h title 'Brands Directory', count 'Explore 191+ Brands at CP67 Mall', floor dropdown options include '4th Floor'; 41i chip scrolls 0 -> 1054px to block containing 'Tier Terms' and 'threshold'; 41j code HA999999 matches /^HA\\d{6}$/, copy + refer-friends clickable; home regression sections points-card/quick-actions/home-banners/trending-offers/featured-stores all visible. Reach the tier page via /app/tier-journey until the route bug is fixed.",
+  "rca_of_the_issue": "ConsumerApp.jsx registers the tier page as <Route path=\"tier-journey\"> and a catch-all <Route path=\"*\" element={<Navigate to=\"/app/home\" replace/>}>. Home.jsx's new Point 41b T&C button navigates to the non-existent '/app/tier', so React Router matches the catch-all and silently sends the user back to Home - the failure is invisible (no error), which is why it looks like the click did nothing. Reproduce: login -> /app/home -> click [data-testid=tier-tnc-link] -> URL remains /app/home. Mitigation: use '/app/tier-journey' or register an alias route."
+}

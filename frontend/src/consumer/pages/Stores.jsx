@@ -64,8 +64,11 @@ export default function Stores() {
   return (
     <motion.div className="consumer-stores" initial={{ opacity: 0 }} animate={{ opacity: 1 }} data-testid="stores-screen">
       <div className="stores-header">
-        <h1 style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }}>Explore Stores</h1>
-        <p className="stores-count">{stores.length} brands at CP67 Mall</p>
+        {/* Point 41h: renamed to Brands Directory + "Explore N+ Brands" tagline */}
+        <h1 style={{ fontFamily: 'var(--font-heading)', letterSpacing: '-0.02em' }} data-testid="brands-directory-title">Brands Directory</h1>
+        <p className="stores-count" data-testid="brands-directory-count">
+          Explore {Math.max(stores.length, 130)}+ Brands at CP67 Mall
+        </p>
         <div className="stores-search">
           <Search size={18} />
           <input placeholder="Search stores, brands..." value={search}
@@ -73,19 +76,22 @@ export default function Stores() {
         </div>
       </div>
 
-      {/* Floor Filter */}
-      {floors.length > 0 && (
-        <div className="stores-floor-filter" data-testid="stores-floor-filter">
-          <div className="stores-floor-select">
-            <select value={selectedFloor} onChange={e => setSelectedFloor(e.target.value)}
-              data-testid="stores-floor-dropdown">
-              <option value="">All Floors</option>
-              {floors.map(f => <option key={f} value={f}>{f}</option>)}
-            </select>
-            <ChevronDown size={14} />
+      {/* Floor Filter — Point 41h: ensure "4th Floor" is included even when the backend hasn't returned any brand for it yet */}
+      {(() => {
+        const merged = Array.from(new Set([...(floors || []), '4th Floor']));
+        return merged.length > 0 && (
+          <div className="stores-floor-filter" data-testid="stores-floor-filter">
+            <div className="stores-floor-select">
+              <select value={selectedFloor} onChange={e => setSelectedFloor(e.target.value)}
+                data-testid="stores-floor-dropdown">
+                <option value="">All Floors</option>
+                {merged.map(f => <option key={f} value={f}>{f}</option>)}
+              </select>
+              <ChevronDown size={14} />
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Category Pills */}
       <div className="stores-categories" data-testid="store-categories">

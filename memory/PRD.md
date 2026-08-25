@@ -753,3 +753,43 @@ Verified end-to-end by testing_agent iteration 51 (**24/24 backend PASS + full P
 - `/app/backend/tests/test_points_38_39.py` — 3 tests, defensive decode + endpoint placeholder flag + end-to-end edit-brand no-crash
 - `/app/backend/tests/test_iteration51_points_38_39.py` — 11 tests seeded from the testing agent covering all 4 image_url variants across 3 code paths + regression on the alerts endpoint
 
+
+## Feb 21 2026 — Client Points 40 & 41 (iOS iPad Picker + Consumer PWA UI Overhaul)
+
+Verified end-to-end by testing_agent iteration 52 (**Point 40 static PASS + backend 15/15**) followed by main-agent smoke test (all 5 iteration-52 issues fixed).
+
+### Point 40 — iOS iPad WebView Camera/Photo Picker crash ✅
+- **Fix**: `/app/ios-build/CP67iOS/WebViewContainer.swift`
+  - `launchCamera` and `launchGallery` now set `modalPresentationStyle = .fullScreen` and configure `popoverPresentationController.sourceView`/`sourceRect` for iPad (iOS requires a source anchor for popover presentation, else UIKit throws on iPad).
+  - Applied to `PHPickerViewController` (iOS 14+) and the `UIImagePickerController` iOS<14 fallback.
+  - `Info.plist` bumped to `CFBundleShortVersionString=1.0.1`, `CFBundleVersion=2`.
+
+### Point 41 — Consumer PWA UI overhaul ✅
+Sub-points (a, b, c, g, h, i, j) — all shipped, all data-testids verified live:
+- **41a** — Login tagline: "CP67's Loyalty Programme" + "Shop. Scan. Earn." in gold.
+- **41b** — Home tier badge uses tier-coloured gradient (`TIER_META`) + T&C chip that deep-links into Tier Journey T&C block.
+- **41c** — Tier progress line now reads live thresholds from `GET /api/consumer/tier-info` (iteration-52 fix: was hard-coded to 500/2000/5000, now matches backend `tier_journey` table). Static `TIER_META` remains only as an offline fallback.
+- **41g** — Profile "Complete your profile" CTA (Interests block removed): pale gold heading + high-contrast `#FFF9E6` subtext lists missing fields (Name, DOB, Email, Address). Iteration-52 fix darkened the subtext for accessibility on mobile.
+- **41h** — Explore "Brands Directory" renamed, "Explore 191+ Brands at CP67 Mall" counter, floor dropdown now includes "4th Floor".
+- **41i** — Tier Journey T&C chip smooth-scrolls to `#tier-tnc-block` (5 bullets). Iteration-52 fix: bullet text changed from `#2E2219` (contrast 1.1:1 on dark card) to `rgba(255,255,255,0.85)` — WCAG AA compliant.
+- **41j** — Profile Refer & Earn section: deterministic `HA<6-digit>` code from phone, Copy button with `toast.success('Referral code copied')` (iteration-52 fix: previously silent), Refer Friends CTA using `navigator.share` with WhatsApp fallback.
+
+### Iteration-52 defects fixed (main agent, this session)
+1. Home.jsx `tier-tnc-link`: `navigate('/app/tier')` → `navigate('/app/tier-journey')` (route mismatch was silently redirecting via catch-all).
+2. TierJourney.jsx `tier-tnc-block`: bullet text colour → readable on dark card.
+3. Home.jsx tier progress: now derives next-tier from `/api/consumer/tier-info` payload (`next_tier`, `points_to_next`) instead of hard-coded thresholds.
+4. Profile.jsx complete-profile CTA: subtext colour → `#FFF9E6` with `#FFDF73` accent (high contrast on gold banner).
+5. Profile.jsx referral-copy-btn: added `toast.success('Referral code copied')` on successful clipboard write.
+
+### Smoke test (main agent, this session)
+- Login via reviewer phone `9999999999` + OTP `123456` → landed on `/app/home`.
+- Bronze tier badge rendered with gradient, T&C chip visible.
+- Clicking T&C chip → URL correctly changed to `/app/tier-journey`.
+- Tier T&C block visible with readable white bullets on dark card.
+
+### Files touched (this batch)
+- `/app/frontend/src/consumer/pages/Home.jsx` (route fix + dynamic tier-info fetch)
+- `/app/frontend/src/consumer/pages/Profile.jsx` (CTA contrast + copy toast)
+- `/app/frontend/src/consumer/pages/TierJourney.jsx` (T&C block bullet contrast)
+- `/app/ios-build/CP67iOS/WebViewContainer.swift` (iPad picker anchor)
+- `/app/ios-build/CP67iOS/Info.plist` (version bump)

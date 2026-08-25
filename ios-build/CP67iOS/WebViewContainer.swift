@@ -146,7 +146,29 @@ struct WebViewContainer: UIViewRepresentable {
                     picker.cameraCaptureMode = .photo
                     picker.allowsEditing = false
                     picker.delegate = self
-                    self.topViewController()?.present(picker, animated: true)
+                    // Point 40 (App Store rejection Aug 2026): on iPad Air 11 M3
+                    // running iPadOS 26 the default modal presentation style for
+                    // UIImagePickerController + .camera crashes with a UIKit
+                    // constraint exception because the picker's view controller
+                    // isn't configured for the iPad's full-screen camera preview.
+                    // Forcing .fullScreen (the documented style for camera on
+                    // iPad) and wrapping the presentation in a guard fixes the
+                    // reviewer's steps-to-crash ("app crashed when taking photos").
+                    picker.modalPresentationStyle = .fullScreen
+                    guard let top = self.topViewController() else {
+                        self.sendCameraError("no_presenter")
+                        return
+                    }
+                    // Configure popover anchor on iPad — required for any picker
+                    // that could fall back to a form-sheet presentation on iPad.
+                    if let pop = picker.popoverPresentationController {
+                        pop.sourceView = top.view
+                        pop.sourceRect = CGRect(x: top.view.bounds.midX,
+                                                y: top.view.bounds.midY,
+                                                width: 0, height: 0)
+                        pop.permittedArrowDirections = []
+                    }
+                    top.present(picker, animated: true)
                 }
             }
         }
@@ -158,13 +180,41 @@ struct WebViewContainer: UIViewRepresentable {
                 config.filter = .images
                 let picker = PHPickerViewController(configuration: config)
                 picker.delegate = self
-                topViewController()?.present(picker, animated: true)
+                // Point 40: PHPickerViewController defaults to .automatic which
+                // on iPad tries to present as a form sheet; forcing .fullScreen
+                // avoids the popover anchor requirement and prevents the same
+                // "crash on photo pick" the reviewer reported.
+                picker.modalPresentationStyle = .fullScreen
+                guard let top = topViewController() else {
+                    sendCameraError("no_presenter")
+                    return
+                }
+                if let pop = picker.popoverPresentationController {
+                    pop.sourceView = top.view
+                    pop.sourceRect = CGRect(x: top.view.bounds.midX,
+                                            y: top.view.bounds.midY,
+                                            width: 0, height: 0)
+                    pop.permittedArrowDirections = []
+                }
+                top.present(picker, animated: true)
             } else {
                 let picker = UIImagePickerController()
                 picker.sourceType = .photoLibrary
                 picker.allowsEditing = false
                 picker.delegate = self
-                topViewController()?.present(picker, animated: true)
+                picker.modalPresentationStyle = .fullScreen
+                guard let top = topViewController() else {
+                    sendCameraError("no_presenter")
+                    return
+                }
+                if let pop = picker.popoverPresentationController {
+                    pop.sourceView = top.view
+                    pop.sourceRect = CGRect(x: top.view.bounds.midX,
+                                            y: top.view.bounds.midY,
+                                            width: 0, height: 0)
+                    pop.permittedArrowDirections = []
+                }
+                top.present(picker, animated: true)
             }
         }
 

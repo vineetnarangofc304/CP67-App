@@ -78,6 +78,18 @@ export default function TierJourney() {
           <h1 style={{ fontFamily: 'var(--font-heading)', color: '#fff', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
             Tier Journey
           </h1>
+          {/* Point 41i: T&C chip lives in the header next to the title */}
+          <button
+            type="button"
+            data-testid="tier-tnc-chip"
+            onClick={() => {
+              const el = document.getElementById('tier-tnc-block');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+            style={{ marginLeft: 'auto', background: 'transparent', color: '#FFDF73', border: '1px solid rgba(255,223,115,0.5)', borderRadius: 12, fontSize: 11, padding: '4px 10px', cursor: 'pointer', fontWeight: 600 }}
+          >
+            View T&amp;C
+          </button>
         </div>
 
         {/* Current tier badge */}
@@ -328,6 +340,33 @@ export default function TierJourney() {
             <span style={{ color: 'var(--cp-gold)', fontWeight: 600, flex: 1, textAlign: 'right' }}>{slab.jewellery}</span>
           </motion.div>
         ))}
+      </motion.div>
+
+      {/* Point 41i: Tier T&C block — referenced by the header chip and by Home's T&C link */}
+      <motion.div
+        id="tier-tnc-block"
+        initial={{ y: 12, opacity: 0 }}
+        whileInView={{ y: 0, opacity: 1 }}
+        viewport={{ once: true }}
+        style={{
+          background: 'var(--cp-surface, #12141a)',
+          border: '1px solid rgba(212,175,55,0.25)',
+          borderRadius: 16,
+          padding: 18,
+          margin: '0 16px 20px',
+        }}
+        data-testid="tier-tnc-block"
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <span style={{ color: '#D4AF37', fontFamily: 'var(--font-heading)', fontSize: 13, letterSpacing: '0.14em', textTransform: 'uppercase' }}>Tier Terms &amp; Conditions</span>
+        </div>
+        <ul style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, lineHeight: 1.6, paddingLeft: 18, margin: 0 }}>
+          <li>Tier progress is based on Total Points Earned across all approved bills.</li>
+          <li>You move up automatically once you cross the next tier&apos;s threshold — no need to redeem.</li>
+          <li>Point-earn rates differ between Retail and Jewellery — see the table above.</li>
+          <li>Redemption and expiry are governed by the master CP67 loyalty policy.</li>
+          <li>Homeland Advantage may revise slabs, benefits and rates from time to time.</li>
+        </ul>
       </motion.div>
 
       <div className="home-spacer" />

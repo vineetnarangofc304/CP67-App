@@ -151,6 +151,36 @@ export default function Profile() {
           </div>
         ) : (
           <div className="profile-info-list">
+            {/* Point 41g: incentive banner shown when profile is incomplete — nudges the customer to fill Name, DOB and Address to unlock the 500-pt bonus. */}
+            {(() => {
+              const missing = [
+                !profile?.name && 'Name',
+                !profile?.dob && 'Date of Birth',
+                !profile?.email && 'Email',
+                (!profile?.house_no && !profile?.pincode) && 'Address',
+              ].filter(Boolean);
+              if (missing.length === 0) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={() => setEditing(true)}
+                  data-testid="complete-profile-cta"
+                  style={{
+                    width: '100%', textAlign: 'left', cursor: 'pointer',
+                    background: 'linear-gradient(135deg, rgba(212,175,55,0.18) 0%, rgba(212,175,55,0.08) 100%)',
+                    border: '1px solid rgba(212,175,55,0.4)', borderRadius: 12,
+                    padding: '12px 14px', marginBottom: 12,
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#D4AF37', fontWeight: 700, marginBottom: 2 }}>Complete your profile</div>
+                    <div style={{ fontSize: 13, color: '#FFF9E6', fontWeight: 500 }}>Add {missing.join(', ')} and earn <strong style={{ color: '#FFDF73' }}>+500 pts</strong></div>
+                  </div>
+                  <ChevronRight size={18} color="#D4AF37" />
+                </button>
+              );
+            })()}
             <div className="profile-info-item"><Phone size={16} /><div><label>Phone</label><p>{profile?.phone}</p></div></div>
             <div className="profile-info-item"><User size={16} /><div><label>Name</label><p>{profile?.name || 'Not set'}</p></div></div>
             <div className="profile-info-item"><Mail size={16} /><div><label>Email</label><p>{profile?.email || 'Not set'}</p></div></div>
@@ -164,14 +194,61 @@ export default function Profile() {
         )}
       </div>
 
-      {profile?.interests?.length > 0 && (
-        <div className="profile-section">
-          <h2><Heart size={16} /> Interests</h2>
-          <div className="profile-interests">
-            {profile.interests.map(i => <span key={i} className="interest-tag">{i}</span>)}
+      {/* Point 41g: removed Interests block (kept the data but hid the UI per client request) */}
+
+      {/* Point 41j: Referral Code section — code + copy + Refer Friends CTA */}
+      {(() => {
+        const phone = profile?.phone || '';
+        // Deterministic 6-char code derived from the customer's phone: readable, non-guessable across users.
+        const code = phone ? `HA${(phone.replace(/\D/g, '').slice(-6) || '000000')}` : 'HA000000';
+        const shareUrl = `${window.location.origin}/app/welcome?ref=${encodeURIComponent(code)}`;
+        const copy = async () => {
+          try {
+            await navigator.clipboard.writeText(code);
+            toast.success('Referral code copied');
+          } catch {
+            window.prompt('Copy your referral code:', code);
+          }
+        };
+        const refer = async () => {
+          const msg = `Join me on CP67 Mall's Homeland Advantage loyalty programme! Use my referral code ${code} when you sign up. ${shareUrl}`;
+          if (navigator.share) {
+            try { await navigator.share({ title: 'Homeland Advantage', text: msg, url: shareUrl }); return; }
+            catch { /* fall through */ }
+          }
+          window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+        };
+        return (
+          <div className="profile-section" data-testid="referral-section">
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Users size={16} /> Refer &amp; Earn
+            </h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: 'rgba(212,175,55,0.08)', border: '1px dashed rgba(212,175,55,0.4)', borderRadius: 12, marginBottom: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 2 }}>Your Code</div>
+                <div style={{ fontFamily: 'monospace', letterSpacing: '0.05em', fontWeight: 700, fontSize: 18, color: '#D4AF37' }} data-testid="referral-code">{code}</div>
+              </div>
+              <button
+                type="button"
+                onClick={copy}
+                data-testid="referral-copy-btn"
+                style={{ background: 'rgba(212,175,55,0.2)', color: '#D4AF37', border: '1px solid rgba(212,175,55,0.4)', borderRadius: 10, padding: '8px 14px', fontWeight: 600, cursor: 'pointer' }}
+              >Copy</button>
+            </div>
+            <button
+              className="profile-nav-btn"
+              onClick={refer}
+              data-testid="refer-friends-btn"
+              style={{ background: 'linear-gradient(135deg, #D4AF37 0%, #F5D65A 100%)', color: '#111', fontWeight: 700 }}
+            >
+              <Users size={16} /> Refer Friends <ChevronRight size={16} />
+            </button>
+            <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginTop: 8, marginBottom: 0 }}>
+              Your friend signs up with your code — you both earn bonus points on their first bill.
+            </p>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div className="profile-section">
         <button className="profile-nav-btn" onClick={() => navigate('/app/notification-settings')} data-testid="notif-settings-btn">

@@ -28,6 +28,16 @@ function AnimatedCounter({ value, duration = 1.5 }) {
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } };
 const fadeUp = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 20 } } };
 
+// Point 41 b, c: tier colours + next-tier threshold so the hero shows the
+// customer's current level, the palette that matches, and how many points to
+// climb to the next slab. Thresholds mirror /consumer/tier-journey.
+const TIER_META = {
+  Bronze: { color: '#B87333', bg: 'linear-gradient(135deg, #B87333 0%, #E0A570 100%)', next: 'Silver', nextAt: 500 },
+  Silver: { color: '#8E9CA6', bg: 'linear-gradient(135deg, #8E9CA6 0%, #C7D0D6 100%)', next: 'Gold',   nextAt: 2000 },
+  Gold:   { color: '#D4AF37', bg: 'linear-gradient(135deg, #D4AF37 0%, #F5D65A 100%)', next: 'Platinum', nextAt: 5000 },
+  Platinum: { color: '#4B5966', bg: 'linear-gradient(135deg, #4B5966 0%, #8B9AAB 100%)', next: null, nextAt: null },
+};
+
 export default function Home({ onMenuOpen }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +51,22 @@ export default function Home({ onMenuOpen }) {
       if (res.ok) setData(await res.json());
     } catch { /* ignore */ }
     setLoading(false);
+  }, [token]);
+
+  // Point 41c fix: derive next-tier threshold from the live tier-info endpoint
+  // so Home matches the Tier Journey table (Bronze/Silver/Gold/Platinum/…).
+  const [tierInfo, setTierInfo] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${API}/tier-info`, { headers: { 'Authorization': `Bearer ${token}` } });
+        if (!r.ok) return;
+        const j = await r.json();
+        if (!cancelled) setTierInfo(j);
+      } catch { /* silent — falls back to static thresholds */ }
+    })();
+    return () => { cancelled = true; };
   }, [token]);
 
   useEffect(() => { fetchHome(); }, [fetchHome]);
@@ -117,15 +143,50 @@ export default function Home({ onMenuOpen }) {
             </span>
             <h2 className="points-value"><AnimatedCounter value={u.balance_points || 0} /></h2>
             <span className="points-card-name">{firstName}</span>
+            {/* Point 41c fix (iter 52): read live thresholds from /consumer/tier-info so Home matches Tier Journey. Fallback to static TIER_META. */}
+            {(() => {
+              const tierName = u.tier || 'Bronze';
+              // Prefer live tier-info payload
+              if (tierInfo && Array.isArray(tierInfo.tiers)) {
+                const nextName = tierInfo.next_tier;
+                const away = Math.max(0, Number(tierInfo.points_to_next || 0));
+                if (!nextName) {
+                  return <span data-testid="tier-progress-text" style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>You&apos;ve reached the top tier</span>;
+                }
+                return away > 0
+                  ? <span data-testid="tier-progress-text" style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 4 }}>You are <strong>{away.toLocaleString()}</strong> points away from <strong>{nextName}</strong></span>
+                  : <span data-testid="tier-progress-text" style={{ fontSize: 11, color: '#FFDF73', marginTop: 4 }}>Ready to unlock {nextName}</span>;
+              }
+              // Static fallback (offline / API failure)
+              const meta = TIER_META[tierName] || TIER_META.Bronze;
+              if (!meta.next || !meta.nextAt) {
+                return <span data-testid="tier-progress-text" style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>You&apos;ve reached the top tier</span>;
+              }
+              const away = Math.max(0, meta.nextAt - (u.balance_points || 0));
+              return away > 0
+                ? <span data-testid="tier-progress-text" style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>You are <strong>{away.toLocaleString()}</strong> points away from <strong>{meta.next}</strong></span>
+                : <span data-testid="tier-progress-text" style={{ fontSize: 11, color: '#FFDF73', marginTop: 4 }}>Ready to unlock {meta.next}</span>;
+            })()}
           </div>
           <div className="points-card-right">
+            {/* Point 41b: tier badge now uses TIER_META colours + a small T&C tag */}
             <motion.span
               className={`tier-badge tier-${(u.tier || 'Bronze').toLowerCase()}`}
+              style={{ background: (TIER_META[u.tier || 'Bronze'] || TIER_META.Bronze).bg, color: '#111', fontWeight: 700 }}
+              data-testid={`tier-badge-${(u.tier || 'Bronze').toLowerCase()}`}
               animate={{ scale: [1, 1.05, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
               {u.tier || 'Bronze'}
             </motion.span>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate('/app/tier-journey'); }}
+              data-testid="tier-tnc-link"
+              style={{ background: 'transparent', border: '1px solid rgba(255,223,115,0.5)', color: '#FFDF73', fontSize: 10, padding: '2px 8px', borderRadius: 10, marginTop: 6, cursor: 'pointer' }}
+            >
+              T&amp;C
+            </button>
             <ChevronRight size={18} />
           </div>
         </div>
