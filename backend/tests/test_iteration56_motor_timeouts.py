@@ -15,6 +15,8 @@ import time
 from pathlib import Path
 from unittest import mock
 
+from starlette.background import BackgroundTasks
+
 import pytest
 import requests
 from dotenv import dotenv_values
@@ -163,7 +165,7 @@ class TestExceptionSimulation:
         from pymongo import errors as pe
         exc = getattr(pe, exc_name)("simulated %s" % exc_name)
         with mock.patch.object(server, "db", _FakeDB(exc)):
-            res = _run(server.get_bill_image("some-bill-id", payload={"username": "admin"}))
+            res = _run(server.get_bill_image("some-bill-id", BackgroundTasks(), payload={"username": "admin"}))
         assert isinstance(res, dict)
         assert res["image_url"] is None
         assert res["fetch_error"] and "Server error while loading image" in res["fetch_error"]

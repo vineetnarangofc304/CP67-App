@@ -2991,7 +2991,7 @@ async def get_pending_bills(payload: dict = Depends(verify_jwt_token)):
 
 
 @api_router.get("/bills/{bill_id}/image")
-async def get_bill_image(bill_id: str, payload: dict = Depends(verify_jwt_token)):
+async def get_bill_image(bill_id: str, background_tasks: BackgroundTasks, payload: dict = Depends(verify_jwt_token)):
     """Return just the inline base64 image for a single bill (loaded on demand
     by the admin UI). Keeps list endpoints cheap.
 
@@ -3032,7 +3032,25 @@ async def get_bill_image(bill_id: str, payload: dict = Depends(verify_jwt_token)
         normalized = raw if isinstance(raw, str) else ""
         fetch_error: Optional[str] = None
 
-        if isinstance(raw, str) and raw.startswith("base64:"):
+        # Feb 2026 (session-20): objstore:<path> is the new preferred storage
+        # for bill images — the Mongo doc is <1KB instead of multi-MB, so
+        # find_one is instant and only the actual bytes travel over the
+        # object-storage CDN. Legacy inline URLs are progressively migrated
+        # by the code path below.
+        if isinstance(raw, str) and raw.startswith("objstore:"):
+            try:
+                from storage import aresolve_objstore_url
+                fetched = await aresolve_objstore_url(raw)
+                if fetched:
+                    data, ctype = fetched
+                    normalized = f"data:{ctype or 'image/jpeg'};base64,{base64.b64encode(data).decode()}"
+                else:
+                    normalized = None
+                    fetch_error = "Object storage returned no data (path may be missing)."
+            except Exception as e:
+                normalized = None
+                fetch_error = f"Object storage read error: {str(e)[:120]}"
+        elif isinstance(raw, str) and raw.startswith("base64:"):
             payload_b64 = raw[7:]
             # Apply the same <200-byte corrupted-placeholder guard as the
             # data: branch so legacy short base64 payloads also surface
@@ -3113,6 +3131,58 @@ async def get_bill_image(bill_id: str, payload: dict = Depends(verify_jwt_token)
             "image_hash": None,
             "fetch_error": f"Server error while loading image: {str(e)[:120]}",
         }
+    finally:
+        # Session-20: progressive migration — if we successfully served an
+        # inline data:image/... URL and it's fat (>50KB), schedule a
+        # background task to move it into object storage so the next read
+        # only fetches a <1KB Mongo doc.
+        try:
+            if (
+                isinstance(raw, str)
+                and normalized
+                and isinstance(normalized, str)
+                and normalized.startswith("data:image/")
+                and not raw.startswith("objstore:")
+                and len(normalized) > 50_000
+            ):
+                background_tasks.add_task(_migrate_bill_image_to_objstore, bill_id, normalized)
+        except Exception:
+            pass
+
+
+async def _migrate_bill_image_to_objstore(bill_id: str, data_url: str):
+    """Background task — take a data:image/*;base64,... URL and move it to
+    Emergent Object Storage. Updates bills.image_url to `objstore:<path>` so
+    the next /image call reads a tiny Mongo doc and streams bytes from the
+    object-storage CDN. Silent no-op on any failure — inline URL stays in
+    place so the UI still works."""
+    try:
+        header, _, payload_b64 = data_url.partition(",")
+        if not payload_b64:
+            return
+        ctype = "image/jpeg"
+        if "image/png" in header:
+            ctype = "image/png"
+        elif "image/webp" in header:
+            ctype = "image/webp"
+        try:
+            raw_bytes = base64.b64decode(payload_b64)
+        except Exception:
+            return
+        # Skip tiny placeholders — nothing to migrate.
+        if len(raw_bytes) < 5_000:
+            return
+        from storage import aupload_bill_image
+        new_url = await aupload_bill_image(bill_id, raw_bytes, ctype)
+        if not new_url:
+            return
+        await db.bills.update_one({"id": bill_id}, {"$set": {
+            "image_url": new_url,
+            "image_migrated_at": datetime.now(timezone.utc).isoformat(),
+        }})
+        logger.info(f"Migrated bill {bill_id} image ({len(raw_bytes)} bytes) → {new_url}")
+    except Exception as e:
+        logger.warning(f"_migrate_bill_image_to_objstore failed for {bill_id}: {e}")
 
 @api_router.get("/bills/{bill_id}")
 async def get_bill_details(bill_id: str, payload: dict = Depends(verify_jwt_token)):
@@ -4224,6 +4294,68 @@ async def bulk_reprocess_status(job_id: str, payload: dict = Depends(verify_jwt_
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@api_router.post("/admin/bills/migrate-images-to-objstore")
+async def migrate_bill_images_to_objstore(
+    background_tasks: BackgroundTasks,
+    limit: int = 500,
+    payload: dict = Depends(verify_jwt_token),
+):
+    """Session-20 (Feb 2026): bulk-migrate inline base64 bill images out of
+    the Mongo `bills` doc into Emergent Object Storage. Fire-and-forget —
+    returns immediately with the number of docs queued.
+
+    Only migrates bills whose `image_url` starts with `data:image/` or
+    `base64:` AND whose stored length is >50KB (skips sub-5KB placeholders
+    that would otherwise be re-queued forever). Safe to call repeatedly;
+    already-migrated bills are naturally skipped by the prefix filter.
+    """
+    if payload.get("role") not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+    q = {
+        "image_url": {"$regex": "^(data:image/|base64:)"},
+        # Only queue bills with fat image_urls — sub-5KB placeholders are
+        # never migrated so the worker doesn't churn on them and the
+        # queued count can drain to 0.
+        "$expr": {"$gt": [{"$strLenCP": "$image_url"}, 50000]},
+    }
+    projection = {"_id": 0, "id": 1}
+    cursor = db.bills.find(q, projection).limit(max(1, min(limit, 5000)))
+    bill_ids = [b["id"] async for b in cursor if b.get("id")]
+
+    for bill_id in bill_ids:
+        background_tasks.add_task(_migrate_one_bill_by_id, bill_id)
+
+    return {
+        "success": True,
+        "queued": len(bill_ids),
+        "message": f"Queued {len(bill_ids)} bill(s) for background migration to object storage. Re-run this endpoint to migrate the next batch."
+    }
+
+
+async def _migrate_one_bill_by_id(bill_id: str):
+    """Fetch the bill's inline image_url and delegate to
+    _migrate_bill_image_to_objstore. Runs in the FastAPI background pool."""
+    try:
+        b = await db.bills.find_one({"id": bill_id}, {"_id": 0, "image_url": 1})
+        if not b:
+            return
+        raw = b.get("image_url") or ""
+        if not isinstance(raw, str):
+            return
+        if raw.startswith("data:image/"):
+            data_url = raw
+        elif raw.startswith("base64:"):
+            data_url = f"data:image/jpeg;base64,{raw[7:]}"
+        else:
+            return
+        await _migrate_bill_image_to_objstore(bill_id, data_url)
+    except Exception as e:
+        logger.warning(f"_migrate_one_bill_by_id({bill_id}) failed: {e}")
+
+
 
 
 # ---------------- Point 25: Admin alert config ----------------
@@ -8825,6 +8957,14 @@ async def startup_seed():
     asyncio.create_task(_parking_expiry_loop())
     # Ensure DB indexes for fast queries (idempotent)
     await ensure_db_indexes()
+    # Session-20 (Feb 2026): initialise Emergent Object Storage for bill
+    # images. Non-fatal — if init fails we fall back to inline storage and
+    # log a warning.
+    try:
+        from storage import init_storage
+        init_storage()
+    except Exception as e:
+        logger.warning(f"Object storage init on startup failed (non-fatal): {e}")
     # Point 16: Backfill bill_no_normalized on legacy bills (idempotent, one-off per doc)
     asyncio.create_task(_backfill_bill_no_normalized())
     # Point 25: One-time backfill so the alert scanner doesn't flood ops with

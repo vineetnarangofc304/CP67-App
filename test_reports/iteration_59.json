@@ -1,0 +1,46 @@
+{
+  "summary": "Backend-only verification of session-20 Emergent Object Storage migration for bill images. New suite /app/backend/tests/test_iteration59_objstore_migration.py (29 tests: 28 pass, 1 fail = auth gap). Verified: storage.init_storage() works and is memoised (0 re-POSTs to /init), returns None non-fatally on failure; put/get/upload_bill_image/resolve_objstore_url round-trip real bytes through https://integrations.emergentagent.com/objstore/api/v1/storage with correct jpg/png/webp path mapping; 'Object storage initialised' present in backend startup logs. GET /api/bills/{id}/image on an objstore: bill returns HTTP 200 with byte-identical data:image/jpeg;base64 (3 repeats, worst 1.0s for a 120KB image, <1500ms budget); missing objstore path -> HTTP 200 + fetch_error 'Object storage returned no data (path may be missing).'; mocked storage.get_object raising -> HTTP 200 + fetch_error 'Object storage read error: socket blew up' (never a raw 500). Progressive migration proven end-to-end: 160KB inline bill served inline on the 1st read, background task rewrote image_url to objstore:cp67-mall/bills/{id}.jpg (<100 bytes) with image_migrated_at set, 2nd read reconstructed identical bytes. 26KB inline bill stayed inline (no image_migrated_at); existing objstore bills are never re-written; <5KB payloads and malformed data URLs are skipped by the worker. Exception simulation: upload_bill_image->None and ->raise both leave the inline URL intact with no crash. Bulk endpoint POST /api/admin/bills/migrate-images-to-objstore returns 200 {success,queued,message} in <5s, limit clamped to [1,5000], 3 seeded fat bills all migrated + readable afterwards. Regression: iteration 54/55/56/57/58 suites = 95 passed, 1 skipped, 0 failed (after fixing 6 stale direct-call sites for the new background_tasks arg).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/admin/bills/migrate-images-to-objstore", "issue": "No role check — only Depends(verify_jwt_token). A consumer/staff JWT (signed with the same JWT_SECRET) gets HTTP 200 and can queue a mall-wide migration of up to 5000 bills. Test test_non_admin_jwt_is_rejected fails with 200. Add the same admin-role guard used by other /admin endpoints.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/admin/bills/migrate-images-to-objstore", "issue": "'Call until queued=0' will never terminate. The query filter is ^(data:image/|base64:) but _migrate_bill_image_to_objstore returns early when the decoded payload is <5KB, so placeholder/thumbnail bills are re-queued forever. Preview floor: queued stays at 17 across 5 consecutive runs (all 17 are sub-5KB). Fix: either exclude short image_urls in the query (e.g. $expr on strLenCP > ~66000) or stamp a skip marker (image_migration_skipped_at) so they drop out of the filter — otherwise the documented redeploy step loops indefinitely."},
+      {"endpoint": "storage.py (all functions)", "issue": "Blocking `requests` calls (put timeout=120s, get timeout=60s) are invoked directly from the async get_bill_image handler and from background tasks, so each objstore read/upload blocks the whole event loop. Measured: /api/health worst latency rose to 1293ms while 6 concurrent 300KB objstore reads were in flight (baseline ~50-100ms). Wrap with asyncio.to_thread(...) or use httpx.AsyncClient. In production (Atlas + real traffic) this can serialise admin image loads and re-create the perceived timeout."},
+      {"endpoint": "storage.py module import", "issue": "EMERGENT_KEY / STORAGE_BASE are read at import time from os.environ with no load_dotenv() in storage.py. It works today only because server.py calls load_dotenv() before the lazy import. Any importer that loads storage first silently gets EMERGENT_KEY=None and every upload/read fails with a silent None (this exact failure mode broke 10 tests until the test imported server first). Also INTEGRATION_PROXY_URL is not in backend/.env — the code falls back to a hardcoded https://integrations.emergentagent.com default."},
+      {"endpoint": "GET /api/bills/{id}/image", "issue": "Spec deviation (benign): the review request states base64: bills are skipped by progressive migration, but a fat base64: bill IS auto-migrated because the finally block only inspects `normalized` (already a data: URL). Verified the migrated bill still serves correctly — flagging only so the documented behaviour matches the code."},
+      {"endpoint": "GET /api/bills/{id}/image", "issue": "No integrity check after migration: image_hash is not recompared/updated and the object is never verified readable before the Mongo image_url is overwritten. If put_object returns 200 but the object is later unreadable, the inline copy is already gone (only mitigation is a friendly fetch_error). Consider a read-back verify before the $set."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration59_objstore_migration.py",
+    "/app/test_reports/pytest/iteration_59_results.xml",
+    "/app/test_reports/pytest/iteration_59_regression.xml"
+  ],
+  "action_items": [
+    "Add an admin role guard to POST /api/admin/bills/migrate-images-to-objstore (currently any valid JWT works).",
+    "Make the bulk endpoint converge to queued=0: exclude/mark sub-5KB inline images so repeated calls terminate (preview stalls at 17).",
+    "Run storage.py's blocking requests calls off the event loop (asyncio.to_thread or httpx.AsyncClient) — measured 1.3s /api/health latency under 6 concurrent objstore reads.",
+    "Add load_dotenv() (or lazy env reads) inside storage.py so EMERGENT_LLM_KEY cannot silently be None; optionally add INTEGRATION_PROXY_URL to backend/.env instead of the hardcoded fallback.",
+    "Optional hardening: verify the uploaded object is readable before overwriting bill.image_url."
+  ],
+  "critical_code_review_comments": [
+    "server.py:4299 migrate_bill_images_to_objstore has no role assertion — verify_jwt_token alone authenticates consumer tokens too.",
+    "server.py:3134 finally block relies on `raw`/`normalized` being bound; if the find_one raises they are unbound and the NameError is swallowed by the bare except — correct today but fragile, initialise both before the try.",
+    "storage.py reads module-level env at import time and uses sync requests inside async paths — the two highest-risk deviations for production.",
+    "_migrate_bill_image_to_objstore's <5KB early return has no observability (no log, no marker), which is why the bulk endpoint's queued count never drains."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration59_objstore_migration.py (new)",
+    "/app/backend/tests/test_iteration56_motor_timeouts.py (test-only: pass BackgroundTasks() to get_bill_image)",
+    "/app/backend/tests/test_iteration58_compression_retry.py (test-only: pass BackgroundTasks() to get_bill_image)"
+  ],
+  "success_rate": {"backend": "97% (28/29 new tests; 95/95 regression)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "TEST_i59_* bills (inline 160KB/26KB/8KB, base64:, objstore:, missing-path, empty) — all deleted in session teardown (verified 0 leftover). Objects written under cp67-mall/tests/* and cp67-mall/bills/TEST_i59_* remain in object storage (harmless). NOTE: the bulk-endpoint tests also migrated preview's real bills; only 1 non-placeholder bill existed and it now reads from objstore correctly.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin / CP67Admin@2025 (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "Run with `cd /app/backend && python -m pytest tests/test_iteration59_objstore_migration.py -p no:randomly -q -o addopts=\"\"`. CRITICAL: import server BEFORE storage in any test file (storage.py reads EMERGENT_LLM_KEY at import time; server.py does load_dotenv). Direct calls to server.get_bill_image now need a positional BackgroundTasks(): server.get_bill_image(bill_id, BackgroundTasks(), payload={'role':'admin'}). Preview has 17 sub-5KB placeholder bills that can never migrate, so bulk `queued` floors at 17 — don't assert 0. Object storage is live and fast in preview (120KB read ~1s, 300KB ~1.7s). One flaky ingress ConnectTimeout was seen on /api/bills right after the concurrency test (passed on re-run).",
+  "rca_of_the_issue": "The objstore pipeline itself is sound: reads, writes, progressive migration and failure fallbacks all behave as designed and no path can produce a raw HTTP 500 (all failure modes return 200 + fetch_error). The two things that will bite in production are (a) the bulk endpoint is unauthenticated beyond 'any valid JWT' and never reports queued=0 because sub-5KB placeholders are re-queued each run, and (b) storage.py performs blocking HTTP inside the async event loop, so many simultaneous admin image loads serialise behind each other — the same symptom class (slow/timeout on Admin Bill Review) the fix is meant to eliminate. Both are small, localised changes."
+}

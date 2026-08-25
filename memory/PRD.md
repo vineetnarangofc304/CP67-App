@@ -938,3 +938,26 @@ Move image storage OUT of the `bills` doc into object storage (Emergent Object S
 
 ### Action required from user
 Redeploy production. Compression + wider socket budget + retry ships together. If timeouts still recur after redeploy, agree object-storage migration as next roadmap item.
+
+## Session 20 (Feb 2026) — Emergent Object Storage migration for bill images
+
+### The durable fix
+Bill.image_url now supports a new `objstore:<path>` prefix that points to Emergent Object Storage. Mongo doc shrinks from multi-MB to <100 bytes per bill.
+
+### Components (all in code)
+1. `/app/backend/storage.py` — new module: `init_storage` / sync + async (`aput/aget/aupload_bill_image/aresolve_objstore_url`) helpers, uses `INTEGRATION_PROXY_URL` (fallback https://integrations.emergentagent.com) + `EMERGENT_LLM_KEY`. `load_dotenv()` at import time so module works before server bootstrap.
+2. `get_bill_image` recognises `objstore:<path>`, streams the bytes back re-encoded as data:image/*;base64. All blocking HTTP is wrapped in `asyncio.to_thread` so the event loop is not starved.
+3. `_migrate_bill_image_to_objstore` — background worker scheduled from the `/image` endpoint's `finally` block. Any inline data URL >50KB is progressively migrated on next view.
+4. `POST /api/admin/bills/migrate-images-to-objstore` (admin-only) — bulk queue endpoint. `$expr {$strLenCP > 50000}` filter drains to `queued=0` in 1-3 calls.
+5. Startup: `init_storage()` non-fatal, falls back to inline on any failure.
+
+### Verification (iteration_60.json)
+- 32/32 objstore tests + 95/95 regression PASS. Zero raw 500s in any path.
+- Admin guard: non-admin JWT → 403; admin → 200.
+- Async event loop: 6-way concurrent 300KB objstore reads keep /api/health within 9% of the no-objstore control (was 2.5× before the async wrappers).
+- Progressive migration end-to-end proven: 160KB inline bill → 1st view returns inline + queues bg task → after ~5s bill.image_url = `objstore:cp67-mall/bills/{id}.jpg` → 2nd view returns byte-identical bytes from object storage.
+
+### Redeploy runbook for the user
+1. Redeploy production (ships sessions 15-20 together).
+2. Call `POST /api/admin/bills/migrate-images-to-objstore` from the admin bearer token. Poll it 1-3 times until `queued=0` (fat inline bills drain in one batch of ≤500 per call).
+3. Every future admin bill review reads a <1KB Mongo doc + streams bytes over the objstore CDN — no more 10s+ Atlas timeouts.

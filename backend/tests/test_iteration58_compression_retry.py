@@ -22,6 +22,8 @@ import uuid
 from pathlib import Path
 from unittest import mock
 
+from starlette.background import BackgroundTasks
+
 import pytest
 import requests
 from dotenv import dotenv_values
@@ -211,7 +213,7 @@ class TestRetryLoop:
         )
         t0 = time.time()
         with mock.patch.object(server, "db", _FakeDB(fake)):
-            out = _run(server.get_bill_image("TEST_i58_retry", payload={"role": "admin"}))
+            out = _run(server.get_bill_image("TEST_i58_retry", BackgroundTasks(), payload={"role": "admin"}))
         elapsed = time.time() - t0
         assert fake.calls == 2, f"retry did not happen (find_one calls={fake.calls})"
         assert out["image_url"] == BIG_DATA_URL, out
@@ -224,7 +226,7 @@ class TestRetryLoop:
 
         fake = _FakeBills(fail_times=5)
         with mock.patch.object(server, "db", _FakeDB(fake)):
-            out = _run(server.get_bill_image("TEST_i58_retry_fail", payload={"role": "admin"}))
+            out = _run(server.get_bill_image("TEST_i58_retry_fail", BackgroundTasks(), payload={"role": "admin"}))
         assert fake.calls == 2, f"expected exactly 2 attempts, got {fake.calls}"
         assert out["image_url"] is None
         assert out["fetch_error"].startswith("Server error while loading image: "), out
@@ -237,7 +239,7 @@ class TestRetryLoop:
         fake = _FakeBills(fail_times=0, result=None)
         with mock.patch.object(server, "db", _FakeDB(fake)):
             with pytest.raises(HTTPException) as ei:
-                _run(server.get_bill_image("TEST_i58_missing", payload={"role": "admin"}))
+                _run(server.get_bill_image("TEST_i58_missing", BackgroundTasks(), payload={"role": "admin"}))
         assert ei.value.status_code == 404
         assert ei.value.detail == "Bill not found"
         assert fake.calls == 1, f"404 should not be retried (calls={fake.calls})"
