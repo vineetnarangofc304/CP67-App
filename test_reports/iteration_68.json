@@ -1,0 +1,46 @@
+{
+  "summary": "Iteration 68 backend-only verification of POST /api/admin/bills/{bill_id}/edit-brand defensive hardening. Created /app/backend/tests/test_iteration68_editbrand_retry.py (22 tests, 17 PASS / 5 FAIL). Verified: happy path queued response <1s with lean projection {_id:0,id,store_name,status} + max_time_ms=8000 and exactly ONE update_one; 1-shot retry works on find_one AND update_one for all 4 transient pymongo classes; asyncio.wait_for(10s) on update_one fires correctly (hang->retry->success at ~10.4s; hang+hang -> 503 at ~20.6s); regressions 404 / 400 / 401 / rename-only / iteration-66 + 67 suites all pass. FAILURE FOUND: the 503 mapping in the top-level except is string-based, so AutoReconnect, ServerSelectionTimeoutError and ExecutionTimeout (Atlas MaxTimeMSExpired — the very error iteration 66 targeted) still surface as HTTP 500 instead of 503.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/admin/bills/{bill_id}/edit-brand",
+        "issue": "503 transient-DB mapping (server.py ~4849) matches on str(e) substrings only ('read operation timed out', 'networktimeout', 'autoreconnect', 'serverselectiontimeout'). pymongo exception messages do NOT contain their class names, so: AutoReconnect('connection pool paused') -> 500 'Brand edit server error: connection pool paused'; ServerSelectionTimeoutError('No replica set members match') -> 500; ExecutionTimeout('operation exceeded time limit') (= Atlas MaxTimeMSExpired from the max_time_ms=8000 guard, the most likely real-world failure) -> 500. Only NetworkTimeout whose message happens to contain 'read operation timed out' maps to 503. Fix: replace the string sniffing with `isinstance(e, (NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout, asyncio.TimeoutError))` (keep the substring check as a fallback).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/admin/bills/{bill_id}/edit-brand",
+        "issue": "asyncio.wait_for cancellation on the update_one retry means the first (cancelled) write may still be applied server-side; the retry re-issues the same idempotent $set so it is harmless today, but worst case the whole handler takes ~20.6s before the 503 (verified). If the admin UI/Cloudflare timeout is <20s the user sees a network error instead of the friendly toast — consider timeout=6.0 per attempt."
+      },
+      {
+        "endpoint": "POST /api/admin/bills/{bill_id}/edit-brand",
+        "issue": "On a persistent failure the bill document is left untouched (verified store_name unchanged) — good — but `reprocessing_started_at` is also never cleared/never set, so no stale-spinner risk. No action needed; noted for completeness."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration68_editbrand_retry.py",
+    "/app/test_reports/pytest/iter68_results.xml"
+  ],
+  "action_items": [
+    "server.py edit_bill_brand except block: use isinstance() against (NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout, asyncio.TimeoutError) for the 503 mapping — 3 of the 4 retried exception classes currently still return 500 (incl. ExecutionTimeout / MaxTimeMSExpired).",
+    "Optional: lower the per-attempt asyncio.wait_for timeout from 10.0s to ~6.0s so the worst-case handler latency drops from ~20.6s to ~12.5s and stays under typical proxy timeouts."
+  ],
+  "critical_code_review_comments": [
+    "find_one retry loop verified: exactly 2 attempts on transient error, 0.3s backoff, no update_one issued when the read never succeeds (spy-confirmed).",
+    "update_one retry loop verified: `except (asyncio.TimeoutError, *_retryable)` catches both the wait_for timeout and pymongo transients; exactly 2 attempts.",
+    "Happy path spy: 1 find_one with projection {_id:0,id:1,store_name:1,status:1} + max_time_ms=8000, 1 update_one, bg task _reprocess_after_brand_edit queued; HTTP latency on a 500KB inline-image bill measured well under 1s.",
+    "Non-transient exceptions (ValueError) correctly keep the 500 + 'Brand edit server error: ...' detail.",
+    "server.py is 9418 lines — long past the 700-line guideline; edit-brand/reprocess/force-credit admin bill routes are a natural module to extract."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration68_editbrand_retry.py"],
+  "success_rate": {"backend": "77% (17/22)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "TEST_ITER68_* bills (500KB inline image) + TEST_ITER68_USER created by the module fixture and deleted after the run — verified 0 remaining rows in db.bills and db.users.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "admin / CP67Admin@2025",
+  "context_for_next_testing_agent": "Reuse the _Spy/_DbProxy/_CollProxy fault-injection helper in /app/backend/tests/test_iteration68_editbrand_retry.py — it records find_one/update_one calls AND injects per-attempt faults ('hang' => await asyncio.sleep(30), or an exception instance). Tests call server.edit_bill_brand() in-process (BackgroundTasks() + payload dict) so mock.patch.object(server,'db') is effective; HTTP-level assertions go through BASE_URL. After the isinstance fix, re-run: pytest tests/test_iteration68_editbrand_retry.py -q (expect 22/22). Full-suite runtime ~52s (two tests intentionally burn 10s/20s on wait_for).",
+  "rca_of_the_issue": "Root cause of the 5 failures: the transient-DB detection in the edit_bill_brand top-level except relies on lowercase substring matching against str(e). pymongo error classes render only their message (e.g. AutoReconnect -> 'connection pool paused', ExecutionTimeout -> 'operation exceeded time limit'), never the class name, so the 'autoreconnect'/'serverselectiontimeout'/'networktimeout' checks can never fire from a real driver exception. Reproduction: patch db.bills.find_one (or update_one) to raise ExecutionTimeout('operation exceeded time limit') on both attempts -> handler returns 500 'Brand edit server error: operation exceeded time limit' instead of the intended 503 friendly retry hint. The user's originally reported production message ('The read operation timed out') does match the substring list, so that exact case is fixed; the MaxTimeMSExpired case introduced by max_time_ms=8000 is not."
+}

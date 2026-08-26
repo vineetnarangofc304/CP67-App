@@ -4710,15 +4710,29 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
     empty "Brand edit failed (HTTP 500)".
     """
     try:
+        from pymongo.errors import NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout
+        _retryable = (NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout)
         # Feb 2026: only fetch fields needed for the status/audit-note check.
         # Pulling the full bill (including legacy multi-MB image_url) here
         # tripped Atlas MaxTimeMSExpired and produced the admin "Brand edit
         # failed (HTTP 500)" toast. The bg reprocess worker re-fetches the
         # full doc with 25s max_time_ms when it actually needs the image.
-        bill = await db.bills.find_one(
-            {"id": bill_id},
-            {"_id": 0, "id": 1, "store_name": 1, "status": 1},
-        )
+        # Feb 2026 (iter-68): explicit 1-shot retry on transient Atlas
+        # NetworkTimeout so a bad-replica blip doesn't surface as HTTP 500.
+        bill = None
+        for attempt in range(2):
+            try:
+                bill = await db.bills.find_one(
+                    {"id": bill_id},
+                    {"_id": 0, "id": 1, "store_name": 1, "status": 1},
+                    max_time_ms=8000,
+                )
+                break
+            except _retryable:
+                if attempt == 0:
+                    await asyncio.sleep(0.3)
+                    continue
+                raise
         if not bill:
             raise HTTPException(status_code=404, detail="Bill not found")
         new_name = (payload_body.new_store_name or "").strip()
@@ -4728,17 +4742,32 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
         old_name = bill.get("store_name")
         audit_note = f"Brand name updated: '{old_name}' → '{new_name}' by admin"
 
-        await db.bills.update_one(
-            {"id": bill_id},
-            {"$set": {
-                "store_name": new_name,
-                "brand_edited_at": datetime.now(timezone.utc).isoformat(),
-                "brand_edited_by": payload.get("username") or "admin",
-                "admin_notes": audit_note,
-                # Mark as reprocessing so admin UI can show a spinner
-                "reprocessing_started_at": datetime.now(timezone.utc).isoformat() if payload_body.reprocess else None,
-            }}
-        )
+        # Feb 2026 (iter-68): update_one also gets a 1-shot retry — under
+        # Atlas load a write to a bill doc that carries a multi-MB inline
+        # image_url can trip socketTimeoutMS. Retry once, then surface a
+        # friendlier 503 (not raw 500) so the admin UI can suggest reload.
+        for attempt in range(2):
+            try:
+                await asyncio.wait_for(
+                    db.bills.update_one(
+                        {"id": bill_id},
+                        {"$set": {
+                            "store_name": new_name,
+                            "brand_edited_at": datetime.now(timezone.utc).isoformat(),
+                            "brand_edited_by": payload.get("username") or "admin",
+                            "admin_notes": audit_note,
+                            # Mark as reprocessing so admin UI can show a spinner
+                            "reprocessing_started_at": datetime.now(timezone.utc).isoformat() if payload_body.reprocess else None,
+                        }}
+                    ),
+                    timeout=6.0,
+                )
+                break
+            except (asyncio.TimeoutError, *_retryable):
+                if attempt == 0:
+                    await asyncio.sleep(0.3)
+                    continue
+                raise
 
         if not payload_body.reprocess:
             return {"success": True, "reprocessed": False, "store_name": new_name}
@@ -4814,9 +4843,38 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
         raise
     except Exception as e:
         logger.exception(f"edit_bill_brand failed for bill_id={bill_id}: {e}")
+        # Feb 2026 (iter-68): Atlas transient timeouts get a friendlier 503
+        # so the admin UI can show "MongoDB slow — please retry" instead of a
+        # scary raw 500. Everything else keeps the 500 with the exact reason.
+        # Iter-69: use isinstance against the pymongo exception classes —
+        # substring matching against str(e) misses AutoReconnect,
+        # ServerSelectionTimeoutError and ExecutionTimeout (MaxTimeMSExpired)
+        # because their messages never include the class name.
+        try:
+            from pymongo.errors import (
+                NetworkTimeout as _NT,
+                AutoReconnect as _AR,
+                ServerSelectionTimeoutError as _SST,
+                ExecutionTimeout as _ET,
+            )
+            _transient_classes = (_NT, _AR, _SST, _ET, asyncio.TimeoutError)
+        except Exception:
+            _transient_classes = (asyncio.TimeoutError,)
+        err_txt = str(e)
+        is_transient_db = (
+            isinstance(e, _transient_classes)
+            or ("read operation timed out" in err_txt.lower())
+            or ("write operation timed out" in err_txt.lower())
+            or ("operation exceeded time limit" in err_txt.lower())
+        )
+        if is_transient_db:
+            raise HTTPException(
+                status_code=503,
+                detail="MongoDB is under load — the brand edit didn't go through. Please retry in ~10s.",
+            )
         raise HTTPException(
             status_code=500,
-            detail=f"Brand edit server error: {str(e)[:200]}"
+            detail=f"Brand edit server error: {err_txt[:200]}"
         )
 
 

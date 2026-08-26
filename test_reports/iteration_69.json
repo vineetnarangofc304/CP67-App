@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 69 backend-only re-verification of POST /api/admin/bills/{bill_id}/edit-brand. Re-ran /app/backend/tests/test_iteration68_editbrand_retry.py after the two iter-69 changes (isinstance-based 503 detection + update_one wait_for 10.0s->6.0s): 22/22 PASS (was 17/22 in iter-68). All 5 previously-failing 503-mapping tests now pass. Only test-side change: relaxed/retargeted the two timing assertions that were hard-coded to the old 10s per-attempt timeout. No application code was modified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/admin/bills/{bill_id}/edit-brand",
+        "issue": "Local re-import of pymongo error classes inside the except block on every failure (server.py ~4844). Functionally correct and defensively wrapped in try/except, but it belongs at module import scope alongside the existing _retryable tuple. Cosmetic only."
+      },
+      {
+        "endpoint": "POST /api/admin/bills/{bill_id}/edit-brand",
+        "issue": "asyncio.wait_for cancels the in-flight update_one on timeout; the cancelled write may still land server-side. The retry re-issues the same idempotent $set so it is harmless today (verified store_name correct after hang->retry->success), but worth a comment in code."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration68_editbrand_retry.py",
+    "/app/test_reports/pytest/iter69_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED: is_transient_db now uses isinstance(e, (NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout, asyncio.TimeoutError)) with the str(e) substring list retained as a fallback — all 4 pymongo classes now map to HTTP 503 with detail 'MongoDB is under load — the brand edit didn't go through. Please retry in ~10s.' on both find_one AND update_one paths (7 parametrized cases, spy-confirmed exactly 2 attempts each).",
+    "VERIFIED: non-transient ValueError('boom-not-transient') on update_one still surfaces 500 with 'Brand edit server error: ...' — the 503 widening did not over-capture.",
+    "VERIFIED latency: happy-path queued HTTP response 0.15s (500KB inline-image bill, lean projection {_id:0,id,store_name,status} + max_time_ms=8000, exactly 1 find_one + 1 update_one). Single-hang retry path ~6.3s (wait_for now fires at 6s). Worst-case update_one hang+hang measured 12.31s (was 20.6s at 10s timeout) and still returns 503 — now comfortably under typical 30s proxy/Cloudflare timeouts.",
+    "VERIFIED regressions: 404 unknown bill, 400 blank brand, 401/403 unauthenticated, reprocess=false rename-only, iteration-66 reprocess-guard lean projection, and the full iteration-66 + iteration-67 suites (invoked as a subprocess from test_prev_iteration_suites_pass) all pass.",
+    "Bills left untouched on persistent failure (store_name still TEST_WrongBrand) — no partial-write / stale-spinner risk.",
+    "server.py is ~9430 lines — still far past the 700-line guideline. The admin bill routes (edit-brand / reprocess / force-credit) plus the shared _retryable retry helper are the obvious first extraction; the retry-with-backoff loop is now duplicated between the find_one and update_one blocks (DRY)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration68_editbrand_retry.py"],
+  "success_rate": {"backend": "100% (22/22)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "TEST_ITER68_* bills (500KB inline image) + TEST_ITER68_USER created by the module fixture; confirmed 0 leftover rows in db.bills and db.users after the run.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin / CP67Admin@2025",
+  "context_for_next_testing_agent": "test_iteration68_editbrand_retry.py is green at 22/22 and now the regression suite for edit-brand. Timing assertions are tied to the 6.0s per-attempt wait_for: test_hang_then_success_retries expects 5.5-11s, test_double_hang_maps_to_503 expects 11.5-17s — update both if the timeout constant changes again. Full run ~37s. Reuse the _Spy/_DbProxy/_CollProxy fault injector (per-attempt exception instance or the literal 'hang' => asyncio.sleep(30)); tests call server.edit_bill_brand() in-process so mock.patch.object(server,'db') works, HTTP-level checks go via BASE_URL.",
+  "rca_of_the_issue": "Iter-68 root cause (substring matching against str(e) never sees pymongo class names) is fully resolved by the isinstance() check. Re-confirmed by injecting ExecutionTimeout('operation exceeded time limit'), AutoReconnect('connection pool paused') and ServerSelectionTimeoutError('No replica set members match') on both attempts of find_one and of update_one — all now return 503 with the friendly detail instead of 500."
+}

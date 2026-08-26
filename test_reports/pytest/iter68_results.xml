@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="5" skipped="0" tests="22" time="51.569" timestamp="2026-08-26T11:38:13.127392+00:00" hostname="agent-env-8ad6f330-e3d5-4374-bc19-5cfcf4932153"><testcase classname="tests.test_iteration68_editbrand_retry.TestEditBrandHappyPath" name="test_queued_http_fast_and_persists" time="0.393" /><testcase classname="tests.test_iteration68_editbrand_retry.TestEditBrandHappyPath" name="test_lean_projection_maxtime_and_single_update" time="0.004" /><testcase classname="tests.test_iteration68_editbrand_retry.TestEditBrandHappyPath" name="test_rename_only_no_reprocess" time="0.003" /><testcase classname="tests.test_iteration68_editbrand_retry.TestFindOneTransient" name="test_first_call_fails_then_succeeds[exc0]" time="0.305" /><testcase classname="tests.test_iteration68_editbrand_retry.TestFindOneTransient" name="test_first_call_fails_then_succeeds[exc1]" time="0.309" /><testcase classname="tests.test_iteration68_editbrand_retry.TestFindOneTransient" name="test_first_call_fails_then_succeeds[exc2]" time="0.305" /><testcase classname="tests.test_iteration68_editbrand_retry.TestFindOneTransient" name="test_first_call_fails_then_succeeds[exc3]" time="0.305" /><testcase classname="tests.test_iteration68_editbrand_retry.TestFindOneTransient" name="test_persistent_failure_maps_to_503[exc0-NetworkTimeout]" time="0.304" /><testcase classname="tests.test_iteration68_editbrand_retry.TestFindOneTransient" name="test_persistent_failure_maps_to_503[exc1-AutoReconnect]" time="0.303"><failure message="AssertionError: AutoReconnect: expected 503, got 500 detail=Brand edit server error: connection pool paused&#10;assert 500 == 503&#10; +  where 500 = HTTPException(status_code=500, detail='Brand edit server error: connection pool paused').status_code&#10; +    where HTTPException(status_code=500, detail='Brand edit server error: connection pool paused') = &lt;ExceptionInfo HTTPException(status_code=500, detail='Brand edit server error: connection pool paused') tblen=5&gt;.value">self = &lt;test_iteration68_editbrand_retry.TestFindOneTransient object at 0xff5d778dd590&gt;
+exc = AutoReconnect('connection pool paused'), label = 'AutoReconnect'
+
+    @pytest.mark.parametrize("exc,label", [
+        (NetworkTimeout("customer-apps-shard-00-01:27017: The read operation timed out"), "NetworkTimeout"),
+        (AutoReconnect("connection pool paused"), "AutoReconnect"),
+        (ServerSelectionTimeoutError("No replica set members match"), "ServerSelectionTimeoutError"),
+        (ExecutionTimeout("operation exceeded time limit"), "ExecutionTimeout"),
+    ])
+    def test_persistent_failure_maps_to_503(self, exc, label):
+        bid = _seed_bill()
+        with _Spy(find_faults=[exc, exc]) as spy:
+            with pytest.raises(HTTPException) as ei:
+                _call(bid, new_store_name="TEST_Never")
+        assert len(spy.rec["find_one"]) == 2, "expected exactly 2 find_one attempts"
+        assert len(spy.rec["update_one"]) == 0, "update_one must not run after read failure"
+&gt;       assert ei.value.status_code == 503, (
+            f"{label}: expected 503, got {ei.value.status_code} detail={ei.value.detail}")
+E       AssertionError: AutoReconnect: expected 503, got 500 detail=Brand edit server error: connection pool paused
+E       assert 500 == 503
+E        +  where 500 = HTTPException(status_code=500, detail='Brand edit server error: connection pool paused').status_code
+E        +    where HTTPException(status_code=500, detail='Brand edit server error: connection pool paused') = &lt;ExceptionInfo HTTPException(status_code=500, detail='Brand edit server error: connection pool paused') tblen=5&gt;.value
+
+tests/test_iteration68_editbrand_retry.py:281: AssertionError</failure></testcase><testcase classname="tests.test_iteration68_editbrand_retry.TestFindOneTransient" name="test_persistent_failure_maps_to_503[exc2-ServerSelectionTimeoutError]" time="0.303"><failure message="AssertionError: ServerSelectionTimeoutError: expected 503, got 500 detail=Brand edit server error: No replica set members match&#10;assert 500 == 503&#10; +  where 500 = HTTPException(status_code=500, detail='Brand edit server error: No replica set members match').status_code&#10; +    where HTTPException(status_code=500, detail='Brand edit server error: No replica set members match') = &lt;ExceptionInfo HTTPException(status_code=500, detail='Brand edit server error: No replica set members match') tblen=5&gt;.value">self = &lt;test_iteration68_editbrand_retry.TestFindOneTransient object at 0xff5d778dd810&gt;
+exc = ServerSelectionTimeoutError('No replica set members match')
+label = 'ServerSelectionTimeoutError'
+
+    @pytest.mark.parametrize("exc,label", [
+        (NetworkTimeout("customer-apps-shard-00-01:27017: The read operation timed out"), "NetworkTimeout"),
+        (AutoReconnect("connection pool paused"), "AutoReconnect"),
+        (ServerSelectionTimeoutError("No replica set members match"), "ServerSelectionTimeoutError"),
+        (ExecutionTimeout("operation exceeded time limit"), "ExecutionTimeout"),
+    ])
+    def test_persistent_failure_maps_to_503(self, exc, label):
+        bid = _seed_bill()
+        with _Spy(find_faults=[exc, exc]) as spy:
+            with pytest.raises(HTTPException) as ei:
+                _call(bid, new_store_name="TEST_Never")
+        assert len(spy.rec["find_one"]) == 2, "expected exactly 2 find_one attempts"
+        assert len(spy.rec["update_one"]) == 0, "update_one must not run after read failure"
+&gt;       assert ei.value.status_code == 503, (
+            f"{label}: expected 503, got {ei.value.status_code} detail={ei.value.detail}")
+E       AssertionError: ServerSelectionTimeoutError: expected 503, got 500 detail=Brand edit server error: No replica set members match
+E       assert 500 == 503
+E        +  where 500 = HTTPException(status_code=500, detail='Brand edit server error: No replica set members match').status_code
+E        +    where HTTPException(status_code=500, detail='Brand edit server error: No replica set members match') = &lt;ExceptionInfo HTTPException(status_code=500, detail='Brand edit server error: No replica set members match') tblen=5&gt;.value
+
+tests/test_iteration68_editbrand_retry.py:281: AssertionError</failure></testcase><testcase classname="tests.test_iteration68_editbrand_retry.TestFindOneTransient" name="test_persistent_failure_maps_to_503[exc3-ExecutionTimeout]" time="0.303"><failure message="AssertionError: ExecutionTimeout: expected 503, got 500 detail=Brand edit server error: operation exceeded time limit&#10;assert 500 == 503&#10; +  where 500 = HTTPException(status_code=500, detail='Brand edit server error: operation exceeded time limit').status_code&#10; +    where HTTPException(status_code=500, detail='Brand edit server error: operation exceeded time limit') = &lt;ExceptionInfo HTTPException(status_code=500, detail='Brand edit server error: operation exceeded time limit') tblen=5&gt;.value">self = &lt;test_iteration68_editbrand_retry.TestFindOneTransient object at 0xff5d778dda90&gt;
+exc = ExecutionTimeout('operation exceeded time limit')
+label = 'ExecutionTimeout'
+
+    @pytest.mark.parametrize("exc,label", [
+        (NetworkTimeout("customer-apps-shard-00-01:27017: The read operation timed out"), "NetworkTimeout"),
+        (AutoReconnect("connection pool paused"), "AutoReconnect"),
+        (ServerSelectionTimeoutError("No replica set members match"), "ServerSelectionTimeoutError"),
+        (ExecutionTimeout("operation exceeded time limit"), "ExecutionTimeout"),
+    ])
+    def test_persistent_failure_maps_to_503(self, exc, label):
+        bid = _seed_bill()
+        with _Spy(find_faults=[exc, exc]) as spy:
+            with pytest.raises(HTTPException) as ei:
+                _call(bid, new_store_name="TEST_Never")
+        assert len(spy.rec["find_one"]) == 2, "expected exactly 2 find_one attempts"
+        assert len(spy.rec["update_one"]) == 0, "update_one must not run after read failure"
+&gt;       assert ei.value.status_code == 503, (
+            f"{label}: expected 503, got {ei.value.status_code} detail={ei.value.detail}")
+E       AssertionError: ExecutionTimeout: expected 503, got 500 detail=Brand edit server error: operation exceeded time limit
+E       assert 500 == 503
+E        +  where 500 = HTTPException(status_code=500, detail='Brand edit server error: operation exceeded time limit').status_code
+E        +    where HTTPException(status_code=500, detail='Brand edit server error: operation exceeded time limit') = &lt;ExceptionInfo HTTPException(status_code=500, detail='Brand edit server error: operation exceeded time limit') tblen=5&gt;.value
+
+tests/test_iteration68_editbrand_retry.py:281: AssertionError</failure></testcase><testcase classname="tests.test_iteration68_editbrand_retry.TestUpdateOneHardening" name="test_hang_then_success_retries" time="10.313" /><testcase classname="tests.test_iteration68_editbrand_retry.TestUpdateOneHardening" name="test_double_hang_maps_to_503" time="20.317" /><testcase classname="tests.test_iteration68_editbrand_retry.TestUpdateOneHardening" name="test_update_transient_exception_persistent_503[exc0-NetworkTimeout]" time="0.304" /><testcase classname="tests.test_iteration68_editbrand_retry.TestUpdateOneHardening" name="test_update_transient_exception_persistent_503[exc1-AutoReconnect]" time="0.305"><failure message="AssertionError: AutoReconnect: expected 503, got 500 detail=Brand edit server error: primary stepped down&#10;assert 500 == 503&#10; +  where 500 = HTTPException(status_code=500, detail='Brand edit server error: primary stepped down').status_code&#10; +    where HTTPException(status_code=500, detail='Brand edit server error: primary stepped down') = &lt;ExceptionInfo HTTPException(status_code=500, detail='Brand edit server error: primary stepped down') tblen=5&gt;.value">self = &lt;test_iteration68_editbrand_retry.TestUpdateOneHardening object at 0xff5d778dfbd0&gt;
+exc = AutoReconnect('primary stepped down'), label = 'AutoReconnect'
+
+    @pytest.mark.parametrize("exc,label", [
+        (NetworkTimeout("connection closed: The write operation timed out"), "NetworkTimeout"),
+        (AutoReconnect("primary stepped down"), "AutoReconnect"),
+        (ExecutionTimeout("operation exceeded time limit"), "ExecutionTimeout"),
+    ])
+    def test_update_transient_exception_persistent_503(self, exc, label):
+        bid = _seed_bill()
+        with _Spy(update_faults=[exc, exc]) as spy:
+            with pytest.raises(HTTPException) as ei:
+                _call(bid, new_store_name="TEST_UpdExc")
+        assert len(spy.rec["update_one"]) == 2, "no retry on transient write error"
+&gt;       assert ei.value.status_code == 503, (
+            f"{label}: expected 503, got {ei.value.status_code} detail={ei.value.detail}")
+E       AssertionError: AutoReconnect: expected 503, got 500 detail=Brand edit server error: primary stepped down
+E       assert 500 == 503
+E        +  where 500 = HTTPException(status_code=500, detail='Brand edit server error: primary stepped down').status_code
+E        +    where HTTPException(status_code=500, detail='Brand edit server error: primary stepped down') = &lt;ExceptionInfo HTTPException(status_code=500, detail='Brand edit server error: primary stepped down') tblen=5&gt;.value
+
+tests/test_iteration68_editbrand_retry.py:325: AssertionError</failure></testcase><testcase classname="tests.test_iteration68_editbrand_retry.TestUpdateOneHardening" name="test_update_transient_exception_persistent_503[exc2-ExecutionTimeout]" time="0.305"><failure message="AssertionError: ExecutionTimeout: expected 503, got 500 detail=Brand edit server error: operation exceeded time limit&#10;assert 500 == 503&#10; +  where 500 = HTTPException(status_code=500, detail='Brand edit server error: operation exceeded time limit').status_code&#10; +    where HTTPException(status_code=500, detail='Brand edit server error: operation exceeded time limit') = &lt;ExceptionInfo HTTPException(status_code=500, detail='Brand edit server error: operation exceeded time limit') tblen=5&gt;.value">self = &lt;test_iteration68_editbrand_retry.TestUpdateOneHardening object at 0xff5d778dfe50&gt;
+exc = ExecutionTimeout('operation exceeded time limit')
+label = 'ExecutionTimeout'
+
+    @pytest.mark.parametrize("exc,label", [
+        (NetworkTimeout("connection closed: The write operation timed out"), "NetworkTimeout"),
+        (AutoReconnect("primary stepped down"), "AutoReconnect"),
+        (ExecutionTimeout("operation exceeded time limit"), "ExecutionTimeout"),
+    ])
+    def test_update_transient_exception_persistent_503(self, exc, label):
+        bid = _seed_bill()
+        with _Spy(update_faults=[exc, exc]) as spy:
+            with pytest.raises(HTTPException) as ei:
+                _call(bid, new_store_name="TEST_UpdExc")
+        assert len(spy.rec["update_one"]) == 2, "no retry on transient write error"
+&gt;       assert ei.value.status_code == 503, (
+            f"{label}: expected 503, got {ei.value.status_code} detail={ei.value.detail}")
+E       AssertionError: ExecutionTimeout: expected 503, got 500 detail=Brand edit server error: operation exceeded time limit
+E       assert 500 == 503
+E        +  where 500 = HTTPException(status_code=500, detail='Brand edit server error: operation exceeded time limit').status_code
+E        +    where HTTPException(status_code=500, detail='Brand edit server error: operation exceeded time limit') = &lt;ExceptionInfo HTTPException(status_code=500, detail='Brand edit server error: operation exceeded time limit') tblen=5&gt;.value
+
+tests/test_iteration68_editbrand_retry.py:325: AssertionError</failure></testcase><testcase classname="tests.test_iteration68_editbrand_retry.TestUpdateOneHardening" name="test_non_transient_error_still_500" time="0.003" /><testcase classname="tests.test_iteration68_editbrand_retry.TestRegression" name="test_404_unknown_bill" time="0.251" /><testcase classname="tests.test_iteration68_editbrand_retry.TestRegression" name="test_400_blank_brand" time="0.138" /><testcase classname="tests.test_iteration68_editbrand_retry.TestRegression" name="test_unauthenticated_rejected" time="0.118" /><testcase classname="tests.test_iteration68_editbrand_retry.TestRegression" name="test_iter66_67_projections_still_lean" time="0.004" /><testcase classname="tests.test_iteration68_editbrand_retry.TestRegression" name="test_prev_iteration_suites_pass" time="16.095" /></testsuite></testsuites>

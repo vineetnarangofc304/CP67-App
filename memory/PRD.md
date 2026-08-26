@@ -1158,3 +1158,38 @@ Three backlog items closed. Bill Image Streaming intentionally deferred — it w
 
 ### Action required from user
 Redeploy PREVIEW → PRODUCTION. All 3 fixes are additive/backward-compatible; no schema or contract changes.
+
+## Session 27 (Feb 2026) — Fix Brand popup 500 hardening
+
+### Symptom (production screenshot)
+Admin on cp67bot.fundlexperiences.com opens Fix Brand Name popup, types "mar", clicks a suggestion (e.g. MARKS AND SPENCERS Anchor) → toast: "Brand edit server error: customer-apps-shard-00-01.jxp3ul.mongodb.net:27017: The read operation timed out". API being hit: `POST /api/admin/bills/{bill_id}/edit-brand`.
+
+### Root cause
+Iteration 66 shipped a lean projection on the initial find_one but left two gaps:
+1. **No retry on transient Atlas errors** — a single NetworkTimeout / AutoReconnect / ExecutionTimeout aborted the request with a raw 500.
+2. **No timeout on update_one** — a slow Motor write could hang past Cloudflare's edge timeout.
+3. **Raw 500** — the admin UI showed a scary "The read operation timed out" toast instead of a retry hint.
+
+### Fixes (server.py POST /api/admin/bills/{bill_id}/edit-brand)
+1. **1-shot retry** on both `find_one` and `update_one` for `(NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout)` with 0.3s backoff.
+2. **`max_time_ms=8000`** on find_one (previously unbounded on the server side).
+3. **`asyncio.wait_for(update_one, timeout=6.0)`** so writes can't hang past 6s per attempt.
+4. **HTTP 503 mapping** — top-level except now uses `isinstance()` against pymongo's transient classes (plus a str(e) fallback for messages like "operation exceeded time limit"). Returns a friendly `503 "MongoDB is under load — the brand edit didn't go through. Please retry in ~10s."` instead of a raw 500.
+
+Iter-68 initially tried substring detection; iter-69 fixed the gap by switching to `isinstance()` because pymongo error messages never contain class names.
+
+### Verification (iteration_68 → iteration_69)
+- 22/22 backend tests PASS (`/app/backend/tests/test_iteration68_editbrand_retry.py`).
+- Happy path: 0.15s on a 500KB-image bill.
+- Single-hang retry: ~6.3s (was 10.4s).
+- Worst-case double-hang: ~12.3s + 503 (was 20.6s, still under Cloudflare's 30s edge timeout).
+- All 4 pymongo transient classes now map to 503 on both find_one and update_one paths.
+- Non-transient errors (ValueError etc.) still return 500 with the exact reason.
+- Bill left untouched on persistent failure (no partial write).
+
+### Known observations
+- The retry-with-backoff loop is now duplicated between find_one and update_one; extract into a helper if reused.
+- server.py is 9430 lines — the admin bill routes (edit-brand / reprocess / force-credit) remain the obvious first-extraction target.
+
+### Action required from user
+Redeploy PREVIEW → PRODUCTION. Fix Brand popup will retry once through Atlas hiccups; on persistent failure the admin UI shows a friendly "retry in ~10s" toast instead of "server error".
