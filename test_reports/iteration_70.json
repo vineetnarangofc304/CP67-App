@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 70 backend-only verification of the edit-brand async-write refactor. Created /app/backend/tests/test_iteration70_editbrand_async_write.py (19 tests, 19/19 PASS). Verified: (1) queued path (reprocess=true, wait_for_result=false) returns 200 {success:true, reprocessed:'queued'} in 0.12s over the public URL and ~1ms of in-process DB work even when update_one is patched to hang 30s — ZERO update_one on the request thread (spy-confirmed), exactly ONE bg task queued and it is _apply_brand_edit_and_reprocess_bg with the right args; request thread does a single lean find_one {_id:0,id,store_name,status} with max_time_ms=8000 and does not mutate the doc. (2) bg worker happy path: 1 update_one, store_name/brand_edited_at/brand_edited_by/admin_notes audit line/reprocessing_started_at all persisted, _reprocess_after_brand_edit invoked. (3) Real end-to-end HTTP → FastAPI BackgroundTasks: rename persisted by the bg worker within seconds. (4) Atlas hiccup: NetworkTimeout x2 then success => exactly 3 update_one attempts, measured backoff gaps [1.0s, 2.0s], total 3.00s, final write persisted, reprocess still ran; AutoReconnect/ServerSelectionTimeoutError/ExecutionTimeout also retried. (5) Persistent failure (NetworkTimeout x3): reprocess STILL invoked with the corrected name, doc unchanged, worker never raises (also with a non-transient ValueError + exploding reprocess). (6) Rename-only path (reprocess=false) still writes inline with 1-shot retry; double transient failure and double hang both map to 503 with the exact friendly detail (hang+hang ~12.3s). (7) Regressions: 404 unknown bill, 400 blank name (doc untouched), 401 unauthenticated, find_one 1-shot retry then 503. Full iter-61..70 regression: 152 passed / 3 failed — all 3 failures are pre-existing stale test guards unrelated to iteration 70 (git diff HEAD~1 shows only edit_bill_brand was touched).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/consumer/popups/active, POST /api/consumer/popups/dismiss", "issue": "Admin JWT is rejected with 401 'Invalid token type' while test_iteration65 expects 403. Access IS correctly denied, so this is an HTTP-status-semantics mismatch only (pre-existing, unrelated to iter-70). Decide 401 vs 403 and align the code or the iter-65 guard."},
+      {"endpoint": "GET /api/admin/bills/{id}/force-credit-preview", "issue": "test_iteration62 source-inspection guard asserts the literal find_one({\"id\": bill_id}, {\"_id\": 0}); the handler's projection has since changed, so the guard fails. Stale guard, pre-existing, no functional impact."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration70_editbrand_async_write.py",
+    "/app/backend/tests/test_iteration68_editbrand_retry.py",
+    "/app/test_reports/pytest/iter70_results.xml"
+  ],
+  "action_items": [
+    "No action needed for iteration 70 — the async-write refactor behaves exactly as specified (request thread write-free, sub-200ms, 3-attempt bg retry with 1s/2s backoff, reprocess always invoked).",
+    "Optional cleanup: refresh the two stale pre-existing guards (test_iteration62 force_credit_preview source assertion; test_iteration65 401-vs-403 expectation)."
+  ],
+  "critical_code_review_comments": [
+    "_apply_brand_edit_and_reprocess_bg swallows all failures — if all 3 update_one attempts fail AND the reprocess pipeline leaves the bill in a non-approve state, the admin's edit is silently lost with only a log line. Consider a small persisted retry/dead-letter marker (e.g. brand_edit_pending) so the UI or a cron can retry.",
+    "The queued path returns success:true before the write is attempted, so the popup can report success for a bill whose brand never changes. Acceptable per the design tradeoff, but the UI message should keep the 'refresh in ~10s' hint (it does).",
+    "Duplicate audit-note/$set write payload now exists in both _apply_brand_edit_and_reprocess_bg and the inline rename-only branch — extract a shared _brand_edit_set(...) helper (DRY).",
+    "server.py is 9483 lines — well past the 700-line guideline; edit-brand/reprocess should move to its own router module."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration70_editbrand_async_write.py",
+    "/app/backend/tests/test_iteration68_editbrand_retry.py",
+    "/app/backend/tests/test_iteration66_reprocess_projections.py"
+  ],
+  "success_rate": {"backend": "100% (19/19 iter-70 tests; 152/155 across iter-61..70, 3 pre-existing stale guards)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "TEST_ITER70_* bills + TEST_ITER70_USER user; all deleted in module teardown (verified 0 remaining docs).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin admin / CP67Admin@2025 from /app/memory/test_credentials.md",
+  "context_for_next_testing_agent": "test_iteration70_editbrand_async_write.py is the edit-brand regression suite for the async-write design: request thread must have 0 update_one and 1 bg task (_apply_brand_edit_and_reprocess_bg); bg worker retries update_one 3x with 1s/2s backoff (timing assertions: gap[0] 0.8-1.6s, gap[1] 1.8-2.6s, total 2.8-6.0s) and 12s per-attempt wait_for; rename-only inline path keeps the 6.0s wait_for so hang+hang => 503 at ~12.3s. To spy on the bg worker, call server._apply_brand_edit_and_reprocess_bg(...) in-process under the _Spy/_DbProxy/_CollProxy fault injector (per-attempt exception instance or the literal 'hang'), patching server._reprocess_after_brand_edit with an async stub. iter-68/66 stale assertions were updated for the new architecture; iter-62 force_credit_preview source guard and iter-65 401-vs-403 popup expectation still fail and are pre-existing.",
+  "rca_of_the_issue": "Confirmed the iter-70 design fixes the reported production symptom: with db.bills.update_one patched to sleep 30s, the handler still returns 'queued' in ~1ms of DB work, so an Atlas write taking 6-10s can no longer produce the 503 'MongoDB is under load' toast. The write now happens in _apply_brand_edit_and_reprocess_bg with 3 attempts (12s each, 1s/2s backoff), and _reprocess_after_brand_edit is invoked even when all writes fail, so the reprocess pipeline's own store_name write recovers the admin's edit."
+}

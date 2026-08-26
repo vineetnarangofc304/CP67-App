@@ -1193,3 +1193,34 @@ Iter-68 initially tried substring detection; iter-69 fixed the gap by switching 
 
 ### Action required from user
 Redeploy PREVIEW → PRODUCTION. Fix Brand popup will retry once through Atlas hiccups; on persistent failure the admin UI shows a friendly "retry in ~10s" toast instead of "server error".
+
+## Session 28 (Feb 2026) — Fix Brand popup: async-write refactor
+
+### Symptom (production, user screenshot)
+Even after iter-69's retry + friendly 503, the popup shows: "MongoDB is under load — the brand edit didn't go through. Please retry in ~10s." The retry doesn't help because Atlas is genuinely taking 6-10s to `update_one` on legacy bills with inline multi-MB image_url — both attempts persistently fail.
+
+### Root cause
+The `update_one` on the request thread had a hard latency ceiling (6s per attempt × 2 = 12s worst case). Legacy bills carry inline base64 image_url payloads that make Atlas rewrite the whole doc on every `$set`, and under Atlas M10-tier load this can genuinely take 6-10s per write. Retry doesn't help when the underlying operation is that slow.
+
+### Fix (iter-70)
+Refactored `POST /api/admin/bills/{bill_id}/edit-brand` to fully async writes:
+1. **Request thread**: does ONE cheap indexed find_one (lean projection + max_time_ms=8000 + 1-shot retry), builds the audit note, and returns 200 in <200ms. NO writes on the request thread.
+2. **NEW background worker `_apply_brand_edit_and_reprocess_bg`**: owns the update_one (3 attempts, 12s wait_for each, 1s/2s backoff) PLUS the reprocess call. If all 3 write attempts fail, the reprocess pipeline is STILL invoked because it re-writes `store_name` on approve/manual_review — so Atlas hiccups can't lose the admin's edit.
+3. **Rename-only path (`reprocess=false`)** keeps its inline retry write (unchanged from iter-69) since there's no bg worker to defer to.
+4. **503 mapping** (from iter-69) retained as safety net.
+
+### Verification (iteration_70.json)
+- 19/19 new tests PASS (`/app/backend/tests/test_iteration70_editbrand_async_write.py`).
+- Request thread: 0.12s HTTP round-trip on the public URL; ZERO update_one on the request thread (spy-confirmed); exactly 1 bg task queued.
+- Bg worker happy path: 1 update_one, all 5 fields persisted (store_name, brand_edited_at, brand_edited_by, admin_notes, reprocessing_started_at).
+- Atlas hiccup: NetworkTimeout ×2 → success on 3rd, measured backoff [1.0s, 2.0s], total 3.00s.
+- Persistent 3× NetworkTimeout: reprocess STILL invoked with the corrected name, worker never raises.
+- Real e2e: rename persisted by bg within seconds.
+- Regression: 152/155 iter-61..70 pass (3 failures are pre-existing stale guards unrelated to iter-70).
+
+### Known observations
+- If all 3 update_one attempts fail AND the reprocess leaves the bill in a non-approve state, the edit is silently lost (only in logs). Future: persist a `brand_edit_pending` marker for retry.
+- Duplicate `$set` payload now in both bg worker and inline rename-only branch — extract helper if reused.
+
+### Action required from user
+Redeploy PREVIEW → PRODUCTION. Fix Brand popup will return instantly even during Atlas load; the write happens in the background with 3 retries and Atlas load can no longer produce the 503 toast on this path.

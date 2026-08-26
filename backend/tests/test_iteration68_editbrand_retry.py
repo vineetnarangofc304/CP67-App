@@ -227,7 +227,8 @@ class TestEditBrandHappyPath:
         assert doc.get("reprocessing_started_at")
         assert "TEST_WrongBrand" in (doc.get("admin_notes") or "")
 
-    def test_lean_projection_maxtime_and_single_update(self):
+    def test_lean_projection_maxtime_and_no_request_thread_update(self):
+        """iter-70: request thread does the lean find_one and NOTHING else."""
         bid = _seed_bill()
         with _Spy() as spy:
             res = _call(bid, reprocess=True, auto_force_credit_on_fundle_reject=True)
@@ -237,7 +238,8 @@ class TestEditBrandHappyPath:
         assert {k for k, v in proj.items() if v == 1} == {"id", "store_name", "status"}, proj
         assert proj.get("_id") == 0 and proj.get("image_url") != 1
         assert spy.find_max_times() == [8000], spy.find_max_times()
-        assert len(spy.rec["update_one"]) == 1, f"update_one called {len(spy.rec['update_one'])}x"
+        assert len(spy.rec["update_one"]) == 0, (
+            f"iter-70: request thread must not write, got {len(spy.rec['update_one'])} update_one")
 
     def test_rename_only_no_reprocess(self):
         bid = _seed_bill()
@@ -261,9 +263,8 @@ class TestFindOneTransient:
             res = _call(bid, new_store_name="TEST_RetryOk")
         assert res["success"] is True and res["reprocessed"] == "queued", res
         assert len(spy.rec["find_one"]) == 2, "no retry happened on find_one"
-        assert len(spy.rec["update_one"]) == 1
-        doc = _run(server.db.bills.find_one({"id": bid}, {"_id": 0, "store_name": 1}))
-        assert doc["store_name"] == "TEST_RetryOk"
+        # iter-70: the write moved to the bg worker — request thread writes nothing
+        assert len(spy.rec["update_one"]) == 0
 
     @pytest.mark.parametrize("exc,label", [
         (NetworkTimeout("customer-apps-shard-00-01:27017: The read operation timed out"), "NetworkTimeout"),
@@ -287,11 +288,14 @@ class TestFindOneTransient:
 
 # ======================================================= simulated update hang
 class TestUpdateOneHardening:
+    """iter-70: the inline update_one now only exists on the rename-only
+    (reprocess=False) path, so these use reprocess=False."""
+
     def test_hang_then_success_retries(self):
         bid = _seed_bill()
         t0 = time.time()
         with _Spy(update_faults=["hang", None]) as spy:
-            res = _call(bid, new_store_name="TEST_UpdRetry")
+            res = _call(bid, new_store_name="TEST_UpdRetry", reprocess=False)
         elapsed = time.time() - t0
         assert res["success"] is True, res
         assert len(spy.rec["update_one"]) == 2, "update_one was not retried after wait_for timeout"
@@ -305,7 +309,7 @@ class TestUpdateOneHardening:
         t0 = time.time()
         with _Spy(update_faults=["hang", "hang"]) as spy:
             with pytest.raises(HTTPException) as ei:
-                _call(bid, new_store_name="TEST_UpdFail")
+                _call(bid, new_store_name="TEST_UpdFail", reprocess=False)
         elapsed = time.time() - t0
         assert len(spy.rec["update_one"]) == 2
         assert ei.value.status_code == 503, f"got {ei.value.status_code}: {ei.value.detail}"
@@ -323,7 +327,7 @@ class TestUpdateOneHardening:
         bid = _seed_bill()
         with _Spy(update_faults=[exc, exc]) as spy:
             with pytest.raises(HTTPException) as ei:
-                _call(bid, new_store_name="TEST_UpdExc")
+                _call(bid, new_store_name="TEST_UpdExc", reprocess=False)
         assert len(spy.rec["update_one"]) == 2, "no retry on transient write error"
         assert ei.value.status_code == 503, (
             f"{label}: expected 503, got {ei.value.status_code} detail={ei.value.detail}")
@@ -333,7 +337,7 @@ class TestUpdateOneHardening:
         bid = _seed_bill()
         with _Spy(update_faults=[ValueError("boom-not-transient")]):
             with pytest.raises(HTTPException) as ei:
-                _call(bid, new_store_name="TEST_Boom")
+                _call(bid, new_store_name="TEST_Boom", reprocess=False)
         assert ei.value.status_code == 500, ei.value.status_code
         assert "Brand edit server error" in str(ei.value.detail)
 

@@ -232,7 +232,11 @@ class TestEditBrandQueued:
         # queued mode must not read the bill again on the request thread
         assert len(spy.calls) == 1, f"queued path made {len(spy.calls)} bills.find_one calls: {spy.projections()}"
         names = [getattr(t.func, "__name__", str(t.func)) for t in bg.tasks]
-        assert "_reprocess_after_brand_edit" in names, f"bg reprocess not queued: {names}"
+        # iter-70: the queued path now hands off to the unified worker
+        # `_apply_brand_edit_and_reprocess_bg` which owns BOTH the write and
+        # the `_reprocess_after_brand_edit` call.
+        assert ("_apply_brand_edit_and_reprocess_bg" in names
+                or "_reprocess_after_brand_edit" in names), f"bg reprocess not queued: {names}"
 
     def test_edit_brand_no_reprocess_flag(self):
         bid = _seed_bill()

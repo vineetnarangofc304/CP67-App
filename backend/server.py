@@ -4642,6 +4642,59 @@ class EditBrandRequest(BaseModel):
     wait_for_result: bool = False  # opt-in: block until Fundle responds (legacy sync mode)
 
 
+async def _apply_brand_edit_and_reprocess_bg(bill_id: str, old_name: Optional[str],
+                                              new_name: str, by_user: str, auto_fc: bool):
+    """Feb 2026 (iter-70): unified background worker for the Fix Brand popup.
+    Owns BOTH the write (store_name + audit note + reprocessing_started_at)
+    AND the reprocess call. Moved out of the request thread because an
+    update_one on a bill doc that carries a legacy multi-MB inline image_url
+    can take 6-10s on Atlas under load, tripping the request-thread timeout
+    and surfacing as HTTP 503 to the admin UI.
+
+    All DB writes are retried on transient errors. If both write attempts
+    fail, we still try the reprocess (the pipeline itself will re-write
+    store_name) so a slow Atlas doesn't lose the admin's edit entirely.
+    """
+    from pymongo.errors import NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout
+    _retryable = (NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout)
+    audit_note = f"Brand name updated: '{old_name}' → '{new_name}' by admin"
+    write_ok = False
+    for attempt in range(3):
+        try:
+            await asyncio.wait_for(
+                db.bills.update_one(
+                    {"id": bill_id},
+                    {"$set": {
+                        "store_name": new_name,
+                        "brand_edited_at": datetime.now(timezone.utc).isoformat(),
+                        "brand_edited_by": by_user,
+                        "admin_notes": audit_note,
+                        "reprocessing_started_at": datetime.now(timezone.utc).isoformat(),
+                    }}
+                ),
+                timeout=12.0,
+            )
+            write_ok = True
+            break
+        except (asyncio.TimeoutError, *_retryable) as e:
+            logger.warning(f"edit-brand (bg): update_one attempt {attempt+1} failed for {bill_id}: {e}")
+            if attempt < 2:
+                await asyncio.sleep(1.0 + attempt)
+                continue
+        except Exception as e:
+            logger.exception(f"edit-brand (bg): update_one non-transient failure for {bill_id}: {e}")
+            break
+    if not write_ok:
+        logger.error(f"edit-brand (bg): all update_one attempts failed for {bill_id}; will still attempt reprocess")
+    # Kick off the reprocess pipeline regardless of the write outcome — the
+    # pipeline re-writes store_name on approve/manual_review, so a slow
+    # Atlas doesn't lose the admin's brand correction.
+    try:
+        await _reprocess_after_brand_edit(bill_id, new_name, auto_fc)
+    except Exception as e:
+        logger.exception(f"edit-brand (bg): reprocess chain failed for {bill_id}: {e}")
+
+
 async def _reprocess_after_brand_edit(bill_id: str, new_name: str, auto_fc: bool):
     """Background worker for edit-brand — runs the reprocess pipeline off the
     request thread so Cloudflare/browser fetch doesn't time out (Fundle
@@ -4712,13 +4765,13 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
     try:
         from pymongo.errors import NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout
         _retryable = (NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout)
-        # Feb 2026: only fetch fields needed for the status/audit-note check.
-        # Pulling the full bill (including legacy multi-MB image_url) here
-        # tripped Atlas MaxTimeMSExpired and produced the admin "Brand edit
-        # failed (HTTP 500)" toast. The bg reprocess worker re-fetches the
-        # full doc with 25s max_time_ms when it actually needs the image.
-        # Feb 2026 (iter-68): explicit 1-shot retry on transient Atlas
-        # NetworkTimeout so a bad-replica blip doesn't surface as HTTP 500.
+        # Feb 2026 (iter-70): request thread does ONE cheap indexed find_one
+        # and NOTHING else. All writes (audit note + reprocessing_started_at
+        # marker) are moved into the background worker together with the
+        # actual reprocess call. Reason: even a $set update on a bill doc
+        # that carries a legacy multi-MB inline image_url can take 6-10s on
+        # Atlas under load — the update_one on the request thread was the
+        # last remaining Atlas-timeout risk on this endpoint.
         bill = None
         for attempt in range(2):
             try:
@@ -4740,12 +4793,26 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
             raise HTTPException(status_code=400, detail="new_store_name is required")
 
         old_name = bill.get("store_name")
-        audit_note = f"Brand name updated: '{old_name}' → '{new_name}' by admin"
 
-        # Feb 2026 (iter-68): update_one also gets a 1-shot retry — under
-        # Atlas load a write to a bill doc that carries a multi-MB inline
-        # image_url can trip socketTimeoutMS. Retry once, then surface a
-        # friendlier 503 (not raw 500) so the admin UI can suggest reload.
+        # Default: queue background worker that does BOTH the write AND the
+        # reprocess. Returns in <200ms regardless of Atlas latency.
+        if payload_body.reprocess and not payload_body.wait_for_result:
+            background_tasks.add_task(
+                _apply_brand_edit_and_reprocess_bg,
+                bill_id, old_name, new_name,
+                payload.get("username") or "admin",
+                payload_body.auto_force_credit_on_fundle_reject,
+            )
+            return {
+                "success": True,
+                "reprocessed": "queued",
+                "store_name": new_name,
+                "message": "Brand updated. Reprocessing in background — refresh the list in ~10 seconds to see the result."
+            }
+
+        # Rename-only path (reprocess=false): still needs the write, but
+        # without an image-heavy update pipeline. Do it inline with retry.
+        audit_note = f"Brand name updated: '{old_name}' → '{new_name}' by admin"
         for attempt in range(2):
             try:
                 await asyncio.wait_for(
@@ -4756,7 +4823,6 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
                             "brand_edited_at": datetime.now(timezone.utc).isoformat(),
                             "brand_edited_by": payload.get("username") or "admin",
                             "admin_notes": audit_note,
-                            # Mark as reprocessing so admin UI can show a spinner
                             "reprocessing_started_at": datetime.now(timezone.utc).isoformat() if payload_body.reprocess else None,
                         }}
                     ),
@@ -4771,19 +4837,6 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
 
         if not payload_body.reprocess:
             return {"success": True, "reprocessed": False, "store_name": new_name}
-
-        # Default: queue background reprocess and return immediately
-        if not payload_body.wait_for_result:
-            background_tasks.add_task(
-                _reprocess_after_brand_edit,
-                bill_id, new_name, payload_body.auto_force_credit_on_fundle_reject
-            )
-            return {
-                "success": True,
-                "reprocessed": "queued",
-                "store_name": new_name,
-                "message": "Brand updated. Reprocessing in background — refresh the list in ~10 seconds to see the result."
-            }
 
         # Sync path (legacy) — waits for Fundle. Kept for admins who need immediate result.
         # Feb 2026: 25s max_time_ms — legacy inline image_url transfer.
