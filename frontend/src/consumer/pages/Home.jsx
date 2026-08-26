@@ -28,6 +28,52 @@ function AnimatedCounter({ value, duration = 1.5 }) {
 const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } };
 const fadeUp = { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1, transition: { type: 'spring', damping: 20 } } };
 
+// Feb 2026: guard <img> renders so stale/empty seed URLs don't paint the broken
+// image icon AND don't trigger React's "empty src" warning. Renders a soft
+// placeholder when src is missing or an onError fires (dead cross-env URL,
+// 404, etc.).
+function SafeImage({ src, alt, className, style, loading = 'lazy', fallbackLabel }) {
+  const [errored, setErrored] = React.useState(false);
+  const trimmed = typeof src === 'string' ? src.trim() : '';
+  const isBad = !trimmed || errored;
+  if (isBad) {
+    return (
+      <div
+        className={className}
+        aria-label={alt || fallbackLabel || 'image'}
+        style={{
+          ...(style || {}),
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, rgba(30,20,10,0.85), rgba(198,137,57,0.45))',
+          color: 'rgba(255,223,115,0.92)',
+          fontFamily: 'var(--font-heading)',
+          fontSize: 14,
+          fontWeight: 600,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          textAlign: 'center',
+          padding: '0 12px',
+          textShadow: '0 1px 2px rgba(0,0,0,0.4)',
+        }}
+      >
+        {fallbackLabel || (alt ? alt.split(' ').slice(0, 3).join(' ') : '\u00A0')}
+      </div>
+    );
+  }
+  return (
+    <img
+      src={trimmed}
+      alt={alt || ''}
+      loading={loading}
+      className={className}
+      style={style}
+      onError={() => setErrored(true)}
+    />
+  );
+}
+
 // Point 41 b, c: tier colours + next-tier threshold so the hero shows the
 // customer's current level, the palette that matches, and how many points to
 // climb to the next slab. Thresholds mirror /consumer/tier-journey.
@@ -150,22 +196,29 @@ export default function Home({ onMenuOpen }) {
               if (tierInfo && Array.isArray(tierInfo.tiers)) {
                 const nextName = tierInfo.next_tier;
                 const away = Math.max(0, Number(tierInfo.points_to_next || 0));
-                if (!nextName) {
-                  return <span data-testid="tier-progress-text" style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>You&apos;ve reached the top tier</span>;
+                // Feb 2026: only trust "reached top tier" when current tier
+                // actually IS the top slab — a Bronze user with 0 pts must
+                // never see "top tier" copy (was a live bug on production).
+                const currentIsTop = !TIER_META[tierName]?.next;
+                if (!nextName && currentIsTop) {
+                  return <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>You&apos;ve reached the top tier</span>;
                 }
-                return away > 0
-                  ? <span data-testid="tier-progress-text" style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 4 }}>You are <strong>{away.toLocaleString()}</strong> points away from <strong>{nextName}</strong></span>
-                  : <span data-testid="tier-progress-text" style={{ fontSize: 11, color: '#FFDF73', marginTop: 4 }}>Ready to unlock {nextName}</span>;
+                if (nextName) {
+                  return away > 0
+                    ? <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 4 }}>You are <strong>{away.toLocaleString()}</strong> points away from <strong>{nextName}</strong></span>
+                    : <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: '#FFDF73', marginTop: 4 }}>Ready to unlock {nextName}</span>;
+                }
+                // Fall through to static meta when tier-info payload is inconsistent
               }
-              // Static fallback (offline / API failure)
+              // Static fallback (offline / API failure / stale tier-info)
               const meta = TIER_META[tierName] || TIER_META.Bronze;
               if (!meta.next || !meta.nextAt) {
-                return <span data-testid="tier-progress-text" style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>You&apos;ve reached the top tier</span>;
+                return <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>You&apos;ve reached the top tier</span>;
               }
               const away = Math.max(0, meta.nextAt - (u.balance_points || 0));
               return away > 0
-                ? <span data-testid="tier-progress-text" style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>You are <strong>{away.toLocaleString()}</strong> points away from <strong>{meta.next}</strong></span>
-                : <span data-testid="tier-progress-text" style={{ fontSize: 11, color: '#FFDF73', marginTop: 4 }}>Ready to unlock {meta.next}</span>;
+                ? <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>You are <strong>{away.toLocaleString()}</strong> points away from <strong>{meta.next}</strong></span>
+                : <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: '#FFDF73', marginTop: 4 }}>Ready to unlock {meta.next}</span>;
             })()}
           </div>
           <div className="points-card-right">
@@ -236,7 +289,7 @@ export default function Home({ onMenuOpen }) {
                 transition={{ duration: 0.6 }}
                 style={{ position: 'absolute', inset: 0 }}
               >
-                <img src={data.banners[bannerIdx].image_url} alt={data.banners[bannerIdx].title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <SafeImage src={data.banners[bannerIdx].image_url} alt={data.banners[bannerIdx].title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} fallbackLabel={data.banners[bannerIdx].title} />
                 <div className="banner-overlay">
                   <h3>{data.banners[bannerIdx].title}</h3>
                   <p>{data.banners[bannerIdx].subtitle}</p>
@@ -290,7 +343,7 @@ export default function Home({ onMenuOpen }) {
                 whileTap={{ scale: 0.96 }}
               >
                 <div className="offer-card-img">
-                  <img src={o.image_url} alt={o.title} loading="lazy" />
+                  <SafeImage src={o.image_url} alt={o.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} fallbackLabel={o.title} />
                   <span className="offer-badge">{o.discount_value}</span>
                 </div>
                 <div className="offer-card-info">
@@ -325,7 +378,7 @@ export default function Home({ onMenuOpen }) {
                 whileTap={{ scale: 0.96 }}
               >
                 <div className="store-card-img">
-                  {s.cover_image ? <img src={s.cover_image} alt={s.name} loading="lazy" /> : <div className="store-grid-placeholder"><span>{s.name[0]}</span></div>}
+                  {s.cover_image ? <SafeImage src={s.cover_image} alt={s.name} fallbackLabel={s.name} /> : <div className="store-grid-placeholder"><span>{s.name[0]}</span></div>}
                 </div>
                 <div className="store-card-info">
                   <h4>{s.name}</h4>
@@ -356,7 +409,7 @@ export default function Home({ onMenuOpen }) {
                 transition={{ delay: i * 0.1 }}
                 whileTap={{ scale: 0.96 }}
               >
-                <img src={e.image_url} alt={e.title} loading="lazy" />
+                <SafeImage src={e.image_url} alt={e.title} fallbackLabel={e.title} />
                 <div className="event-card-overlay">
                   <span className="event-date">{new Date(e.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
                   <h4>{e.title}</h4>

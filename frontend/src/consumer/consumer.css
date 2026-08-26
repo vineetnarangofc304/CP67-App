@@ -735,6 +735,7 @@
 }
 
 .points-label {
+  display: block;
   font-size: 12px;
   color: var(--cp-gold-light);
   font-weight: 500;
@@ -749,6 +750,7 @@
 }
 
 .points-card-name {
+  display: block;
   font-size: 14px;
   color: var(--cp-gold-light);
   font-weight: 600;

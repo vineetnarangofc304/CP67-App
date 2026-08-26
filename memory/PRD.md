@@ -1125,3 +1125,36 @@ Additionally, `_reprocess_single_bill` had no `objstore:` branch — migrated bi
 
 ### Action required from user
 Redeploy PREVIEW → PRODUCTION. Fix Brand submit + Reprocess should stop failing on legacy heavy bills AND on migrated objstore bills.
+
+## Session 26 (Feb 2026) — Finish the iteration_66 next-action backlog
+
+Three backlog items closed. Bill Image Streaming intentionally deferred — it would require coordinated frontend refactor and risks the working admin Bill Review modal.
+
+### Fixes
+
+1. **Bill read cleanup — the last 3 full-doc find_ones**
+   - `GET /api/admin/bills/{id}/force-credit-preview` → projection `{_id:0, amount:1, store_name:1}` (only fields consumed).
+   - `POST /api/admin/bills/{id}/force-credit` → projection `{_id:0, image_url:0, ocr_raw_data:0}` + `max_time_ms=15000` (force-credit branch of `_reprocess_single_bill` never touches image, so heavy fields excluded).
+   - `POST /api/bills/{id}/reprocess-legacy` → `{_id:0}` + `max_time_ms=25000` (this path DOES need image_url for `_resolve_bill_image_base64`).
+
+2. **Shared consumer auth**
+   - `routes/admin_diy._current_consumer` now delegates to `routes.consumer.get_current_consumer`. Single source of truth for consumer-token validation — the role/type claim-divergence bug (iter 65) can never recur.
+
+3. **Consumer Home hardening**
+   - New `SafeImage` component in `consumer/pages/Home.jsx` — renders a gradient placeholder + label when src is empty, whitespace, null, or fires onError. Replaces 4 unguarded `<img>` renders (banner, hot deal, featured store, event). Kills the React "empty string src" warning + the broken-image icon on stale cross-env URLs.
+   - Placeholder styling upgraded to warm gold-on-dark gradient (was low-contrast white on cream) for legibility.
+   - Tier card copy fix: "You've reached the top tier" only shows when the current tier IS actually the top slab (per TIER_META). A Bronze user with 0 pts now sees "You are 500 points away from Silver" (was showing "top tier" — a real UX bug on production).
+   - Layout fix: `.points-card-name`, `.points-label` and tier-progress spans are now `display: block` so `firstName` no longer runs into the tier text (was rendering "TestYou've reached the top tier").
+
+### Verification (iteration_67.json)
+- 16/16 backend tests PASS.
+- Playwright: SafeImage renders placeholder for empty/whitespace/null/dead URLs; renders real `<img>` (naturalWidth>0) for valid data-URI; no React empty-src warning.
+- Tier card: Bronze user with 0 pts → "You are 500 points away from Silver" with 25px vertical gap below the name.
+- Consumer JWT still 200 on `/api/consumer/popups/active` and `/dismiss` (delegation didn't regress); admin/staff/garbage tokens → 401/403.
+
+### Still on backlog
+- **Bill Image Streaming** — GET /api/bills/{id}/image as raw StreamingResponse (30% bandwidth win, requires coordinated frontend change).
+- **Real banner/hot-deal/event seed content** — preview DB still carries dead cross-env URLs; SafeImage now hides them gracefully but a proper re-seed would show real hero content.
+
+### Action required from user
+Redeploy PREVIEW → PRODUCTION. All 3 fixes are additive/backward-compatible; no schema or contract changes.

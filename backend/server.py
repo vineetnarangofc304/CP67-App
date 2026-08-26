@@ -3602,7 +3602,9 @@ async def _reprocess_bill_full_legacy_impl(bill_id: str, background_tasks: Backg
     complete transaction detail."""
     
     # Get bill
-    bill = await db.bills.find_one({"id": bill_id})
+    # Feb 2026: reprocess-legacy needs image_url for _resolve_bill_image_base64,
+    # so keep full doc but cap max_time_ms=25000 for legacy multi-MB payloads.
+    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0}, max_time_ms=25000)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
     
@@ -4578,7 +4580,12 @@ async def force_credit_preview(bill_id: str, payload: dict = Depends(verify_jwt_
     """Returns the auto-calculated force-credit points for this bill (no mutation).
     Used by the admin UI to show 'You're about to credit X points' before confirm.
     """
-    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+    # Feb 2026: force-credit-preview only reads amount + store_name — lean
+    # projection prevents Atlas MaxTimeMSExpired on legacy multi-MB bills.
+    bill = await db.bills.find_one(
+        {"id": bill_id},
+        {"_id": 0, "amount": 1, "store_name": 1},
+    )
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
     auto = await _compute_auto_points(float(bill.get("amount") or 0), bill.get("store_name"))
@@ -4601,7 +4608,13 @@ async def force_credit_bill(bill_id: str, background_tasks: BackgroundTasks,
     """Force-credit a single bill using the auto-calculated points (category × range).
     No admin input needed — system calculates the exact reward per the earn-rate table.
     """
-    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+    # Feb 2026: force_credit path in _reprocess_single_bill never touches
+    # the image → exclude image_url + ocr_raw_data + 15s max_time_ms.
+    bill = await db.bills.find_one(
+        {"id": bill_id},
+        {"_id": 0, "image_url": 0, "ocr_raw_data": 0},
+        max_time_ms=15000,
+    )
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
     if bill.get("status") not in ("manual_review", "pending_review"):

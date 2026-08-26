@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration 67 verification: (a) lean find_one projections + max_time_ms on force-credit-preview / force-credit / reprocess-legacy, (b) iteration-66 reprocess/edit-brand regressions, (c) admin_diy._current_consumer delegation to routes.consumer.get_current_consumer, (d) Home.jsx SafeImage placeholder behaviour and tier-card copy. Created /app/backend/tests/test_iteration67_billread_cleanup.py — 16/16 pytest tests PASS. Playwright: 3 runs on /app/home with the consumer test account (9876543210) including API-response injection of EMPTY / whitespace / null / dead image URLs and a valid data-URI. All backend + frontend checks passed; no functional issues found.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Consumer Home — SafeImage placeholder (banner / hot-deal / event tiles)",
+        "issues": [
+          "Fallback label uses color rgba(255,255,255,0.55) over a very light gradient (rgba(198,137,57,0.12) -> rgba(255,223,115,0.06)). On the light card background the uppercase label is barely legible (see screenshot i67_all_bad). Cosmetic only — consider a darker/neutral label colour or a higher-contrast placeholder fill.",
+          "Current preview seed data has dead/blank banner+deal+event image URLs, so the real Home screen shows placeholders for every media tile. Not a code bug, but the seeded content should get valid image URLs for realistic UX review."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration67_billread_cleanup.py",
+    "/app/test_reports/pytest/iter67_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py force_credit_bill: projection {_id:0, image_url:0, ocr_raw_data:0} + max_time_ms=15000 confirmed via find_one spy; doc handed to _reprocess_single_bill verified to contain neither heavy field, so the pipeline can never re-upload an image on the force-credit path (intended).",
+    "server.py force_credit_preview: projection {_id:0, amount:1, store_name:1} confirmed; response payload keys unchanged (bill_id, amount, store_name, calculated_points, rate_pct, rate_basis, category, range_label, brand_found).",
+    "server.py _reprocess_bill_full_legacy_impl: full doc {_id:0} + max_time_ms=25000 confirmed (image_url is genuinely needed there).",
+    "routes/admin_diy._current_consumer now imports routes.consumer.get_current_consumer inside the function on every request. Functionally correct (module is cached) but a module-level import would be marginally cleaner — non-blocking.",
+    "Home.jsx SafeImage: trims src, treats '', '   ' and null as missing, and flips to placeholder onError. Verified no <img src=''> is ever emitted and React logs no 'empty string src' warning. Valid src (data-URI) still renders a real <img> with naturalWidth>0."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration67_billread_cleanup.py"],
+  "success_rate": { "backend": "100% (16/16)", "frontend": "100% (all SafeImage + tier-card assertions passed)" },
+  "seed_data_creation": "TEST_ITER67_* bills + TEST_ITER67_USER created and deleted by the module fixture; verified 0 remaining rows in db.bills / db.users after the run. Note: the force-credit end-to-end test credits points to phone 919876543210 (same phone as the consumer test account) via the real Fundle earn call — expected, balance still showed 0/Bronze on Home.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin/CP67Admin@2025 (also parking1/Parking1@2025 for the staff-token rejection case); consumer 9876543210 / OTP 1234",
+  "context_for_next_testing_agent": "Backend spy pattern (_DbProxy/_CollProxy/_FindOneSpy patching server.db) is reused in test_iteration62/66/67 — copy it for any new projection assertions. Playwright detail for Home.jsx: consumer /api/consumer/home returns keys user, banners, featured_stores, trending_offers, upcoming_events, categories (NOT 'hot_deals'/'offers'/'events') — use page.route('**/api/consumer/home*') + route.fulfill to inject bad/good image URLs. SafeImage placeholders are div[aria-label] with a gradient background, so assert on aria-label rather than img. Deferred backlog item still open: Bill Image Streaming endpoint (intentionally not done in iter 67).",
+  "rca_of_the_issue": "N/A — no defects reproduced this iteration. Verification evidence: find_one spy shows preview={_id:0,amount:1,store_name:1}; force-credit={_id:0,image_url:0,ocr_raw_data:0} max_time_ms=15000; legacy={_id:0} max_time_ms=25000; edit-brand guard={id,store_name,status}; reprocess guard={status,reprocessing_started_at,reprocessing_finished_at}; bg/sync workers {_id:0} max_time_ms=25000, brand-edit fallback reload excludes image_url+ocr_raw_data with max_time_ms=15000. Consumer JWT -> 200 on /api/consumer/popups/active and /dismiss; admin, parking-staff, garbage and absent tokens -> 401/403. Home tier card for Bronze/0 pts renders 'You are 500 points away from Silver' with display:block and a 25px vertical gap below the first-name span (no 'top tier' copy)."
+}

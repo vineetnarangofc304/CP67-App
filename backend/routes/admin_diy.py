@@ -60,15 +60,11 @@ async def _verify_admin(creds: HTTPAuthorizationCredentials = Depends(_security)
 
 
 async def _current_consumer(creds: HTTPAuthorizationCredentials = Depends(_security)):
-    if creds is None:
-        raise HTTPException(401, "Not authenticated")
-    try:
-        payload = _jwt.decode(creds.credentials, _JWT_SECRET, algorithms=["HS256"])
-    except Exception:
-        raise HTTPException(401, "Invalid token")
-    if payload.get("role") != "consumer" and payload.get("type") != "consumer":
-        raise HTTPException(403, "Consumer only")
-    return payload
+    """Feb 2026: delegate to the single source of truth in routes.consumer so a
+    future consumer-token-shape change can't silently break routes again
+    (was a live bug — role vs type claim divergence, fixed iter-65)."""
+    from routes.consumer import get_current_consumer
+    return await get_current_consumer(creds)
 
 
 # ==================== A) PUSH NOTIFICATIONS ====================
