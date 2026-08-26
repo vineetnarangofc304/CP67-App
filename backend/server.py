@@ -3480,7 +3480,14 @@ async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks,
     then renders as "Reprocess timed out").
     """
     try:
-        bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+        # Feb 2026: only fetch the guard fields — pulling the full bill
+        # (including multi-MB legacy inline image_url) here caused Atlas
+        # MaxTimeMSExpired under production load and produced the admin
+        # "Reprocess timed out" toast.
+        bill = await db.bills.find_one(
+            {"id": bill_id},
+            {"_id": 0, "status": 1, "reprocessing_started_at": 1, "reprocessing_finished_at": 1},
+        )
         if not bill:
             raise HTTPException(status_code=404, detail="Bill not found")
         if bill.get("status") not in ["pending_review", "rejected", "manual_review"]:
@@ -3536,7 +3543,10 @@ async def _do_reprocess_bill_bg(bill_id: str):
     from fastapi import BackgroundTasks as _BG
     bg = _BG()
     try:
-        bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+        # Feb 2026: 25s max_time_ms buys Atlas headroom to transfer the
+        # (potentially multi-MB legacy inline) image_url without tripping
+        # MaxTimeMSExpired. Migrated `objstore:` bills return in <100ms.
+        bill = await db.bills.find_one({"id": bill_id}, {"_id": 0}, max_time_ms=25000)
         if not bill:
             return
         await _reprocess_single_bill(
@@ -3559,7 +3569,8 @@ async def _do_reprocess_bill_sync(bill_id: str, background_tasks: BackgroundTask
     """Original synchronous reprocess kept for `?wait=true`. Delegates to the
     shared `_reprocess_single_bill` helper (same pipeline as bulk reprocess) so
     behaviour stays consistent."""
-    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+    # Feb 2026: 25s max_time_ms — same rationale as _do_reprocess_bill_bg.
+    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0}, max_time_ms=25000)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")
     res = await _reprocess_single_bill(
@@ -3894,7 +3905,24 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
     image_url = bill.get("image_url") or ""
     image_base64 = None
     image_download_error: Optional[str] = None
-    if image_url.startswith("data:"):
+    if image_url.startswith("objstore:"):
+        # Feb 2026 (session-20): migrated bills store image bytes in Emergent
+        # Object Storage. Without this branch reprocess sent no image to
+        # Fundle and got "bill_file missing" → force-credit fallback got
+        # correctly suppressed, but the reprocess never succeeded either.
+        try:
+            from storage import aresolve_objstore_url
+            fetched = await aresolve_objstore_url(image_url)
+            if fetched:
+                data, _ctype = fetched
+                image_base64 = base64.b64encode(data).decode()
+                logger.info(f"Reprocess: fetched objstore image for {bill_id} ({len(image_base64)} chars)")
+            else:
+                image_download_error = "Object storage returned no data"
+        except Exception as e:
+            image_download_error = f"Object storage read error: {str(e)[:120]}"
+            logger.warning(f"Reprocess objstore fetch failed for {bill_id}: {e}")
+    elif image_url.startswith("data:"):
         try:
             image_base64 = image_url.split(",", 1)[1]
         except Exception:
@@ -4608,7 +4636,8 @@ async def _reprocess_after_brand_edit(bill_id: str, new_name: str, auto_fc: bool
     from fastapi import BackgroundTasks as _BG
     bg = _BG()
     try:
-        updated_bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+        # Feb 2026: 25s max_time_ms — legacy inline image_url transfer.
+        updated_bill = await db.bills.find_one({"id": bill_id}, {"_id": 0}, max_time_ms=25000)
         if not updated_bill:
             return
         res = await _reprocess_single_bill(
@@ -4628,7 +4657,15 @@ async def _reprocess_after_brand_edit(bill_id: str, new_name: str, auto_fc: bool
                 logger.info(f"edit-brand (bg): skipping force-credit fallback for {bill_id} — Fundle rejection was due to missing/corrupted image")
             elif ("brand" in err_txt) or ("match" in err_txt) or ("0 points" in err_txt) or ("not found" in err_txt):
                 logger.info(f"edit-brand (bg): Fundle rejected '{new_name}'. Auto-force-credit fallback for bill {bill_id}")
-                updated_bill2 = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+                # Feb 2026: 25s max_time_ms + skip the heavy image_url on this
+                # reload — the reprocess pipeline just needs status + amount +
+                # store_name for the force-credit path (no fresh image needed
+                # since we already tried once above).
+                updated_bill2 = await db.bills.find_one(
+                    {"id": bill_id},
+                    {"_id": 0, "image_url": 0, "ocr_raw_data": 0},
+                    max_time_ms=15000,
+                )
                 if updated_bill2 and updated_bill2.get("status") in ("manual_review", "pending_review", "rejected"):
                     await _reprocess_single_bill(
                         updated_bill2, re_ocr=False, send_whatsapp_flag=True,
@@ -4660,7 +4697,15 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
     empty "Brand edit failed (HTTP 500)".
     """
     try:
-        bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+        # Feb 2026: only fetch fields needed for the status/audit-note check.
+        # Pulling the full bill (including legacy multi-MB image_url) here
+        # tripped Atlas MaxTimeMSExpired and produced the admin "Brand edit
+        # failed (HTTP 500)" toast. The bg reprocess worker re-fetches the
+        # full doc with 25s max_time_ms when it actually needs the image.
+        bill = await db.bills.find_one(
+            {"id": bill_id},
+            {"_id": 0, "id": 1, "store_name": 1, "status": 1},
+        )
         if not bill:
             raise HTTPException(status_code=404, detail="Bill not found")
         new_name = (payload_body.new_store_name or "").strip()
@@ -4699,7 +4744,8 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
             }
 
         # Sync path (legacy) — waits for Fundle. Kept for admins who need immediate result.
-        updated_bill = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+        # Feb 2026: 25s max_time_ms — legacy inline image_url transfer.
+        updated_bill = await db.bills.find_one({"id": bill_id}, {"_id": 0}, max_time_ms=25000)
         res = await _reprocess_single_bill(
             updated_bill, re_ocr=False, send_whatsapp_flag=True,
             background_tasks=background_tasks
@@ -4715,8 +4761,14 @@ async def edit_bill_brand(bill_id: str, payload_body: EditBrandRequest,
             # Only fallback on brand-mismatch errors; leave other errors as-is
             if ("brand" in err_txt) or ("match" in err_txt) or ("0 points" in err_txt) or ("not found" in err_txt):
                 logger.info(f"edit-brand: Fundle rejected '{new_name}'. Auto-force-credit fallback for bill {bill_id}")
-                # Reload bill (status may have been updated by the reprocess)
-                updated_bill2 = await db.bills.find_one({"id": bill_id}, {"_id": 0})
+                # Reload bill (status may have been updated by the reprocess).
+                # Feb 2026: skip heavy fields — force-credit only needs status +
+                # amount + store_name; image_url is not needed for this fallback.
+                updated_bill2 = await db.bills.find_one(
+                    {"id": bill_id},
+                    {"_id": 0, "image_url": 0, "ocr_raw_data": 0},
+                    max_time_ms=15000,
+                )
                 # Only force-credit if the bill is still in a pending-ish state
                 if updated_bill2 and updated_bill2.get("status") in ("manual_review", "pending_review", "rejected"):
                     fc = await _reprocess_single_bill(

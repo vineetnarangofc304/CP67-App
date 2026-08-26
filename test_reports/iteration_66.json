@@ -1,0 +1,35 @@
+{
+  "summary": "Backend-only verification of iteration 66 (reprocess / edit-brand Atlas-timeout projection fixes + missing objstore branch). New suite /app/backend/tests/test_iteration66_reprocess_projections.py — 19 tests, 19 passed (100%). Verified via a _DbProxy/_FindOneSpy in-process spy that every bills.find_one on the reprocess and edit-brand paths now uses the intended projection / max_time_ms, plus real HTTP latency checks against the public REACT_APP_BACKEND_URL. Regression: re-ran iterations 61-65 suites in full — 79 passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/bills/{id}/force-credit-preview", "issue": "server.py:4581 still does find_one({'id':id},{'_id':0}) — pulls the full doc (incl. legacy multi-MB inline image_url + ocr_raw_data) with no max_time_ms, although only amount + store_name are used. Same Atlas MaxTimeMSExpired shape that broke reprocess/edit-brand."},
+      {"endpoint": "POST /api/admin/bills/{id}/force-credit", "issue": "server.py:4604 full-doc find_one with no max_time_ms. The force_credit branch of _reprocess_single_bill never touches the image, so image_url/ocr_raw_data can be excluded."},
+      {"endpoint": "POST /api/bills/{id}/reprocess-legacy", "issue": "server.py:3605 find_one with no projection at all ({_id} included) and no max_time_ms — debug-only path, low priority."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration66_reprocess_projections.py",
+    "/app/test_reports/pytest/iteration66_results.xml",
+    "/app/test_reports/pytest/iteration66_regression.xml"
+  ],
+  "action_items": [
+    "Optional follow-up: apply the same lean projection + max_time_ms treatment to force-credit-preview (line 4581), force-credit (line 4604) and reprocess-legacy (line 3605) — they are the only remaining full-doc bills.find_one reads on admin bill actions."
+  ],
+  "critical_code_review_comments": [
+    "reprocess_bill guard projection {status, reprocessing_started_at, reprocessing_finished_at} verified — confirmed exactly ONE bills.find_one on the request thread in queued mode, image_url never requested.",
+    "edit_bill_brand initial read verified lean {id, store_name, status}; queued mode makes exactly 1 read; sync mode makes 3 reads (lean guard -> full doc @max_time_ms=25000 -> heavy-fields-excluded reload @max_time_ms=15000).",
+    "_do_reprocess_bill_bg / _do_reprocess_bill_sync / _reprocess_after_brand_edit all confirmed to read the full doc with max_time_ms=25000 (spy kwargs), and the bg worker stamps reprocessing_finished_at on both success and exception paths.",
+    "_reprocess_single_bill objstore: branch confirmed — storage.aresolve_objstore_url is invoked with the exact objstore URL and the resolved bytes are base64-encoded into tagnpay earn_points(bill_image_base64); on a None resolve it degrades to action='no_image' with 'Object storage returned no data' rather than force-crediting blindly.",
+    "force-credit fallback suppression for missing/corrupted image errors (bill_file / no file was submitted) still holds in _reprocess_after_brand_edit — only one pipeline invocation, no silent credit."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration66_reprocess_projections.py"],
+  "success_rate": {"backend": "100% (19/19 new + 79/79 regression)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Seeded TEST_ITER66_USER (phone 919876543210) and ~14 TEST_ITER66_* bills — one set with a 500KB inline base64 data: image_url, one set with image_url='objstore:cp67-mall/bills/TEST_ITER66_fake.jpg'. All deleted by the module teardown fixture (verified 0 docs remaining).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "admin / CP67Admin@2025 (from /app/memory/test_credentials.md)",
+  "context_for_next_testing_agent": "The _DbProxy/_CollProxy/_FindOneSpy helper (patches server.db, not the collection, because motor returns a fresh collection object per attribute access) is duplicated in test_iteration62 and test_iteration66 — reuse it for any future projection assertions. Local Mongo never reproduces Atlas MaxTimeMSExpired, so max_time_ms is asserted structurally from spy kwargs. Real HTTP measurements: edit-brand queued 0.13s, reprocess queued 0.18s on a 500KB-image bill. Remaining unfixed full-doc reads: server.py lines 4581, 4604, 3605. Playwright was skipped per the request.",
+  "rca_of_the_issue": "Confirmed fix: all 8 previously-identified bills.find_one sites on the reprocess/edit-brand paths no longer pull the full bill doc on the request thread; the guard reads use tight projections and only the worker paths that genuinely need image bytes fetch the full doc with 25s max_time_ms. The separate 'Reprocess sends no image' defect for migrated bills is also fixed — the new objstore: branch in _reprocess_single_bill resolves bytes through storage.aresolve_objstore_url before calling Fundle."
+}

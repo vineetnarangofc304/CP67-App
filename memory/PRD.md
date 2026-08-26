@@ -1090,3 +1090,38 @@ Fix: widened the check to accept EITHER `role=='consumer'` OR `type=='consumer'`
 
 ### Action required from user
 Redeploy PREVIEW → PRODUCTION. The build now completes; deployment should succeed end-to-end.
+
+## Session 25 (Feb 2026) — Fix Brand + Reprocess flow fails on production
+
+### Symptom (production, user screenshots)
+- Bill Review → Fix Brand popup opens, brand list (163) loads correctly.
+- Submitting the chosen/exact-text brand → fails.
+- Clicking Reprocess on the same bill → also fails.
+- Environment: cp67bot.fundlexperiences.com (production).
+
+### Root cause
+Iteration 62 identified these but left them as backlog — 8 `find_one({"id": bill_id}, {"_id": 0})` sites on the reprocess + edit-brand pipelines were still pulling the FULL bill doc, including legacy multi-MB inline base64 `image_url`. Under production Atlas load these tripped MaxTimeMSExpired.
+
+Additionally, `_reprocess_single_bill` had no `objstore:` branch — migrated bills (from Session 20 Object Storage migration) sent NO image bytes to Fundle, which then rejected them with "bill_file missing", and the force-credit fallback correctly suppressed itself for missing-image errors → the reprocess loop never succeeded for migrated bills.
+
+### Fixes
+1. **`reprocess_bill` guard read** — lean projection `{id, status, reprocessing_started_at, reprocessing_finished_at}` (no image_url).
+2. **`_do_reprocess_bill_bg`** — full doc with `max_time_ms=25000`.
+3. **`_do_reprocess_bill_sync`** — full doc with `max_time_ms=25000`.
+4. **`edit_bill_brand` initial read** — lean projection `{id, store_name, status}`.
+5. **`edit_bill_brand` sync-path reload** — full doc with `max_time_ms=25000`.
+6. **`edit_bill_brand` post-Fundle-reject reload** — exclude `image_url` + `ocr_raw_data` with `max_time_ms=15000`.
+7. **`_reprocess_after_brand_edit`** initial + post-reject reload — same treatment as (5) + (6).
+8. **`_reprocess_single_bill`** — NEW `objstore:<path>` branch fetches bytes via `storage.aresolve_objstore_url` and base64-encodes for TagnPay earn_points.
+
+### Verification (iteration_66.json)
+- 19/19 new tests PASS (`/app/backend/tests/test_iteration66_reprocess_projections.py`).
+- 79/79 regression PASS (iterations 61-65 suites all still green).
+- Real HTTP measurements: edit-brand queued 0.13s, reprocess queued 0.18s on a 500KB-image bill.
+- objstore: branch structurally verified — `storage.aresolve_objstore_url` invoked with the correct path; on None-resolve degrades to `action='no_image'` (no blind credit).
+
+### Known observations (deferred to next session)
+- `force-credit-preview` (server.py:4581), `force-credit` (server.py:4604), and `reprocess-legacy` (server.py:3605) still fetch the full bill doc with no `max_time_ms`. Same-class bug, lower blast radius (admin-only paths, less frequent).
+
+### Action required from user
+Redeploy PREVIEW → PRODUCTION. Fix Brand submit + Reprocess should stop failing on legacy heavy bills AND on migrated objstore bills.
