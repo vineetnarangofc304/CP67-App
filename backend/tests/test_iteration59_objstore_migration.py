@@ -135,7 +135,6 @@ def cleanup():
 # ==================== 1. storage.py module ====================
 class TestStorageModule:
     def test_config_from_env_no_hardcoded_key(self):
-        import storage
 
         assert storage._emergent_key(), "EMERGENT_LLM_KEY not loaded in storage.py"
         assert storage._base_url().endswith("/objstore/api/v1/storage")
@@ -159,7 +158,6 @@ class TestStorageModule:
         assert "OK" in r.stdout
 
     def test_init_storage_returns_key(self):
-        import storage
 
         key = storage.init_storage()
         assert key, "init_storage() returned no storage key"
@@ -167,7 +165,6 @@ class TestStorageModule:
 
     def test_init_storage_is_memoised(self):
         """Second call must NOT re-POST /init."""
-        import storage
 
         storage.init_storage()  # warm
         with mock.patch.object(storage.requests, "post") as m_post:
@@ -176,14 +173,12 @@ class TestStorageModule:
         assert m_post.call_count == 0, f"init re-POSTed /init {m_post.call_count} time(s)"
 
     def test_init_storage_returns_none_on_failure(self):
-        import storage
 
         with mock.patch.object(storage, "_storage_key", None), \
              mock.patch.object(storage.requests, "post", side_effect=RuntimeError("boom")):
             assert storage.init_storage() is None, "init_storage must return None (non-fatal) on failure"
 
     def test_put_get_object_roundtrip(self):
-        import storage
 
         path = f"cp67-mall/tests/i59_{uuid.uuid4().hex[:8]}.bin"
         payload = _jpeg_bytes(4096)
@@ -197,12 +192,10 @@ class TestStorageModule:
         assert ctype.startswith("image/jpeg")
 
     def test_get_object_missing_returns_none(self):
-        import storage
 
         assert storage.get_object(f"cp67-mall/tests/missing_{uuid.uuid4().hex}.bin") is None
 
     def test_upload_bill_image_extension_mapping(self):
-        import storage
 
         bid = f"TEST_i59_ext_{uuid.uuid4().hex[:6]}"
         url_jpg = storage.upload_bill_image(bid, _jpeg_bytes(2048), "image/jpeg")
@@ -211,13 +204,11 @@ class TestStorageModule:
         assert url_png == f"objstore:cp67-mall/bills/{bid}.png", url_png
 
     def test_upload_bill_image_returns_none_on_put_failure(self):
-        import storage
 
         with mock.patch.object(storage, "put_object", return_value=None):
             assert storage.upload_bill_image("TEST_i59_fail", _jpeg_bytes(1024)) is None
 
     def test_resolve_objstore_url(self):
-        import storage
 
         payload = _jpeg_bytes(3000)
         bid = f"TEST_i59_res_{uuid.uuid4().hex[:6]}"
@@ -240,7 +231,6 @@ class TestStorageModule:
 # ==================== 2. GET /image objstore branch ====================
 class TestImageEndpointObjstore:
     def test_objstore_bill_returns_full_data_url_fast(self, client):
-        import storage
 
         payload = _jpeg_bytes(120_000)
         bid_seed = f"TEST_i59_read_{uuid.uuid4().hex[:6]}"
@@ -272,7 +262,6 @@ class TestImageEndpointObjstore:
     def test_objstore_read_exception_returns_200(self):
         """mock storage.get_object -> raise; endpoint must return 200 + 'Object storage read error'."""
         import server
-        import storage
         from starlette.background import BackgroundTasks
 
         bill_id = _seed_bill(f"objstore:cp67-mall/bills/EXC_{uuid.uuid4().hex}.jpg")
@@ -341,7 +330,6 @@ class TestProgressiveMigration:
         assert "image_migrated_at" not in doc
 
     def test_objstore_and_base64_and_http_are_not_remigrated(self, client):
-        import storage
 
         # already objstore -> untouched (no image_migrated_at written)
         payload = _jpeg_bytes(120_000)
@@ -373,7 +361,6 @@ class TestProgressiveMigration:
     def test_upload_failure_leaves_inline_url(self):
         """mock storage.upload_bill_image -> None: no crash, image_url stays inline."""
         import server
-        import storage
 
         bill_id = _seed_bill(BIG_DATA_URL)
         with mock.patch.object(storage, "upload_bill_image", return_value=None):
@@ -384,7 +371,6 @@ class TestProgressiveMigration:
 
     def test_upload_exception_is_swallowed(self):
         import server
-        import storage
 
         bill_id = _seed_bill(BIG_DATA_URL)
         with mock.patch.object(storage, "upload_bill_image", side_effect=RuntimeError("objstore down")):
@@ -411,7 +397,6 @@ class TestProgressiveMigration:
         doc = _bill_doc(bill_id)
         assert doc["image_url"] == f"objstore:cp67-mall/bills/{bill_id}.jpg", doc["image_url"]
         assert doc.get("image_migrated_at")
-        import storage
         got = storage.resolve_objstore_url(doc["image_url"])
         assert got and base64.b64encode(got[0]).decode() == raw_b64
 
@@ -434,7 +419,6 @@ class TestEventLoopBlocking:
         in parallel — high health latency means the event loop is blocked."""
         import concurrent.futures as cf
 
-        import storage
 
         payload = _jpeg_bytes(300_000)
         seed = f"TEST_i59_conc_{uuid.uuid4().hex[:6]}"
@@ -486,7 +470,6 @@ class TestEventLoopBlocking:
     def test_aresolve_objstore_url_exception_returns_200(self):
         """iter-60: mock the ASYNC variant used by the handler -> friendly 200."""
         import server
-        import storage
         from starlette.background import BackgroundTasks
 
         async def _boom(url):
@@ -502,7 +485,6 @@ class TestEventLoopBlocking:
     def test_aupload_bill_image_none_leaves_inline(self):
         """iter-60: mock the ASYNC upload variant -> no-op, inline URL intact."""
         import server
-        import storage
 
         async def _none(bill_id, data, content_type="image/jpeg"):
             return None

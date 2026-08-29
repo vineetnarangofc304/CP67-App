@@ -1267,3 +1267,51 @@ Redeploy PREVIEW → PRODUCTION. Then:
 - Upload a fresh brand logo + banner from the admin panel and confirm they appear in the consumer app.
 - Confirm order/wording changes on the Home screen.
 - Point 40: share the iOS repo path or symbolicated crash log so we can debug the camera crash on iPad Air (M3) iPadOS 26.6.
+
+## Session 30 (Feb 2026) — Retailer Points 11, 14, 15 + admin privesc fix
+
+### Point 14: DONE (already implemented in prior session)
+Bill incentive attribution at `/app/backend/routes/staff.py:1432-1511` already enforces the spec: last QR scan + brand-matched bill = credit; attribution consumed regardless of match (one scan = one bill decision); attribution misses logged for audit. Verified by iter-72 tests. No changes needed.
+
+### Point 15: DONE — "Failed to load report" fixed
+Root cause: `admin_incentive_report` on `staff_incentives` with per-row `bills.find_one` enrichment had no `max_time_ms` bounds, so under Atlas load the whole endpoint 500'd with an opaque toast.
+
+Fix (`/app/backend/routes/staff.py:1022+`):
+- Primary cursor `max_time_ms=15000` (logs a warning if the motor version doesn't support the setter).
+- Per-row `retail_staff` and `bills` lookups get `max_time_ms=5000` + per-row try/except so one bad row can't kill the whole scan.
+- `limit` now `Query(1000, ge=1, le=5000)`.
+- Top-level except uses `isinstance()` against `pymongo.errors.(NetworkTimeout|AutoReconnect|ServerSelectionTimeoutError|ExecutionTimeout)` + `asyncio.TimeoutError` (substring fallback retained) → HTTP 503 with a friendly "retry in ~10s / narrow filters" detail; anything else → 500 with the exact reason.
+- Admin UI now surfaces the 503 detail instead of the generic "Failed to load report".
+
+### Point 11: DONE — retailer OTP silent-failure now observable
+Existing flow (server.py:9142 + staff.py:1751) already dispatches via `send_login_otp` = dual-channel WhatsApp + SMS with the DLT-approved template (PEID 1701172802304667512, Temp ID 1707172914885560615, wording exact). What was missing:
+- If the phone wasn't in `retailer_managers` OR `is_active=false`, endpoint silently returned `success:true` and NO message ever fired — that's the "no OTP is triggered" symptom.
+- If `_send_sms_otp` binding was missing, silent success too.
+
+Fix:
+- `retailer_send_otp` now logs `WARN Retailer OTP requested by non-whitelisted / inactive phone: <phone>` (UI still gets the neutral message to avoid leaking whitelist status).
+- Errors loudly if `_send_sms_otp` isn't bound (bind_staff_db check).
+- **NEW** admin-only diagnostic `GET /api/admin/staff/retailer/diagnose-otp?phone=...` returning `{is_whitelisted, is_active, manager_name, otp_send_bound, otp_channel, explanation}` — admin can now instantly see why a real user isn't getting an OTP.
+
+**Operational note**: user must ensure the retailer manager phone is added to `retailer_managers` (admin panel → Retailer Managers) with `is_active=true`. Once whitelisted, the dual-channel WA+SMS dispatch already fires with the correct DLT template.
+
+### Bonus (HIGH pre-existing security fix)
+Testing agent found: `_verify_admin` in `routes/staff.py` used a **role blacklist** (only rejected `role=='retail_staff'`), so a signed `retailer_manager` JWT reached every `/api/admin/staff/*` endpoint including `retailer-managers` (leaked the full whitelist) and `incentives/report` (leaked the entire incentive ledger).
+
+Fix (`routes/staff.py:250`):
+- Allowlist admin roles only: `('admin', 'super_admin', 'mall_admin')`.
+- Falls back to `type` claim if `role` absent (verified safe: consumer uses `type='consumer'`, staff/retailer set `role` explicitly).
+
+### Verification
+- **iter-72**: 22 pass + 1 xfail documenting the privesc bug. Real retailer_manager JWT confirmed leaking all admin/staff endpoints.
+- **iter-73** (post-fix): 37 new tests + 23/23 iter-72 (xfail flipped to real assertion) + 54/54 cross-router regression (iter 62, 70, 71) all PASS. Retailer_manager tokens now correctly 403 on every admin route; admin/super_admin/mall_admin tokens still 200; limit bounds enforced (10000 → 422; 5000 → 200); every pymongo transient class → 503; generic → 500.
+
+### Follow-ups
+- Grep other admin routers for similar `!= 'retail_staff'`-style blacklist gates.
+- Canonicalize the role/type claim (currently `_verify_admin` reads either, which is safe today but fragile).
+- Split `routes/staff.py` (1994 lines) into retailer_auth / dashboard / reports / staff_crud modules.
+
+### Action required from user
+Redeploy PREVIEW → PRODUCTION. Then:
+- Ensure retailer manager phone is added to Retailer Managers list (admin panel) with active=true — this is the missing operational step for Point 11's "no OTP".
+- Hit **/api/admin/staff/retailer/diagnose-otp?phone=<their-phone>** to confirm before asking a retailer to try login.

@@ -1,0 +1,27 @@
+{
+  "summary": "Backend-only verification of iteration-73 fixes in /app/backend/routes/staff.py. Created /app/backend/tests/test_iteration73_admin_gate.py (37 tests, 37 pass) covering the _verify_admin allowlist privesc fix, diagnose-otp projection, incentive-report limit bounds, and isinstance()-based 503 classification. Flipped the iter-72 xfail (TestAdminGateScope) to a live assertion — iter-72 suite now 23/23 PASS. Light cross-router regression (iter 70 edit-brand async write, iter 71 objstore uploads, iter 62 bill projections) = 54/54 PASS. No backend issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration73_admin_gate.py",
+    "/app/backend/tests/test_iteration72_point11_15.py",
+    "/app/test_reports/pytest/iteration73_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "_verify_admin falls back to the 'type' claim when 'role' is absent (role = payload.get('role') or payload.get('type')). Verified safe today: consumer tokens use type='consumer' and retailer/staff tokens set role explicitly, so nothing non-admin can enter the allowlist. Still worth narrowing to a single canonical claim to avoid future drift.",
+    "Role match is exact and case-sensitive: 'Admin' and 'admin_viewer' are rejected (verified) — intentional, but ensure any future admin-login path emits exactly 'admin'/'super_admin'/'mall_admin'.",
+    "Other admin routers outside routes/staff.py were not re-audited for a similar blacklist pattern; recommend a one-time grep for 'role != \"retail_staff\"'-style gates elsewhere."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration73_admin_gate.py",
+    "/app/backend/tests/test_iteration72_point11_15.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "TEST_ITER73_ prefixed retailer_managers docs (phones 9998873001/9998873002) created and deleted in fixtures; iter-72 TEST_ITER72_ seed reused and cleaned up.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "test_credentials": "Admin: admin / CP67Admin@2025 (from /app/memory/test_credentials.md); retailer OTP dev bypass 1234",
+  "context_for_next_testing_agent": "Verified: (1) real retailer_manager JWT from POST /api/staff/retailer/auth/verify-otp gets 403 'Admin only' on /api/admin/staff/retailer/diagnose-otp, /incentives/report, /retailer-managers, /api/admin/staff, /leaderboard, /metrics/overview, /redemptions, /config/current. (2) admin login token + minted role=admin/super_admin/mall_admin → 200. (3) consumer/retail_staff/empty/missing/'Admin'/'admin_viewer' → 403; bad signature & expired → 401; no token → 403. (4) type='admin'-only token → 200 (documented); role='consumer'+type='admin' → 403. (5) limit: 10000/5001/0/-1 → 422, 1/5000/default → 200. (6) AutoReconnect, NetworkTimeout, ServerSelectionTimeoutError, ExecutionTimeout, asyncio.TimeoutError and substring fallback → 503; generic Exception → 500. (7) cursor lacking max_time_ms now logs 'max_time_ms unavailable' warning. (8) diagnose-otp leaks no _id/email. Older suites 61/63-69/72 were not all rerun per request scope.",
+  "rca_of_the_issue": "Iter-72 privesc root cause was a blacklist gate in _verify_admin ('reject only retail_staff'); iter-73 replaced it with an exact-match allowlist ('admin','super_admin','mall_admin'), which fully closes the escalation path — confirmed by minting a real retailer_manager token via the OTP flow and receiving 403 on all admin staff routes."
+}

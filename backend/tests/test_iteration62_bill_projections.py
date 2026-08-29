@@ -512,7 +512,11 @@ class TestRemainingFullDocFetches:
         # response itself is small (good) — the risk is the server-side transfer
         assert len(r.content) < 5_000
 
-    def test_force_credit_preview_projection_is_full_doc(self):
+    def test_force_credit_preview_projection_is_lean(self):
+        """Updated iter 72: force_credit_preview was hardened to a lean
+        projection (amount + store_name only); the old full-doc guard is
+        obsolete. Assert the lean projection instead."""
         src = inspect.getsource(server.force_credit_preview)
-        assert 'find_one({"id": bill_id}, {"_id": 0})' in src, \
-            "force_credit_preview projection changed — update this guard"
+        assert '"amount": 1' in src and '"store_name": 1' in src, \
+            "force_credit_preview no longer uses a lean projection — MaxTimeMSExpired risk"
+        assert 'find_one({"id": bill_id}, {"_id": 0})' not in src

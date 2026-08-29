@@ -9160,7 +9160,7 @@ app.include_router(coupons_admin_router)
 
 
 # ==================== PUBLIC DOWNLOADS ====================
-from fastapi.responses import FileResponse, Response, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 @app.get("/api/downloads/ios-build")
 async def download_ios_build():

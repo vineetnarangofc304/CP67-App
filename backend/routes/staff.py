@@ -12,7 +12,7 @@ MVP defaults (user-picked):
   - 15-minute attribution window for existing-customer bill uploads
   - Separate staff app served at /staff-app/*
 """
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
@@ -24,6 +24,7 @@ import re
 import logging
 import base64
 import io
+import asyncio
 
 try:
     import qrcode
@@ -254,7 +255,13 @@ async def _verify_admin(auth: HTTPAuthorizationCredentials = Depends(security)) 
         payload = jwt.decode(auth.credentials, JWT_SECRET, algorithms=["HS256"])
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
-    if payload.get("role") == "retail_staff":
+    # Feb 2026 (iter-72 privesc fix): allowlist admin roles instead of the
+    # previous "reject only retail_staff" blacklist, which let a
+    # retailer_manager JWT reach every /api/admin/staff/* endpoint and leak
+    # the retailer whitelist + full incentive ledger. Roles that legitimately
+    # need admin-only endpoints: 'admin', 'super_admin', 'mall_admin'.
+    role = (payload.get("role") or payload.get("type") or "").strip()
+    if role not in ("admin", "super_admin", "mall_admin"):
         raise HTTPException(status_code=403, detail="Admin only")
     return payload
 
@@ -1027,7 +1034,7 @@ async def admin_incentive_report(
     staff_id: Optional[str] = None,
     start_date: Optional[str] = None,       # ISO YYYY-MM-DD (inclusive)
     end_date: Optional[str] = None,         # ISO YYYY-MM-DD (inclusive, end-of-day)
-    limit: int = 1000,
+    limit: int = Query(1000, ge=1, le=5000),
     auth=Depends(_verify_admin),
 ):
     """Point 12 (Aug 2026): Retailer incentive earn report.
@@ -1069,45 +1076,96 @@ async def admin_incentive_report(
     rows: List[Dict] = []
     # Cache staff/bill lookups to keep this endpoint fast for large data-sets.
     staff_cache: Dict[str, Dict] = {}
-    async for r in _db.staff_incentives.find(q, {"_id": 0}).sort("created_at", -1).limit(limit):
-        sid = r.get("staff_id")
-        if sid and sid not in staff_cache:
-            s = await _db.retail_staff.find_one({"id": sid}, {"_id": 0, "name": 1, "phone": 1, "staff_code": 1, "brand_name": 1, "brand_category": 1, "store_location": 1})
-            staff_cache[sid] = s or {}
-        s = staff_cache.get(sid) or {}
+    # Point 15 (Feb 2026): bound the primary find with max_time_ms so an Atlas
+    # hiccup surfaces as a friendly 503 (via top-level except below), not an
+    # opaque "Failed to load report" toast. The per-row bill.find_one is also
+    # bounded so one bad row can't stall the whole scan.
+    try:
+        cur = _db.staff_incentives.find(q, {"_id": 0}).sort("created_at", -1).limit(limit)
+        try:
+            cur = cur.max_time_ms(15000)
+        except Exception as _e:
+            logger.warning(f"admin_incentive_report: max_time_ms unavailable on cursor: {_e}")
+        async for r in cur:
+            sid = r.get("staff_id")
+            if sid and sid not in staff_cache:
+                try:
+                    s = await _db.retail_staff.find_one(
+                        {"id": sid},
+                        {"_id": 0, "name": 1, "phone": 1, "staff_code": 1, "brand_name": 1, "brand_category": 1, "store_location": 1},
+                        max_time_ms=5000,
+                    )
+                except Exception as _se:
+                    logger.warning(f"admin_incentive_report: retail_staff lookup failed for {sid}: {_se}")
+                    s = None
+                staff_cache[sid] = s or {}
+            s = staff_cache.get(sid) or {}
 
-        row = {
-            "id": r.get("id"),
-            "type": r.get("type"),
-            "status": r.get("status"),
-            "amount": r.get("amount"),
-            "customer_phone": r.get("customer_phone"),
-            "created_at": r.get("created_at"),
-            "approved_at": r.get("approved_at"),
-            "expires_at": r.get("expires_at"),
-            "staff_id": sid,
-            "staff_code": s.get("staff_code") or r.get("staff_code"),
-            "staff_name": s.get("name"),
-            "staff_phone": s.get("phone"),
-            "staff_brand": s.get("brand_name"),
-            "staff_brand_category": s.get("brand_category"),
-            "staff_store": s.get("store_location"),
-        }
-        if r.get("type") == "bill_upload":
-            bill_id = r.get("bill_id")
-            row["bill_id"] = bill_id
-            row["bill_value"] = r.get("bill_value")
-            if bill_id:
-                bill = await _db.bills.find_one(
-                    {"id": bill_id},
-                    {"_id": 0, "amount": 1, "store_name": 1, "status": 1, "bill_no": 1, "created_at": 1},
-                )
-                if bill:
-                    row["bill_amount"] = bill.get("amount") or row.get("bill_value")
-                    row["bill_store"] = bill.get("store_name")
-                    row["bill_status"] = bill.get("status")
-                    row["bill_no"] = bill.get("bill_no")
-        rows.append(row)
+            row = {
+                "id": r.get("id"),
+                "type": r.get("type"),
+                "status": r.get("status"),
+                "amount": r.get("amount"),
+                "customer_phone": r.get("customer_phone"),
+                "created_at": r.get("created_at"),
+                "approved_at": r.get("approved_at"),
+                "expires_at": r.get("expires_at"),
+                "staff_id": sid,
+                "staff_code": s.get("staff_code") or r.get("staff_code"),
+                "staff_name": s.get("name"),
+                "staff_phone": s.get("phone"),
+                "staff_brand": s.get("brand_name"),
+                "staff_brand_category": s.get("brand_category"),
+                "staff_store": s.get("store_location"),
+            }
+            if r.get("type") == "bill_upload":
+                bill_id = r.get("bill_id")
+                row["bill_id"] = bill_id
+                row["bill_value"] = r.get("bill_value")
+                if bill_id:
+                    try:
+                        bill = await _db.bills.find_one(
+                            {"id": bill_id},
+                            {"_id": 0, "amount": 1, "store_name": 1, "status": 1, "bill_no": 1, "created_at": 1},
+                            max_time_ms=5000,
+                        )
+                    except Exception as _be:
+                        logger.warning(f"admin_incentive_report: bills lookup failed for {bill_id}: {_be}")
+                        bill = None
+                    if bill:
+                        row["bill_amount"] = bill.get("amount") or row.get("bill_value")
+                        row["bill_store"] = bill.get("store_name")
+                        row["bill_status"] = bill.get("status")
+                        row["bill_no"] = bill.get("bill_no")
+            rows.append(row)
+    except Exception as e:
+        # Feb 2026 Point 15: return a friendly 503 instead of a raw 500 so
+        # the "Failed to load report" toast can be replaced with a retry hint.
+        # Iter-72 hardening: use isinstance() against pymongo classes because
+        # message-substring matching misses AutoReconnect / ExecutionTimeout.
+        try:
+            from pymongo.errors import (
+                NetworkTimeout as _NT,
+                AutoReconnect as _AR,
+                ServerSelectionTimeoutError as _SST,
+                ExecutionTimeout as _ET,
+            )
+            _transient_classes = (_NT, _AR, _SST, _ET, asyncio.TimeoutError)
+        except Exception:
+            _transient_classes = (asyncio.TimeoutError,)
+        err_txt = str(e).lower()
+        transient = (
+            isinstance(e, _transient_classes)
+            or ("timed out" in err_txt)
+            or ("maxtimeexceeded" in err_txt)
+            or ("networktimeout" in err_txt)
+            or ("time limit" in err_txt)
+        )
+        if transient:
+            logger.warning(f"admin_incentive_report Atlas hiccup: {e}")
+            raise HTTPException(status_code=503, detail="Report DB is under load — retry in ~10s. If it persists, narrow the date range or brand filter.")
+        logger.exception(f"admin_incentive_report failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Report failed: {str(e)[:200]}")
 
     # Summary counts (respects filters)
     summary = {
@@ -1753,6 +1811,10 @@ async def retailer_send_otp(payload: StaffOTPRequest):
     phone = _normalise_phone(payload.phone)
     mgr = await _db.retailer_managers.find_one({"phone": phone, "is_active": True}, {"_id": 0})
     if not mgr:
+        # Point 11 (Feb 2026): log the miss so admin can see when a real user
+        # is being silently rejected because the phone isn't whitelisted. UI
+        # still gets the neutral message so we don't leak whitelist status.
+        logger.warning(f"Retailer OTP requested by non-whitelisted / inactive phone: {phone}")
         return {"success": True, "message": "OTP sent if number is registered"}
 
     import random
@@ -1780,9 +1842,41 @@ async def retailer_send_otp(payload: StaffOTPRequest):
                 delivery = r
         except Exception as e:
             logger.error(f"retailer OTP send failed for {phone}: {e}")
+    else:
+        # Feb 2026: if the OTP dispatcher hasn't been wired at bootstrap
+        # (e.g. server.py didn't bind_staff_db yet), fail loudly instead of
+        # silently returning success — this was masking Point 11's "no OTP"
+        # symptom.
+        logger.error("retailer_send_otp: _send_sms_otp binding is None — check bind_staff_db in server.py")
 
     logger.info(f"Retailer OTP generated for {phone}: {otp} delivery={delivery}")
     return {"success": True, "message": "OTP sent", "delivery": delivery}
+
+
+@staff_admin_router.get("/retailer/diagnose-otp")
+async def admin_retailer_diagnose_otp(phone: str, auth=Depends(_verify_admin)):
+    """Point 11 (Feb 2026): admin-only diagnostic — explains why a given
+    phone would or would NOT get a retailer login OTP. Returns whether the
+    phone is whitelisted, whether the OTP send binding is present, and the
+    OTP channel configuration. Read-only; does NOT send an OTP."""
+    phone10 = _normalise_phone(phone)
+    mgr = await _db.retailer_managers.find_one(
+        {"phone": phone10},
+        {"_id": 0, "phone": 1, "is_active": 1, "name": 1},
+    )
+    return {
+        "phone": phone10,
+        "is_whitelisted": bool(mgr),
+        "is_active": bool(mgr and mgr.get("is_active", True)),
+        "manager_name": (mgr or {}).get("name"),
+        "otp_send_bound": _send_sms_otp is not None,
+        "otp_channel": os.environ.get("OTP_CHANNEL", "both"),
+        "explanation": (
+            "Whitelisted + active + OTP dispatcher bound → user will receive OTP via WhatsApp+SMS."
+            if mgr and mgr.get("is_active", True) and _send_sms_otp is not None
+            else "User will silently get 'OTP sent if number is registered' without any message actually being sent."
+        ),
+    }
 
 
 @staff_router.post("/retailer/auth/verify-otp")

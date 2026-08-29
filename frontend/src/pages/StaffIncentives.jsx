@@ -107,6 +107,8 @@ export default function StaffIncentives() {
       if (r.ok) {
         setReportRows(d.rows || []);
         setReportSummary(d.summary || { total: 0, registration_count: 0, bill_upload_count: 0, total_amount: 0, redeemable_amount: 0 });
+      } else if (r.status === 503) {
+        toast.error(d.detail || 'Report DB busy — retry in ~10s');
       } else {
         toast.error(d.detail || 'Failed to load report');
       }
