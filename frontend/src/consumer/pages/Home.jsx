@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useInView, AnimatePresence } from 'framer-motion';
-import { Bell, ChevronRight, Gift, MapPin, ShoppingBag, Ticket, Camera, Menu, TrendingUp, Sparkles } from 'lucide-react';
+import { Bell, ChevronRight, Gift, MapPin, ShoppingBag, Ticket, Camera, Menu, TrendingUp, Sparkles, Store } from 'lucide-react';
 import { useConsumerAuth, API } from '../ConsumerApp';
 
 function AnimatedCounter({ value, duration = 1.5 }) {
@@ -245,13 +245,12 @@ export default function Home({ onMenuOpen }) {
         </div>
       </motion.div>
 
-      {/* Quick Actions — Staggered */}
+      {/* Quick Actions — Staggered (Point 41: Explore removed; Events replaced by Participating Brands) */}
       <motion.div className="home-quick-actions" data-testid="quick-actions" variants={stagger} initial="hidden" animate="visible">
         {[
           { icon: Camera, label: 'Scan Bill', path: '/app/upload', color: '#C68939' },
           { icon: Gift, label: 'Redeem', path: '/app/redeem', color: '#e74c3c' },
-          { icon: Ticket, label: 'Events', path: '/app/events', color: '#8b5cf6' },
-          { icon: MapPin, label: 'Explore', path: '/app/stores', color: '#3b82f6' },
+          { icon: Store, label: 'Brands', path: '/app/stores', color: '#8b5cf6' },
         ].map(a => (
           <motion.button
             key={a.label}
@@ -319,36 +318,34 @@ export default function Home({ onMenuOpen }) {
         </div>
       )}
 
-      {/* Trending Offers */}
-      {data?.trending_offers?.length > 0 && (
+      {/* Point 41: Hot Deals section removed from Home per customer brief.
+         Trending offers are still surfaced on /app/offers via "Redeem". */}
+
+      {/* Events & Happening — Point 41: renamed from Upcoming Events and moved
+         directly under the banner block per the customer's design brief. */}
+      {data?.upcoming_events?.length > 0 && (
         <motion.div className="home-section" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
-          <div className="gold-divider" style={{ margin: '4px 20px 16px' }} />
           <div className="home-section-header">
-            <h2 style={{ fontFamily: 'var(--font-heading)' }}>
-              <Sparkles size={16} style={{ display: 'inline', marginRight: 6, color: 'var(--cp-gold)' }} />
-              Hot Deals
-            </h2>
-            <button onClick={() => navigate('/app/offers')} data-testid="see-all-offers">See All <ChevronRight size={16} /></button>
+            <h2 style={{ fontFamily: 'var(--font-heading)' }}>Events &amp; Happening</h2>
+            <button onClick={() => navigate('/app/events')} data-testid="see-all-events">See All <ChevronRight size={16} /></button>
           </div>
-          <div className="home-offers-scroll" data-testid="trending-offers">
-            {data.trending_offers.map((o, i) => (
+          <div className="home-events-scroll" data-testid="upcoming-events">
+            {data.upcoming_events.map((e, i) => (
               <motion.div
-                key={o.id}
-                className="home-offer-card"
-                onClick={() => navigate(`/app/stores/${o.store_id}`)}
+                key={e.id}
+                className="home-event-card"
+                onClick={() => navigate('/app/events')}
                 initial={{ opacity: 0, x: 40 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.1 }}
                 whileTap={{ scale: 0.96 }}
               >
-                <div className="offer-card-img">
-                  <SafeImage src={o.image_url} alt={o.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} fallbackLabel={o.title} />
-                  <span className="offer-badge">{o.discount_value}</span>
-                </div>
-                <div className="offer-card-info">
-                  <h4>{o.title}</h4>
-                  <p>{o.store_name}</p>
+                <SafeImage src={e.image_url} alt={e.title} fallbackLabel={e.title} />
+                <div className="event-card-overlay">
+                  <span className="event-date">{new Date(e.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                  <h4>{e.title}</h4>
+                  <p>{e.time}</p>
                 </div>
               </motion.div>
             ))}
@@ -356,7 +353,8 @@ export default function Home({ onMenuOpen }) {
         </motion.div>
       )}
 
-      {/* Featured Stores */}
+      {/* Featured Stores — Point 41: placed just below Events & Happening per
+         the customer's section-order brief. */}
       {data?.featured_stores?.length > 0 && (
         <motion.div className="home-section" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
           <div className="gold-divider" style={{ margin: '4px 20px 16px' }} />
@@ -383,37 +381,6 @@ export default function Home({ onMenuOpen }) {
                 <div className="store-card-info">
                   <h4>{s.name}</h4>
                   <span className="store-category-tag">{s.category}</span>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
-      )}
-
-      {/* Events */}
-      {data?.upcoming_events?.length > 0 && (
-        <motion.div className="home-section" initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
-          <div className="home-section-header">
-            <h2 style={{ fontFamily: 'var(--font-heading)' }}>Upcoming Events</h2>
-            <button onClick={() => navigate('/app/events')} data-testid="see-all-events">See All <ChevronRight size={16} /></button>
-          </div>
-          <div className="home-events-scroll" data-testid="upcoming-events">
-            {data.upcoming_events.map((e, i) => (
-              <motion.div
-                key={e.id}
-                className="home-event-card"
-                onClick={() => navigate('/app/events')}
-                initial={{ opacity: 0, x: 40 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                whileTap={{ scale: 0.96 }}
-              >
-                <SafeImage src={e.image_url} alt={e.title} fallbackLabel={e.title} />
-                <div className="event-card-overlay">
-                  <span className="event-date">{new Date(e.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
-                  <h4>{e.title}</h4>
-                  <p>{e.time}</p>
                 </div>
               </motion.div>
             ))}

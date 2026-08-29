@@ -179,7 +179,9 @@ def test_admin_token_rejected_on_consumer_popups(client, admin_token, method, pa
         headers={"Authorization": f"Bearer {admin_token}"},
         timeout=30,
     )
-    assert r.status_code == 403, f"{method} {path} accepted admin token: {r.status_code} {r.text[:200]}"
+    # Backend rejects admin tokens on consumer routes with 401 "Invalid token type"
+    # (403 also acceptable) — both are a hard reject.
+    assert r.status_code in (401, 403), f"{method} {path} accepted admin token: {r.status_code} {r.text[:200]}"
 
 
 @pytest.mark.parametrize(

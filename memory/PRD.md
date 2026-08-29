@@ -1224,3 +1224,46 @@ Refactored `POST /api/admin/bills/{bill_id}/edit-brand` to fully async writes:
 
 ### Action required from user
 Redeploy PREVIEW → PRODUCTION. Fix Brand popup will return instantly even during Atlas load; the write happens in the background with 3 retries and Atlas load can no longer produce the 503 toast on this path.
+
+## Session 29 (Feb 2026) — Points 43 + 41 (partial)
+
+### Point 43: Banner + Brand logo uploads not reflecting in app — FIXED
+Root cause: `upload_brand_image` and `upload_banner_image` in server.py were writing to pod-local disk (`uploads/brands/...`, `uploads/banners/...`). Pod filesystems are ephemeral, so on deployment the uploads vanished.
+
+Fix:
+- Both endpoints now use `storage.aput_object` (Emergent Object Storage), path `cp67-mall/{brands|banners}/{filename}`.
+- New public route `GET /api/uploaded-image/{category}/{filename}` streams bytes from object storage with `Cache-Control: public, max-age=86400`. Validates category (brands|banners) and filename (rejects `/` and `..`).
+- Image URLs stored in DB now use `{BACKEND_PUBLIC_URL}/api/uploaded-image/brands/{brand_id}_logo.jpg` scheme.
+- `_sync_brand_to_store` still fires after brand upload, so consumer Stores collection picks up the new logo.
+- 502 returned if object-storage init fails; 400 for >5MB / bad extension / bad image_type.
+
+### Point 41: Home + Login (low-hanging items) — DONE
+- Login: `CP67's Loyalty Programme` (gold) + `Shop. Scan. Earn.` block above the welcome heading. Sub-tagline color fixed to `rgba(26,26,46,0.75)` (was near-invisible on cream).
+- Home quick actions: 3 buttons — **Scan Bill**, **Redeem**, **Brands** (Explore removed, Events replaced by Brands → /app/stores).
+- Home order: Banners → **Events & Happening** (renamed from "Upcoming Events") → **Featured Stores** (moved below Events).
+- Home: **Hot Deals** block removed entirely (offers still accessible via Redeem CTA).
+- Stores: 4th Floor already in the floor filter dropdown (pre-existing).
+
+### Point 41: DEFERRED to next session
+- Redeem-below-details, Participating Brands homepage tile, Homeland Opera upload area
+- Loyalty slab color highlighting (per attached color codes)
+- Dark Mode / Light Mode toggle
+- T&C Apply* links everywhere applicable (already on tier card + Home hero — needs audit)
+- Mall Amenities dropdown → tap-logo popup
+- Profile completion bar/%
+- Brands Directory (category-wise, floor-wise)
+- Referral code field on Login page
+
+### Point 40: iOS App Store crash — DEFERRED
+Needs the Xcode / mobile app source repo (not in this preview). User should share the iOS crash log symbols + project.
+
+### Verification (iteration_71.json)
+- 14/14 new pytest tests PASS (`/app/backend/tests/test_iteration71_objstore_uploads.py`).
+- 96/96 regression across iter 64-68, 70 all green.
+- Playwright: Home order verified banners(444) → Events(691) → Featured Stores(955); quick actions = 3; Hot Deals gone; Brands nav → /app/stores. Login tagline present.
+
+### Action required from user
+Redeploy PREVIEW → PRODUCTION. Then:
+- Upload a fresh brand logo + banner from the admin panel and confirm they appear in the consumer app.
+- Confirm order/wording changes on the Home screen.
+- Point 40: share the iOS repo path or symbolicated crash log so we can debug the camera crash on iPad Air (M3) iPadOS 26.6.

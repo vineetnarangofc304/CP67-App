@@ -130,7 +130,7 @@ export default function Login() {
             <div style={{ color: '#D4AF37', fontFamily: 'var(--font-heading)', fontSize: 13, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 4 }}>
               CP67&apos;s Loyalty Programme
             </div>
-            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 14, letterSpacing: '0.02em' }}>
+            <div style={{ color: 'rgba(26,26,46,0.75)', fontSize: 14, letterSpacing: '0.02em', fontWeight: 500 }}>
               Shop. Scan. Earn.
             </div>
           </div>

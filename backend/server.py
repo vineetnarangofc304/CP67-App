@@ -2221,13 +2221,19 @@ async def upload_brand_image(
         ext = "jpg"
     
     filename = f"{brand_id}_{image_type}.{ext}"
-    filepath = os.path.join("uploads", "brands", filename)
-    
-    with open(filepath, "wb") as f:
-        f.write(contents)
-    
-    backend_url = os.environ.get("BACKEND_PUBLIC_URL", "")
-    image_url = f"{backend_url}/api/uploads/brands/{filename}"
+    # Feb 2026 (Point 43): move brand logo/cover uploads from pod-local disk
+    # to Emergent Object Storage. Pod-local files are gone on every redeploy
+    # and are inaccessible from the deployed app URL, which is why admin
+    # uploads never showed up in the consumer PWA.
+    from storage import aput_object, APP_NAME
+    content_type = f"image/{'jpeg' if ext in ('jpg','jpeg') else ext}"
+    objstore_path = f"{APP_NAME}/brands/{filename}"
+    put_result = await aput_object(objstore_path, contents, content_type)
+    if not put_result:
+        raise HTTPException(status_code=502, detail="Object storage upload failed. Retry in ~10s.")
+
+    backend_url = os.environ.get("BACKEND_PUBLIC_URL", "").rstrip("/")
+    image_url = f"{backend_url}/api/uploaded-image/brands/{filename}"
     
     field = "logo_url" if image_type == "logo" else "cover_image_url"
     await db.brands.update_one({"id": brand_id}, {"$set": {field: image_url, "updated_at": datetime.now(timezone.utc).isoformat()}})
@@ -2390,15 +2396,46 @@ async def upload_banner_image(
     ext = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
     if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
         ext = "jpg"
-    os.makedirs(os.path.join("uploads", "banners"), exist_ok=True)
     filename = f"banner_{banner_id}.{ext}"
-    filepath = os.path.join("uploads", "banners", filename)
-    with open(filepath, "wb") as f:
-        f.write(contents)
-    backend_url = os.environ.get("BACKEND_PUBLIC_URL", "")
-    image_url = f"{backend_url}/api/uploads/banners/{filename}"
+    # Feb 2026 (Point 43): banner uploads move to Emergent Object Storage.
+    # Pod-local files are gone on every redeploy and inaccessible from the
+    # deployed app URL — why admin banner uploads never showed up in-app.
+    from storage import aput_object, APP_NAME
+    content_type = f"image/{'jpeg' if ext in ('jpg','jpeg') else ext}"
+    objstore_path = f"{APP_NAME}/banners/{filename}"
+    put_result = await aput_object(objstore_path, contents, content_type)
+    if not put_result:
+        raise HTTPException(status_code=502, detail="Object storage upload failed. Retry in ~10s.")
+    backend_url = os.environ.get("BACKEND_PUBLIC_URL", "").rstrip("/")
+    image_url = f"{backend_url}/api/uploaded-image/banners/{filename}"
     await db.banners.update_one({"id": banner_id}, {"$set": {"image_url": image_url, "updated_at": datetime.now(timezone.utc).isoformat()}})
     return {"success": True, "image_url": image_url}
+
+
+@api_router.get("/uploaded-image/{category}/{filename}")
+async def serve_uploaded_image(category: str, filename: str):
+    """Feb 2026 (Point 43): serve brand/banner uploads from Emergent Object
+    Storage. Public endpoint (no auth) because these are marketing assets
+    embedded in <img> tags across the consumer PWA. Backs the URL scheme
+    written by upload_brand_image / upload_banner_image."""
+    if category not in ("brands", "banners"):
+        raise HTTPException(status_code=404, detail="Unknown asset category")
+    # Simple filename allowlist to block path traversal
+    if "/" in filename or ".." in filename or filename.startswith("."):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    from storage import aget_object, APP_NAME
+    from fastapi.responses import Response as _StreamResp
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
+    fallback_ct = f"image/{'jpeg' if ext in ('jpg','jpeg') else ext}"
+    fetched = await aget_object(f"{APP_NAME}/{category}/{filename}")
+    if not fetched:
+        raise HTTPException(status_code=404, detail="Image not found")
+    data, ctype = fetched
+    return _StreamResp(
+        content=data,
+        media_type=ctype or fallback_ct,
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 @api_router.post("/admin/brands/import")
