@@ -1299,6 +1299,15 @@ async def process_bill_ocr(bill_id: str, image_base64: str, user_id: str, phone:
             bonus_txt = f" (incl. +{campaign_bonus_points} campaign bonus)" if campaign_bonus_points > 0 else ""
             await send_app_notification(user_id, "Points Earned!",
                 f"You earned {points_earned} points{bonus_txt} from your purchase at {store_name}!", "points")
+            # Point 44 (Feb 2026): consumer-app upload is a valid "first verified
+            # bill" — issue the deferred parking coupon if flagged.
+            try:
+                from server import _maybe_issue_pending_parking_coupon as _issue_pcoupon
+                _user_doc = await _db.users.find_one({"id": user_id}, {"_id": 0, "phone": 1})
+                if _user_doc and _user_doc.get("phone"):
+                    await _issue_pcoupon(_user_doc["phone"])
+            except Exception as _pe:
+                logger.warning(f"parking coupon hook (consumer upload) failed for {bill_id}: {_pe}")
 
     except Exception as e:
         logger.error(f"OCR processing error for bill {bill_id}: {e}")

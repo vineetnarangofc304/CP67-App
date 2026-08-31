@@ -277,7 +277,7 @@ export default function Home({ onMenuOpen }) {
       {/* Banners — Auto-rotating with crossfade */}
       {data?.banners?.length > 0 && (
         <div className="home-section">
-          <div className="home-banners" data-testid="home-banners" style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', height: 180 }}>
+          <div className="home-banners" data-testid="home-banners" style={{ position: 'relative', borderRadius: 16, overflow: 'hidden', aspectRatio: '3 / 1' }}>
             <AnimatePresence mode="wait">
               <motion.div
                 key={bannerIdx}
@@ -288,7 +288,7 @@ export default function Home({ onMenuOpen }) {
                 transition={{ duration: 0.6 }}
                 style={{ position: 'absolute', inset: 0 }}
               >
-                <SafeImage src={data.banners[bannerIdx].image_url} alt={data.banners[bannerIdx].title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} fallbackLabel={data.banners[bannerIdx].title} />
+                <SafeImage src={data.banners[bannerIdx].image_url} alt={data.banners[bannerIdx].title} style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#1a1a2e' }} fallbackLabel={data.banners[bannerIdx].title} />
                 <div className="banner-overlay">
                   <h3>{data.banners[bannerIdx].title}</h3>
                   <p>{data.banners[bannerIdx].subtitle}</p>

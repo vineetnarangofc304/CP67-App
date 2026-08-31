@@ -1,0 +1,77 @@
+{
+  "summary": "Tested Point 44 (deferred parking coupon) in-process + via admin API and Point 43 (banner 3:1 no-crop) in the consumer app. New pytest suite: 9 tests, 8 pass / 1 fail. Point 43 verified PASS with a seeded 1200x400 banner (container aspect-ratio 3/1, img object-fit: contain, rendered box 366x122 = full 3:1, no side cropping). Point 44 core behaviour is correct (deferral on registration, issue-on-approve, idempotency, expiry clearing, no-op for non-parking users), but the coupon hook is missing from every approval path except admin /process and reprocess?wait=true — including the DEFAULT admin reprocess (background) and the WhatsApp/consumer-app auto-approve paths, which is how most parking-QR users will actually get their first bill verified.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/bills/{id}/reprocess (default wait=false → _do_reprocess_bill_bg)",
+        "issue": "Hook _maybe_issue_pending_parking_coupon is only called in _do_reprocess_bill_sync (?wait=true). The default background path (_do_reprocess_bill_bg, used by the admin UI) approves the bill but never issues the deferred parking coupon. Reproduced: test_reprocess_background_path_issues_coupon → 0 coupons after an 'approved' reprocess.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "process_bill_image (WhatsApp bill upload, server.py ~6640) — status 'auto_approved'",
+        "issue": "Auto-approved WhatsApp bills never call the hook, so a parking-QR user who uploads a bill on WhatsApp (the flow the welcome message tells them to use: 'Upload any purchase bill... your parking coupon QR will be sent') gets points but NO parking coupon. Same for the force-credit fallback branch.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "routes/consumer.py bill upload (~line 1240, status set to 'approved')",
+        "issue": "Consumer-app bill upload sets status='approved' and credits points but does not call _maybe_issue_pending_parking_coupon — deferred coupon never issued for app uploads.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "server.py _maybe_issue_pending_parking_coupon (lines 6058-6061)",
+        "issue": "Dead/unreachable second `except Exception` block after `return coupon_code` inside the same try — remove (misleading, and flagged by linting as unreachable)."
+      },
+      {
+        "endpoint": "server.py _maybe_issue_pending_parking_coupon (expiry parse)",
+        "issue": "datetime.fromisoformat on a stored value without tz (legacy/manually-set docs) raises TypeError inside the inner try → silently swallowed and the coupon is then issued even though the window expired. Consider normalising to tz-aware."
+      },
+      {
+        "endpoint": "GET /api/consumer/home (banners)",
+        "issue": "Seeded banner image_urls point to a stale host https://brand-sync-staging.preview.emergentagent.com/banner-*.jpg which returns text/html (SPA index), so both production banners render the SafeImage text fallback instead of an image on the consumer Home. Point 43 could only be validated with a temporarily seeded banner."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Consumer Home banners",
+        "issues": [
+          "Live banner images are broken (bad seed URLs) so the banner area shows only the gradient + uppercase title fallback — looks like a rendering bug to a reviewer.",
+          "With object-fit: contain, any non-3:1 upload will letterbox against #1a1a2e which reads slightly off-palette against the cream home background; acceptable trade-off but consider matching --cp surface colour."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration74_point44_parking.py",
+    "/app/backend/tests/helper_seed_i74_banner.py",
+    "/app/test_reports/pytest/iter74_results.xml"
+  ],
+  "action_items": [
+    "Call _maybe_issue_pending_parking_coupon from _do_reprocess_bill_bg (or better: from inside _reprocess_single_bill's approved return) so the default admin Reprocess and bulk reprocess also issue the coupon.",
+    "Call the hook on the WhatsApp auto-approve path in process_bill_image (bill_status == 'auto_approved', incl. force-credit fallback).",
+    "Call the hook on the consumer-app upload approval path in routes/consumer.py (status 'approved').",
+    "Delete the unreachable except block at server.py ~6058-6061.",
+    "Fix the stale banner image_url seeds (brand-sync-staging host returns HTML, not images)."
+  ],
+  "critical_code_review_comments": [
+    "Coupon issuance hook placement is fragmented: it is attached to two endpoints instead of a single choke point. Centralise it where a bill transitions to approved/auto_approved (one helper used by all 4 approval paths) to avoid this class of miss.",
+    "server.py is 9577 lines — Point 44 logic (registration + coupon issuance) belongs in a routes/parking module.",
+    "Idempotency via atomic $unset guard is correct and verified; keep this pattern if the hook is moved."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration74_point44_parking.py",
+    "/app/backend/tests/helper_seed_i74_banner.py"
+  ],
+  "success_rate": {"backend": "89% (8/9 tests)", "frontend": "100% (Point 43 verified)"},
+  "seed_data_creation": "Temporary TEST_ITER74_ users/bills/coupons (deleted by module teardown, verified 0 leftovers) and a temporary TEST_ITER74_BANNER 1200x400 banner (removed after the UI check).",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "Admin admin/CP67Admin@2025; Consumer 9876543210 / OTP 1234 (both worked)",
+  "context_for_next_testing_agent": "Reuse /app/backend/tests/test_iteration74_point44_parking.py — it already contains a regression guard (test_reprocess_background_path_issues_coupon) that currently FAILS by design until the hook is added to _do_reprocess_bill_bg/_reprocess_single_bill. After the fix also add coverage for the WhatsApp auto-approve (process_bill_image) and consumer-app upload paths. Point 43 needs a real 3:1 banner seeded (helper_seed_i74_banner.py) because production banner URLs are broken.",
+  "rca_of_the_issue": "Point 44's hook was wired only into process_bill (admin approve) and _do_reprocess_bill_sync. Since /api/bills/{id}/reprocess defaults to wait=false and delegates to _do_reprocess_bill_bg → _reprocess_single_bill (which returns action='approved' but has no hook), and since WhatsApp/consumer-app uploads auto-approve without going through process_bill, most real 'first verified bill' events never trigger coupon issuance, leaving parking_coupon_pending=true on the user indefinitely until the 60-day window silently clears it."
+}

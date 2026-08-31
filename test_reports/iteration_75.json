@@ -1,0 +1,49 @@
+{
+  "summary": "Backend-only retest of Point 44 (deferred parking coupon) after iter-75 moved the coupon hook into the shared choke points. New suite /app/backend/tests/test_iteration75_point44_paths.py (16 tests) + reran iter-74 suite (9) + iter-73 admin-gate regression (35). Result: 59 passed / 1 failed. Verified issuing on: _reprocess_single_bill Fundle-approve, queued /api/bills/{id}/reprocess (wait=false, in-process AND live through uvicorn against real Fundle → bill approved + exactly 1 PARK-XXXX coupon), force-credit-on-Fundle-reject fallback, WhatsApp process_bill_image auto_approved, WhatsApp force-credit fallback, consumer-app process_bill_ocr status='approved'. Verified NO coupon on: reprocess kept_pending, WhatsApp pending_review (settings off), consumer-app pending_review, reject via /process. Idempotency holds under 6 concurrent helper calls (exactly 1 issuance). Dead except block and the duplicate hook in _do_reprocess_bill_sync are confirmed removed (static assertions). ONE remaining gap: the explicit force_credit=True branch of _reprocess_single_bill (admin POST /api/admin/bills/{id}/force-credit and both edit-brand auto-force-credit calls) approves the bill and credits points but never calls the hook.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/admin/bills/{bill_id}/force-credit  +  POST /api/admin/bills/{bill_id}/edit-brand (auto force-credit) → _reprocess_single_bill force_credit=True branch (server.py ~4110-4149)",
+        "issue": "The explicit force_credit branch sets status='approved', $inc's user points and returns action='approved' WITHOUT calling _maybe_issue_pending_parking_coupon (unlike the Fundle-approve branch at ~4207 and the fundle-reject fallback at ~4264). A parking-QR user whose first bill is approved via admin Force-Credit or via edit-brand auto-force-credit gets points but no parking coupon; parking_coupon_pending stays true until the 60-day window silently clears it. Reproduced: test_reprocess_explicit_force_credit_issues_coupon (0 coupons). Fix: add the same try/except hook after the users $inc (and also add the missing _sync_staff_incentive_for_bill call there — that branch skips staff sync too, unlike the other two approve branches).",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": [
+      {
+        "endpoint": "POST /api/bills/{bill_id}/reprocess-legacy (server.py ~3738)",
+        "issue": "Legacy reprocess implementation also sets status='approved' + credits points with no parking-coupon hook and no staff-incentive sync. Not used by the admin UI, but it is still a registered route — either delete it or add the hook."
+      },
+      {
+        "endpoint": "server.py _maybe_issue_pending_parking_coupon (expiry parse)",
+        "issue": "Still open from iter-74: datetime.fromisoformat() on a naive stored expiry raises TypeError inside the inner try → swallowed → coupon issued even though the window expired. Normalise to tz-aware before comparing."
+      }
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration75_point44_paths.py",
+    "/app/backend/tests/test_iteration74_point44_parking.py",
+    "/app/test_reports/pytest/iter75_results.xml"
+  ],
+  "action_items": [
+    "Add _maybe_issue_pending_parking_coupon (+ _sync_staff_incentive_for_bill) to the explicit force_credit=True approve branch in _reprocess_single_bill (server.py ~4136, right after the users balance $inc).",
+    "Decide on reprocess-legacy: delete the route or add the same hook.",
+    "Optional: make the pending-expiry comparison tz-safe in _maybe_issue_pending_parking_coupon."
+  ],
+  "critical_code_review_comments": [
+    "The choke point is now correct for the Fundle paths, but _reprocess_single_bill still has THREE independent 'approve' exits (force_credit, fundle-success, fundle-reject-fallback) each duplicating bill update + points $inc + staff sync + coupon hook. Extract one _finalise_bill_approval(bill_id, user, phone, points, extra_fields) helper — this is exactly the fragmentation that caused iter-74's miss and it just recurred in the force_credit branch.",
+    "routes/consumer.py's runtime `from server import _maybe_issue_pending_parking_coupon` works but is a code smell; move Point 44 logic into a routes/parking.py module importable by both server.py and routes/consumer.py.",
+    "server.py is 9581 lines — still needs splitting."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration75_point44_paths.py (new)",
+    "/app/backend/tests/test_iteration74_point44_parking.py (TestReprocessHook rewritten — the two tests stubbed out _reprocess_single_bill, which now bypasses the relocated hook and produced a false failure; they now drive the real choke point with tagnpay_client mocked)"
+  ],
+  "success_rate": {"backend": "98% (59/60 tests; 15/16 in the new Point-44 suite)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "Temporary TEST_ITER75_ / TEST_ITER74_ users, bills and parking_coupons created in-process; module teardown verified 0 leftovers for users/bills/coupons.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin admin/CP67Admin@2025 (login OK, used for live /api/bills/{id}/reprocess test)",
+  "context_for_next_testing_agent": "test_iteration75_point44_paths.py::TestReprocessChokePoint::test_reprocess_explicit_force_credit_issues_coupon is the single remaining red test and is a real product gap (admin Force-Credit / edit-brand auto-force-credit issue no parking coupon) — it should go green once the hook is added at server.py ~4136. All other Point-44 approval paths (queued reprocess incl. live uvicorn run, bulk, WhatsApp auto-approve, WhatsApp force-credit fallback, consumer-app upload, admin /process approve) are verified green. Do NOT mock _reprocess_single_bill in Point-44 tests — the hook lives inside it now.",
+  "rca_of_the_issue": "Iter-75 added the hook to the two Fundle-driven approve exits of _reprocess_single_bill but the function has a third earlier approve exit (the force_credit=True short-circuit at line ~4110 that skips Fundle entirely) which was left untouched; that exit is what POST /admin/bills/{id}/force-credit and the edit-brand auto-force-credit background tasks use, so those approvals still credit points without issuing the deferred coupon."
+}

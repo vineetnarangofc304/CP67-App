@@ -3378,6 +3378,15 @@ async def process_bill(bill_id: str, request: BillProcessRequest, background_tas
             {"id": bill["user_id"]},
             {"$inc": {"balance_points": points_earned, "total_earned_points": points_earned}}
         )
+
+        # Point 44 (Feb 2026): if this user came in via a parking QR and their
+        # coupon was deferred pending a verified bill, this is that moment —
+        # issue the PARK-XXXX coupon now. Idempotent, safe to call from every
+        # approve path.
+        try:
+            await _maybe_issue_pending_parking_coupon(user.get("phone"))
+        except Exception as _pe:
+            logger.warning(f"parking coupon hook failed for {bill_id}: {_pe}")
         
         # Update QR analytics
         if user.get("first_touch_qr"):
@@ -4125,6 +4134,18 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
             {"id": user["id"]},
             {"$inc": {"balance_points": fc_points, "total_earned_points": fc_points}}
         )
+        # Point 44 (iter-76): explicit force_credit path was missing both the
+        # staff-incentive sync AND the parking-coupon hook — parking-QR users
+        # whose first bill was admin Force-Credited or auto-force-credited
+        # after an edit-brand were left with parking_coupon_pending=true.
+        try:
+            await _sync_staff_incentive_for_bill(bill_id, "approved", phone or "")
+        except Exception as _e:
+            logger.warning(f"staff-sync (explicit force-credit) failed: {_e}")
+        try:
+            await _maybe_issue_pending_parking_coupon(phone)
+        except Exception as _pe:
+            logger.warning(f"parking coupon hook (explicit force-credit) failed for {bill_id}: {_pe}")
         if send_whatsapp_flag and phone:
             try:
                 total_balance_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
@@ -4191,6 +4212,14 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
         except Exception as _e:
             logger.warning(f"staff-sync (reprocess approved) failed: {_e}")
 
+        # Point 44 (Feb 2026): _reprocess_single_bill is the choke point every
+        # reprocess (admin queued + bulk + edit-brand) hits — issuing the
+        # deferred parking coupon here covers all approved-via-reprocess paths.
+        try:
+            await _maybe_issue_pending_parking_coupon(phone)
+        except Exception as _pe:
+            logger.warning(f"parking coupon hook (reprocess) failed for {bill_id}: {_pe}")
+
         if send_whatsapp_flag and phone:
             try:
                 total_balance_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
@@ -4242,6 +4271,11 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
                 await _sync_staff_incentive_for_bill(bill_id, "approved", phone or "")
             except Exception as _e:
                 logger.warning(f"staff-sync (reprocess force-credit) failed: {_e}")
+            # Point 44 (Feb 2026): force-credit is also a valid "first verified bill".
+            try:
+                await _maybe_issue_pending_parking_coupon(phone)
+            except Exception as _pe:
+                logger.warning(f"parking coupon hook (reprocess force-credit) failed for {bill_id}: {_pe}")
             if send_whatsapp_flag and phone and background_tasks is not None:
                 try:
                     total_balance_doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "balance_points": 1})
@@ -5898,6 +5932,11 @@ Use the menu below to explore your rewards!"""
             fundle_registered = True
         
         # Create user in DB
+        # Point 44 (Feb 2026): parking coupon is NO LONGER issued on
+        # registration alone. The customer must upload at least ONE bill
+        # that's approved, then _maybe_issue_pending_parking_coupon fires
+        # and creates the actual PARK-XXXX coupon. Mark the user with
+        # parking_coupon_pending so the bill-approve hook knows to issue.
         new_user = UserData(
             phone=phone,
             name=profile_name or "Customer",
@@ -5910,7 +5949,13 @@ Use the menu below to explore your rewards!"""
             first_touch_message="Parking QR Registration",
             balance_points=0
         )
-        await db.users.insert_one(new_user.model_dump())
+        user_doc = new_user.model_dump()
+        user_doc["parking_coupon_pending"] = True
+        user_doc["parking_coupon_source"] = source_code or "SRC_PARKING"
+        # 60-day window from registration to upload the qualifying bill.
+        _pending_expiry = datetime.now(timezone.utc) + timedelta(days=60)
+        user_doc["parking_coupon_pending_expires_at"] = _pending_expiry.isoformat()
+        await db.users.insert_one(user_doc)
         
         # Update QR analytics
         if qr_data:
@@ -5920,88 +5965,108 @@ Use the menu below to explore your rewards!"""
                 upsert=True
             )
         
-        # Generate Parking Coupon Code
-        coupon_code = f"PARK-{uuid.uuid4().hex[:8].upper()}"
-        expiry_time = datetime.now(timezone.utc) + timedelta(hours=24)
-        
-        # Store coupon in DB
-        parking_coupon = {
-            "coupon_code": coupon_code,
-            "user_phone": phone,
-            "user_name": profile_name or "Customer",
-            "source": "SRC_PARKING",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "expires_at": expiry_time.isoformat(),
-            "status": "active",
-            "used": False
-        }
-        await db.parking_coupons.insert_one(parking_coupon)
-        logger.info(f"Parking coupon created: {coupon_code} for {phone}, expires: {expiry_time.isoformat()}")
-        
-        # Generate QR code image from coupon code
-        qr_image = await generate_parking_qr_image(coupon_code)
-        
-        expiry_str = expiry_time.strftime("%d %b %Y, %I:%M %p")
-        
-        # Send welcome + parking coupon message
-        welcome_msg = f"""Hi {profile_name or 'there'}! Welcome to Homeland Advantage, CP67 Mall's exclusive loyalty program.
-
-As a welcome gift, here is your FREE Parking Coupon!
-
-*Coupon Code:* {coupon_code}
-*Valid Until:* {expiry_str}
-
-Show this QR code at the parking exit counter.
-
-Shop, Earn and Redeem rewards every time you visit CP67 Mall!"""
-        
+        # Send welcome message asking user to upload a bill to unlock parking
+        welcome_msg = (
+            f"Hi {profile_name or 'there'}! Welcome to Homeland Advantage, CP67 Mall's exclusive loyalty program.\n\n"
+            "Your FREE Parking Coupon is *reserved* for you.\n\n"
+            "*How to claim it:* Upload any purchase bill from a CP67 store. Once verified, "
+            "your parking coupon QR will be sent to you on WhatsApp.\n\n"
+            "Shop, Earn and Redeem rewards every time you visit CP67 Mall!"
+        )
+        menu_options = [
+            {"id": "upload_bill", "title": "Upload Bill", "description": "Upload your bill to unlock parking"},
+            {"id": "my_points", "title": "My Points", "description": "Check your loyalty points balance"},
+            {"id": "redeem_points", "title": "Redeem Points", "description": "Redeem points at participating brands"},
+        ]
         outbound_log = WhatsAppLog(
             user_id=new_user.id,
             user_phone=phone,
             direction="outbound",
             message_type="interactive",
-            content=welcome_msg
+            content=welcome_msg,
         )
         await db.whatsapp_logs.insert_one(outbound_log.model_dump())
-        
-        # Try sending QR image
-        if qr_image:
-            qr_caption = f"""Welcome to Homeland Advantage!
-
-Your FREE Parking Coupon:
-*{coupon_code}*
-
-Valid until: {expiry_str}
-
-Show this QR at the parking exit counter."""
-            
-            image_sent = await send_whatsapp_image(phone, qr_image, qr_caption)
-            if image_sent:
-                logger.info(f"Parking coupon QR sent to {phone}")
-                # Also send menu
-                menu_options = [
-                    {"id": "upload_bill", "title": "Upload Bill", "description": "Upload your shopping bill to earn points"},
-                    {"id": "my_points", "title": "My Points", "description": "Check your loyalty points balance"},
-                    {"id": "know_more", "title": "Know More", "description": "Participating brands & T&C"}
-                ]
-                menu_msg = "Start earning points now! Upload your shopping bills to earn and redeem rewards."
-                await send_whatsapp_list(phone, menu_msg, menu_options, header_text="Homeland Advantage", button_text="Menu")
-                return
-        
-        # Fallback: send text message with coupon code
-        buttons = [
-            {"id": "upload_bill", "title": "Upload Bill"},
-            {"id": "my_points", "title": "Check Points"}
-        ]
-        await send_whatsapp_buttons(phone, welcome_msg, buttons)
-        
+        await send_whatsapp_list(phone, welcome_msg, menu_options, header_text="Homeland Advantage", button_text="Menu")
+        logger.info(f"Parking QR registration: {phone} — coupon deferred until first verified bill")
+        return new_user
     except Exception as e:
-        logger.error(f"Error in parking registration for {phone}: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        # Send fallback message
-        fallback_msg = "Welcome to Homeland Advantage! Please visit our help desk for your free parking coupon."
-        await send_whatsapp_text(phone, fallback_msg)
+        logger.error(f"process_parking_registration failed for {phone}: {e}", exc_info=True)
+
+
+async def _maybe_issue_pending_parking_coupon(user_phone: str) -> Optional[str]:
+    """Point 44 (Feb 2026): if the user registered via a parking QR and has
+    a pending parking coupon flag, issue the PARK-XXXX coupon NOW that their
+    first bill has been verified. Idempotent — only fires once."""
+    if not user_phone:
+        return None
+    phone = user_phone if user_phone.startswith("91") else f"91{user_phone[-10:]}"
+    try:
+        user = await db.users.find_one(
+            {"phone": phone, "parking_coupon_pending": True},
+            {"_id": 0, "id": 1, "name": 1, "parking_coupon_source": 1, "parking_coupon_pending_expires_at": 1},
+        )
+        if not user:
+            return None
+        # Expiry check — if the 60-day window elapsed, silently clear the flag.
+        try:
+            _exp = user.get("parking_coupon_pending_expires_at")
+            if _exp and datetime.fromisoformat(_exp) < datetime.now(timezone.utc):
+                await db.users.update_one(
+                    {"phone": phone},
+                    {"$unset": {"parking_coupon_pending": "", "parking_coupon_source": "", "parking_coupon_pending_expires_at": ""}},
+                )
+                logger.info(f"Parking coupon window expired for {phone}; flag cleared")
+                return None
+        except Exception:
+            pass
+
+        # Atomic clear-and-issue: if another request already flipped the flag
+        # we skip so no user ever gets two coupons.
+        clear_res = await db.users.update_one(
+            {"phone": phone, "parking_coupon_pending": True},
+            {"$unset": {"parking_coupon_pending": "", "parking_coupon_source": "", "parking_coupon_pending_expires_at": ""}},
+        )
+        if clear_res.modified_count == 0:
+            return None
+
+        coupon_code = f"PARK-{uuid.uuid4().hex[:8].upper()}"
+        expiry_time = datetime.now(timezone.utc) + timedelta(hours=24)
+        parking_coupon = {
+            "coupon_code": coupon_code,
+            "user_phone": phone,
+            "user_name": user.get("name") or "Customer",
+            "source": user.get("parking_coupon_source") or "SRC_PARKING",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": expiry_time.isoformat(),
+            "status": "active",
+            "used": False,
+            "issued_after_bill_verification": True,
+        }
+        await db.parking_coupons.insert_one(parking_coupon)
+        logger.info(f"Parking coupon issued post-bill-verification: {coupon_code} for {phone}")
+
+        # Send QR image on WhatsApp
+        try:
+            qr_image = await generate_parking_qr_image(coupon_code)
+            expiry_str = expiry_time.strftime("%d %b %Y, %I:%M %p")
+            caption = (
+                f"Congratulations {user.get('name') or 'there'}!\n\n"
+                "Your bill has been verified. Here is your FREE Parking Coupon:\n\n"
+                f"*Coupon Code:* {coupon_code}\n"
+                f"*Valid Until:* {expiry_str}\n\n"
+                "Show this QR at the parking exit counter."
+            )
+            if qr_image:
+                await send_whatsapp_image(phone, qr_image, caption)
+            else:
+                await send_whatsapp_text(phone, caption)
+        except Exception as _e:
+            logger.warning(f"Parking QR delivery failed for {phone} ({coupon_code}): {_e}")
+
+        return coupon_code
+    except Exception as e:
+        logger.error(f"_maybe_issue_pending_parking_coupon failed for {phone}: {e}", exc_info=True)
+        return None
 
 
 
@@ -6760,6 +6825,14 @@ Thank you for shopping at CP67 Mall!"""
             # Get updated balance
             updated_user = await db.users.find_one({"id": user["id"]})
             total_balance = int(updated_user.get("balance_points", 0)) if updated_user else total_balance
+
+        # Point 44 (Feb 2026): WhatsApp auto-approve path — issue the deferred
+        # parking coupon on the first verified bill.
+        if bill_status == "auto_approved":
+            try:
+                await _maybe_issue_pending_parking_coupon(phone)
+            except Exception as _pe:
+                logger.warning(f"parking coupon hook (WA auto_approve) failed for {phone}: {_pe}")
         
         # Update QR analytics
         if user.get("first_touch_qr"):

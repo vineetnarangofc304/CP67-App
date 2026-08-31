@@ -868,14 +868,19 @@
   border-radius: var(--cp-radius);
   overflow: hidden;
   position: relative;
-  aspect-ratio: 2/1;
+  /* Point 43 (Feb 2026): match the admin-recommended 3:1 (1200×400) so
+     object-fit: cover no longer crops the sides of correctly-sized banners. */
+  aspect-ratio: 3 / 1;
   scroll-snap-align: start;
 }
 
 .home-banner-card img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* Point 43: contain preserves the full banner artwork (no side-cropping) on
+     any device width. Admin uploader already warns on non-3:1 uploads. */
+  object-fit: contain;
+  background: #1a1a2e;
 }
 
 .banner-overlay {
