@@ -1,0 +1,34 @@
+{
+  "summary": "Backend-only verification of the Point 14b fix (registration-incentive activation is now brand-gated) in /app/backend/routes/staff.py::create_or_activate_bill_incentive. Created /app/backend/tests/test_iteration77_registration_brand_gate.py with 9 direct-call tests covering all 5 requested scenarios + 2 extra edge cases + Point 14 regression. All 9 passed. Also re-ran regression suites (iter72/73/74/75 + test_points_11_12_14_retailer) = 93 tests, all passed. The reported production bug is fixed: a Brand B bill no longer activates a pending Brand A registration incentive, staff_B still receives its bill_upload credit, and an audit row with reason='registration_activation_brand_mismatch' is written into the existing staff_attribution_misses collection (no new collection).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "routes/staff.py::create_or_activate_bill_incentive (step 2)", "issue": "Registration incentive `expires_at` (registration_validity_days, default 60) is NEVER checked at activation time. Verified by code inspection: the pending query filters only on customer_phone/type/status. Consequence is amplified by this fix - registrations now stay 'pending' much longer (until a matching-brand bill arrives), so a 2-year-old expired registration incentive can still flip to 'redeemable'. Recommend adding {\"expires_at\": {\"$gte\": now_iso}} to the pendings query (and/or an expiry sweeper marking them 'expired')."},
+      {"endpoint": "routes/staff.py::create_or_activate_bill_incentive", "issue": "Every mismatching approved bill writes a NEW registration_activation_brand_mismatch miss row for the same (staff, customer) pair. A customer with a long-lived pending registration who uploads many other-brand bills will generate a growing number of near-duplicate audit rows. Consider de-duping on (staff_id, customer_phone, bill_id) or capping."},
+      {"endpoint": "routes/staff.py", "issue": "DRY: the `_norm` helper is defined twice inside the same function body (step 1 and step 2). Hoist it to a module-level helper (e.g. `_norm_brand`) shared with the Point 14 path so the two gates can never drift."},
+      {"endpoint": "routes/staff.py", "issue": "`if 'bill_doc' not in locals() or bill_doc is None` works but is fragile/implicit. Prefer initialising `bill_doc = None` at the top of the function. Behaviour verified correct by test_s4/test_s4b/test_s4c."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration77_registration_brand_gate.py",
+    "/app/test_reports/pytest/iter77_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (minor): enforce registration incentive expires_at at activation time - see minor issue #1; this is now more impactful because pending registrations live longer.",
+    "OPTIONAL (housekeeping): de-dup / hoist _norm / init bill_doc=None as noted in minor issues."
+  ],
+  "critical_code_review_comments": [
+    "Fix is correct and single-sited: create_or_activate_bill_incentive is the ONLY place that flips registration status to 'redeemable' (grep confirmed, callers = server.py:9311 and routes/consumer.py:1293), so no bypass path exists.",
+    "bill_status gate ('auto_approved','approved') correctly prevents activation on pending_review/rejected - verified in test_s5 and test_s5b.",
+    "Missing bill row (ghost bill_id) does not crash; current_bill_brand is '' so nothing activates and a miss row is logged - safe-by-default behaviour."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration77_registration_brand_gate.py"],
+  "success_rate": {"backend": "100% (9/9 new iter-77 tests, 93/93 regression tests)", "frontend": "not tested (backend-only request)"},
+  "seed_data_creation": "All seed rows tagged with _iter77:true and prefixed TEST_ITER77_ in retail_staff/bills/staff_incentives/staff_attributions/staff_attribution_misses; module-scoped autouse fixture deletes them after the run (verified clean).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "Admin admin / CP67Admin@2025 (not needed - tests call the coroutine directly via routes.staff.bind_db)",
+  "context_for_next_testing_agent": "Iteration 77 fix (registration activation brand gate) is fully covered by /app/backend/tests/test_iteration77_registration_brand_gate.py - reuse it as a regression suite. It binds the real Mongo DB into routes.staff via bind_db and calls create_or_activate_bill_incentive directly (no HTTP). Known unresolved (not a blocker, reported): registration incentive expires_at is not enforced at activation, and duplicate miss rows accumulate per mismatching bill. Full regression command: cd /app/backend && python -m pytest tests/test_iteration7*.py tests/test_points_11_12_14_retailer.py -v",
+  "rca_of_the_issue": "Original bug: step 2 of create_or_activate_bill_incentive updated ALL {customer_phone, type:'registration', status:'pending'} rows to 'redeemable' on any approved bill, ignoring brand. Fix iterates each pending registration, resolves the registering staff's brand_name, normalises both sides with re.sub(r'[^a-z0-9]+','') + lower(), and only activates on an exact normalised match; mismatches are skipped and audited. Verified reproduction-shaped test (test_s1) now asserts staff_A stays 'pending' while staff_B is credited."
+}

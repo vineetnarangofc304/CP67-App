@@ -1568,17 +1568,71 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
             # This enforces "one scan = one bill decision" — later bills need a new QR scan.
             await _db.staff_attributions.update_one({"id": attribution["id"]}, {"$set": {"used": True}})
 
-    # 2. If bill approved, activate any pending registration incentive for this customer
+    # 2. If bill approved, activate any pending registration incentive whose
+    #    staff belongs to the SAME brand as the current bill.
+    #    Feb 2026 (Point 14b): registration incentive must NOT activate when
+    #    the customer uploads a bill for a DIFFERENT retailer. Every incentive
+    #    (registration + bill_upload) is now gated on brand match, so the
+    #    registration source never leaks credit for someone else's activity.
+    #    If the customer uploads a bill for Brand B, the pending Brand A
+    #    registration stays pending until the customer eventually uploads a
+    #    matching Brand A bill within the 60-day window.
     if bill_status in ("auto_approved", "approved"):
-        pending_reg = await _db.staff_incentives.find_one({
-            "customer_phone": customer_phone,
-            "type": "registration",
-            "status": "pending",
-        }, {"_id": 0, "id": 1})
-        if pending_reg:
+        # Reuse the bill_doc we already fetched above if present; otherwise fetch a lean copy.
+        if 'bill_doc' not in locals() or bill_doc is None:
+            bill_doc = await _db.bills.find_one(
+                {"id": bill_id},
+                {"_id": 0, "store_name": 1, "brand": 1},
+            )
+        current_bill_brand = ""
+        if bill_doc:
+            current_bill_brand = (bill_doc.get("store_name") or bill_doc.get("brand") or "").strip()
+
+        def _norm(s: str) -> str:
+            return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+
+        current_bill_brand_norm = _norm(current_bill_brand)
+
+        pendings = _db.staff_incentives.find(
+            {"customer_phone": customer_phone, "type": "registration", "status": "pending"},
+            {"_id": 0, "id": 1, "staff_id": 1, "staff_code": 1},
+        )
+        activated = 0
+        skipped_wrong_brand = 0
+        async for pending_reg in pendings:
+            reg_staff_id = pending_reg.get("staff_id")
+            reg_staff = await _db.retail_staff.find_one({"id": reg_staff_id}, {"_id": 0, "brand_name": 1})
+            reg_brand = (reg_staff or {}).get("brand_name") or ""
+            reg_brand_norm = _norm(reg_brand)
+            if not current_bill_brand_norm or not reg_brand_norm or current_bill_brand_norm != reg_brand_norm:
+                skipped_wrong_brand += 1
+                # Audit: this bill did NOT unlock the registration incentive
+                # because it was for a different brand. Log so admin can see
+                # why the registering retailer wasn't paid.
+                try:
+                    await _db.staff_attribution_misses.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "staff_id": reg_staff_id,
+                        "staff_code": pending_reg.get("staff_code"),
+                        "customer_phone": customer_phone,
+                        "bill_id": bill_id,
+                        "bill_brand": current_bill_brand,
+                        "staff_brand": reg_brand,
+                        "reason": "registration_activation_brand_mismatch",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                except Exception as e:
+                    logger.warning(f"registration miss log failed: {e}")
+                continue
             await _db.staff_incentives.update_one(
                 {"id": pending_reg["id"]},
                 {"$set": {"status": "redeemable", "approved_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            activated += 1
+        if activated or skipped_wrong_brand:
+            logger.info(
+                f"Point 14b: registration activation for {customer_phone} on bill_id={bill_id} "
+                f"bill_brand='{current_bill_brand}': activated={activated} skipped_brand_mismatch={skipped_wrong_brand}"
             )
 
 
