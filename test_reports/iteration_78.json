@@ -1,0 +1,33 @@
+{
+  "summary": "Backend-only test for CP67 iteration 78 (Points 45/46/47/48). Created seeded admins 'billop' & 'appmgr' via super_admin (idempotent), then verified: (P45) /admin/login+/admin/me returns role='app_manager' for appmgr; (P46) same for billop with role='bill_operator'; (P47) tier NAME consistent across /consumer/home, /wallet, /profile, /tier-info in the normal flow for phone 9876543210; regression: /admin/users lists both new admins; consumer endpoints (home/wallet/profile/tier-info/bills) all return 200. (P48) build.gradle already at targetSdkVersion=36, versionCode=12, versionName=1.11 — verified statically. NOTE: /consumer/points-summary and /consumer/tier-journey endpoints listed in the review request DO NOT EXIST in backend — skipped. Also uncovered a partial-fix gap in /profile (see rca).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/consumer/profile", "issue": "Uses ONLY TagnPay total_earned; unlike /home and /tier-info (which take max(local_user.total_earned_points, tagnpay)). If TagnPay returns a stale/lower value, /profile overwrites the persisted DB total_earned_points, causing drift-back. In normal flow with a healthy TagnPay this is invisible (all agree), but any TagnPay hiccup will re-introduce a tier mismatch and corrupt user.total_earned_points. Recommend applying the same 'local_earned = max(local, tagnpay)' logic used in /home & /tier-info before calling calculate_tier() and persisting."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration78_points_45_46_47.py",
+    "/app/test_reports/pytest/iteration78.xml"
+  ],
+  "action_items": [
+    "Optional hardening: mirror the 'max(local, tagnpay)' + persist-tier logic from /consumer/home into /consumer/profile to fully close Point 47 drift (see minor issue above).",
+    "If the client-requested endpoints /consumer/points-summary and /consumer/tier-journey are actually expected to exist, they are missing in backend — clarify with product; otherwise remove from the checklist."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/routes/consumer.py L524-563 (/profile) does not use max(local_earned, tagnpay_earned) before calculate_tier(), unlike L679-706 (/home) and L2086-2101 (/tier-info). This is an asymmetry that partially defeats Point 47's goal of a single source of truth.",
+    "/app/backend/routes/consumer.py L2103-2110 (/tier-info) still ships hardcoded 'tiers' metadata (retail/jewellery %, purchase_range, min_points) separate from calculate_tier() bands. The min_points here happen to match calculate_tier bands but are duplicated — future edits risk drift. Consider centralising all tier metadata in calculate_tier().",
+    "/app/backend/server.py L1047-1071 create_admin_user accepts arbitrary 'role' string with no whitelist. Any typo (e.g. 'app-manager' vs 'app_manager') will silently create a broken admin. Add a role enum: ['admin','super_admin','bill_operator','app_manager']."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration78_points_45_46_47.py"
+  ],
+  "success_rate": {"backend": "100% (5/5 pass, 1 xfail documenting the /profile gap)", "frontend": "n/a (backend-only run per request)"},
+  "test_credentials": "admin/CP67Admin@2025 · billop/BillOp@2025 · appmgr/AppMgr@2025 · consumer phone 9876543210 OTP 1234",
+  "seed_data_creation": "Idempotently created admin users 'billop' (role=bill_operator) and 'appmgr' (role=app_manager) via POST /api/admin/users using super_admin token. No consumer data was altered.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 78 test file is /app/backend/tests/test_iteration78_points_45_46_47.py (pytest, 5 pass + 1 xfail). The xfail documents a real gap: /consumer/profile does NOT use the max(local,tagnpay) pattern used by /home and /tier-info, so it can overwrite persisted total_earned_points with a stale TagnPay 0 value and cause tier drift-back. In the standard test consumer flow this is invisible because TagnPay agrees. If E1 patches /profile to mirror /home's logic, flip the xfail to a normal test. Points 45/46 backend surface is only role storage — frontend gating (roleAccess.js) is untested here per the request. Point 48 (build.gradle) verified static-only.",
+  "rca of the issue": "Point 47 fix is 90% complete. calculate_tier() is now the shared computation across /home, /wallet, /profile, /tier-info. However the INPUT to calculate_tier differs: /home and /tier-info do total_earned = max(local_user.total_earned_points, tagnpay.total_earned_points); /profile uses only tagnpay. Reproduction: (1) set users collection total_earned_points=15000 for phone 9876543210 while TagnPay returns 0. (2) GET /home → 'Gold' (max wins). (3) GET /profile → 'Bronze' AND persists total_earned_points=0 to DB (data corruption). (4) GET /tier-info → 'Bronze' because DB is now 0. Mitigation: patch /profile (backend/routes/consumer.py ~L530-546) to compute local_earned = int(user.get('total_earned_points',0)); if local_earned > total_earned: total_earned = local_earned; before calling calculate_tier() and the update_one. This makes all four endpoints monotonic in total_earned and immune to transient TagnPay dips."
+}

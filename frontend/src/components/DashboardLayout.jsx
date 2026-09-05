@@ -29,6 +29,7 @@ import {
   Ticket
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import { ROLE_ROUTES } from '../lib/roleAccess';
 
 const PARKING_NAV = [
   { path: '/parking-scanner', label: 'Parking Scanner', icon: ScanLine },
@@ -111,11 +112,25 @@ const DashboardLayout = ({ children, title }) => {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   const isParkingStaff = user?.role === 'parking_staff';
-  // Flatten sections for parking staff (they only see 2 items — no headings needed).
-  // Regular admin sees fully grouped sidebar.
+  // Point 45 + 46: filter sidebar to only allowed paths for restricted roles.
+  const allowedForRole = ROLE_ROUTES[user?.role];
+  const filteredSections = allowedForRole
+    ? NAV_SECTIONS
+        .map(sec => ({ ...sec, items: sec.items.filter(i => allowedForRole.includes(i.path)) }))
+        .filter(sec => sec.items.length > 0)
+    : NAV_SECTIONS;
   const sections = isParkingStaff
     ? [{ heading: null, items: PARKING_NAV }]
-    : NAV_SECTIONS;
+    : filteredSections;
+
+  const roleLabel = (() => {
+    if (isParkingStaff) return `Parking Staff${user?.gate ? ` — ${user.gate === 'gate1' ? 'Gate 1' : 'Gate 2'}` : ''}`;
+    if (user?.role === 'bill_operator') return 'Bill Operator';
+    if (user?.role === 'app_manager') return 'App Manager';
+    if (user?.role === 'call_centre') return 'Call Centre';
+    if (user?.role === 'support_officer') return 'Support Officer';
+    return 'Administrator';
+  })();
 
   const handleLogout = () => {
     logout();
@@ -207,9 +222,7 @@ const DashboardLayout = ({ children, title }) => {
               <div>
                 <p className="text-sm font-medium text-slate-900">{user?.username || 'Admin'}</p>
                 <p className="text-xs text-slate-500">
-                  {isParkingStaff 
-                    ? `Parking Staff${user?.gate ? ` — ${user.gate === 'gate1' ? 'Gate 1' : 'Gate 2'}` : ''}` 
-                    : 'Administrator'}
+                  {roleLabel}
                 </p>
               </div>
             </div>

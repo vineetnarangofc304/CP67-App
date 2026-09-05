@@ -28,6 +28,7 @@ import ConsumerApp from './consumer/ConsumerApp';
 import StaffApp from './staff/StaffApp';
 import IOSInstall from './pages/IOSInstall';
 import Privacy from './pages/Privacy';
+import { isPathAllowed, landingForRole } from './lib/roleAccess';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -132,9 +133,7 @@ const AuthProvider = ({ children }) => {
   );
 };
 
-const PARKING_ROUTES = ['/parking-scanner', '/parking-report'];
-
-const ProtectedRoute = ({ children, allowParking = false }) => {
+const ProtectedRoute = ({ children, path }) => {
   const { token, user, loading } = useAuth();
 
   if (loading) {
@@ -149,9 +148,10 @@ const ProtectedRoute = ({ children, allowParking = false }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // Parking staff can only access parking routes
-  if (user?.role === 'parking_staff' && !allowParking) {
-    return <Navigate to="/parking-scanner" replace />;
+  // Role-based route gating (Points 45, 46 + parking staff)
+  const role = user?.role;
+  if (role && !isPathAllowed(role, path)) {
+    return <Navigate to={landingForRole(role)} replace />;
   }
 
   return children;
@@ -164,28 +164,28 @@ function App() {
         <Toaster position="top-right" richColors />
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/qr-codes" element={<ProtectedRoute><QRCodes /></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
-          <Route path="/bills" element={<ProtectedRoute><Bills /></ProtectedRoute>} />
-          <Route path="/parking-scanner" element={<ProtectedRoute allowParking><ParkingScanner /></ProtectedRoute>} />
-          <Route path="/parking-report" element={<ProtectedRoute allowParking><ParkingReport /></ProtectedRoute>} />
-          <Route path="/whatsapp" element={<ProtectedRoute><WhatsAppSimulator /></ProtectedRoute>} />
-          <Route path="/whatsapp-logs" element={<ProtectedRoute><WhatsAppLogs /></ProtectedRoute>} />
-          <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
-          <Route path="/admin-users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
-          <Route path="/blocked-users" element={<ProtectedRoute><BlockedUsers /></ProtectedRoute>} />
-          <Route path="/brands" element={<ProtectedRoute><Brands /></ProtectedRoute>} />
-          <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
-          <Route path="/app-settings" element={<ProtectedRoute><AppSettings /></ProtectedRoute>} />
-          <Route path="/fundle-sync" element={<ProtectedRoute><FundleSync /></ProtectedRoute>} />
-          <Route path="/staff-incentives" element={<ProtectedRoute><StaffIncentives /></ProtectedRoute>} />
-          <Route path="/coupons" element={<ProtectedRoute><Coupons /></ProtectedRoute>} />
-          <Route path="/app-controls" element={<ProtectedRoute><AdminDIY /></ProtectedRoute>} />
-          <Route path="/banners" element={<ProtectedRoute><Banners /></ProtectedRoute>} />
-          <Route path="/offers" element={<ProtectedRoute><Offers /></ProtectedRoute>} />
-          <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
-          <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute path="/"><Dashboard /></ProtectedRoute>} />
+          <Route path="/qr-codes" element={<ProtectedRoute path="/qr-codes"><QRCodes /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute path="/users"><Users /></ProtectedRoute>} />
+          <Route path="/bills" element={<ProtectedRoute path="/bills"><Bills /></ProtectedRoute>} />
+          <Route path="/parking-scanner" element={<ProtectedRoute path="/parking-scanner"><ParkingScanner /></ProtectedRoute>} />
+          <Route path="/parking-report" element={<ProtectedRoute path="/parking-report"><ParkingReport /></ProtectedRoute>} />
+          <Route path="/whatsapp" element={<ProtectedRoute path="/whatsapp"><WhatsAppSimulator /></ProtectedRoute>} />
+          <Route path="/whatsapp-logs" element={<ProtectedRoute path="/whatsapp-logs"><WhatsAppLogs /></ProtectedRoute>} />
+          <Route path="/analytics" element={<ProtectedRoute path="/analytics"><Analytics /></ProtectedRoute>} />
+          <Route path="/admin-users" element={<ProtectedRoute path="/admin-users"><AdminUsers /></ProtectedRoute>} />
+          <Route path="/blocked-users" element={<ProtectedRoute path="/blocked-users"><BlockedUsers /></ProtectedRoute>} />
+          <Route path="/brands" element={<ProtectedRoute path="/brands"><Brands /></ProtectedRoute>} />
+          <Route path="/campaigns" element={<ProtectedRoute path="/campaigns"><Campaigns /></ProtectedRoute>} />
+          <Route path="/app-settings" element={<ProtectedRoute path="/app-settings"><AppSettings /></ProtectedRoute>} />
+          <Route path="/fundle-sync" element={<ProtectedRoute path="/fundle-sync"><FundleSync /></ProtectedRoute>} />
+          <Route path="/staff-incentives" element={<ProtectedRoute path="/staff-incentives"><StaffIncentives /></ProtectedRoute>} />
+          <Route path="/coupons" element={<ProtectedRoute path="/coupons"><Coupons /></ProtectedRoute>} />
+          <Route path="/app-controls" element={<ProtectedRoute path="/app-controls"><AdminDIY /></ProtectedRoute>} />
+          <Route path="/banners" element={<ProtectedRoute path="/banners"><Banners /></ProtectedRoute>} />
+          <Route path="/offers" element={<ProtectedRoute path="/offers"><Offers /></ProtectedRoute>} />
+          <Route path="/events" element={<ProtectedRoute path="/events"><Events /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute path="/reports"><Reports /></ProtectedRoute>} />
           {/* Public install guides */}
           <Route path="/ios-install" element={<IOSInstall />} />
           <Route path="/privacy" element={<Privacy />} />

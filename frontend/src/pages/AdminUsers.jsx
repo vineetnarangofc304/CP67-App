@@ -371,6 +371,7 @@ const AdminUsers = () => {
     super_admin: { label: 'Super Admin', color: 'bg-purple-100 text-purple-800 border-purple-200', icon: ShieldCheck },
     admin: { label: 'Admin', color: 'bg-blue-100 text-blue-800 border-blue-200', icon: Shield },
     bill_operator: { label: 'Bill Operator', color: 'bg-green-100 text-green-800 border-green-200', icon: Shield },
+    app_manager: { label: 'App Manager', color: 'bg-indigo-100 text-indigo-800 border-indigo-200', icon: Shield },
     call_centre: { label: 'Call Centre', color: 'bg-orange-100 text-orange-800 border-orange-200', icon: Shield },
     support_officer: { label: 'Support Officer', color: 'bg-pink-100 text-pink-800 border-pink-200', icon: Shield }
   };
@@ -743,6 +744,12 @@ const AdminUsers = () => {
                     <div className="flex items-center gap-2">
                       <Shield className="h-4 w-4 text-green-600" />
                       Bill Operator
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="app_manager">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-4 w-4 text-indigo-600" />
+                      App Manager
                     </div>
                   </SelectItem>
                   <SelectItem value="call_centre">

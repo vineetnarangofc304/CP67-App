@@ -8,6 +8,14 @@
 - Username: `admin`
 - Password: `CP67Admin@2025`
 
+## Restricted Admin Roles (Points 45, 46)
+- **Bill Operator** — only sees `/bills`
+  - Username: `billop`
+  - Password: `BillOp@2025`
+- **App Manager** — only sees `/banners`, `/offers` (Hot Deals), `/events`, `/campaigns`
+  - Username: `appmgr`
+  - Password: `AppMgr@2025`
+
 ## Parking Staff Login
 - **Gate 1**: Username `parking1`, Password `Parking1@2025` — sees only Gate 1 exits
 - **Gate 2**: Username `parking2`, Password `Parking2@2025` — sees only Gate 2 exits

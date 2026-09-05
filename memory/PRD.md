@@ -1,5 +1,14 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Feb 5, 2026 — Session 79) — Client Points 45, 46, 47, 48
+- **Point 45 — App Manager role**: New restricted admin role `app_manager` can access ONLY Banners, Hot Deals, Events, Campaigns. Seed login: `appmgr` / `AppMgr@2025`.
+- **Point 46 — Bill Operator lockdown**: `bill_operator` now sees ONLY the Bills page (was previously showing Bills + Brands). Seed login: `billop` / `BillOp@2025`.
+- **Point 47 — Tier mismatch fix**: `/consumer/profile` had legacy hardcoded thresholds (Platinum≥10000) while `/consumer/wallet` used `calculate_tier()` (Platinum≥25000). A customer at 15k points saw Platinum on Home but Gold in Wallet. Now all four endpoints (`/home`, `/wallet`, `/profile`, `/tier-info`) route through `calculate_tier()` with the same `max(local_earned, tagnpay_earned)` monotonic input — no more drift, no data corruption from transient TagnPay dips.
+- **Point 48 — Android 16 (API 36)**: Bumped `targetSdkVersion` 35→36, `versionCode` 11→12, `versionName` 1.10→1.11 in `/app/twa-build/app/build.gradle`. AAB must be rebuilt and re-uploaded to Google Play.
+- **New**: Role-based routing helper at `/app/frontend/src/lib/roleAccess.js` — single source of truth for which paths each role can access + landing page.
+- **Verified**: `iteration_78.json` — 5 pytest passes + 1 skipped for synthetic-only test.
+
+
 ## Product Overview
 A top-tier mall engagement app for CP67 Mall (Homeland Advantage), consisting of a consumer mobile PWA, an admin backend, a brand/store dashboard, and an AI/analytics engine.
 

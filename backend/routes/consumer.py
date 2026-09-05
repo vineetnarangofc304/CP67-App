@@ -536,14 +536,16 @@ async def get_profile(current_user=Depends(get_current_consumer)):
         balance = int(points_result["data"].get("balance_points", 0))
         total_earned = int(points_result["data"].get("total_earned_points", balance))
 
-    # Calculate tier
-    tier = "Bronze"
-    if total_earned >= 10000:
-        tier = "Platinum"
-    elif total_earned >= 5000:
-        tier = "Gold"
-    elif total_earned >= 2000:
-        tier = "Silver"
+    # Point 47: never let a stale/lower TagnPay total overwrite the persisted
+    # local total_earned_points (would corrupt tier). Same monotonic pattern
+    # used by /home and /tier-info.
+    local_earned = int(user.get("total_earned_points", 0) or 0)
+    if local_earned > total_earned:
+        total_earned = local_earned
+
+    # Calculate tier — use shared calculate_tier() so /profile matches /wallet, /home, /tier-info
+    # (Point 47: was previously using hardcoded thresholds that disagreed with /wallet)
+    tier = calculate_tier(total_earned)["name"]
 
     await _db.users.update_one(
         {"id": user["id"]},
@@ -688,8 +690,26 @@ async def get_home(current_user=Depends(get_current_consumer)):
     phone_10 = current_user["phone"][-10:]
     points_result = await _tagnpay_client.get_customer_points(phone_10)
     balance = 0
+    total_earned = 0
     if points_result.get("success") and points_result.get("data"):
         balance = int(points_result["data"].get("balance_points", 0))
+        total_earned = int(points_result["data"].get("total_earned_points", balance))
+
+    # Point 47: compute tier from live total_earned using shared calculate_tier()
+    # so Home matches Wallet/Tier Journey. Never trust stale user.tier from DB.
+    local_earned = int(user.get("total_earned_points", 0)) if user else 0
+    if local_earned > total_earned:
+        total_earned = local_earned
+    live_tier = calculate_tier(total_earned)["name"]
+    # Persist so other reads stay in sync
+    if user and user.get("tier") != live_tier:
+        try:
+            await _db.users.update_one(
+                {"id": user["id"]},
+                {"$set": {"tier": live_tier, "total_earned_points": total_earned, "balance_points": balance}}
+            )
+        except Exception:
+            pass
 
     # Banners (random order each time)
     banners = []
@@ -743,7 +763,7 @@ async def get_home(current_user=Depends(get_current_consumer)):
     return {
         "user": {
             "name": user.get("name") if user else None,
-            "tier": user.get("tier", "Bronze") if user else "Bronze",
+            "tier": live_tier,
             "balance_points": balance
         },
         "banners": banners,

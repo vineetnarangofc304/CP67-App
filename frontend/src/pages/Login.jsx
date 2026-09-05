@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../App';
+import { landingForRole } from '../lib/roleAccess';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -16,14 +17,10 @@ const Login = () => {
   const { login, token, user } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect if already logged in
+  // Redirect if already logged in — role-aware landing (Points 45, 46 + parking)
   React.useEffect(() => {
     if (token && user) {
-      if (user.role === 'parking_staff') {
-        navigate('/parking-scanner', { replace: true });
-      } else {
-        navigate('/', { replace: true });
-      }
+      navigate(landingForRole(user.role), { replace: true });
     }
   }, [token, user, navigate]);
 
