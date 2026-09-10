@@ -474,6 +474,24 @@ class TagnPayClient:
             async with httpx.AsyncClient(timeout=25.0) as client:
                 # Build form data - pass store name from bill OCR to both brand fields
                 brand_name = store_name or "CP67 Mall"
+                # Point 49: Fundle's earn_points can reject if `category` sent doesn't match
+                # the brand's category in Fundle's master (e.g. sending "Shopping" for a
+                # restaurant brand like Sagar Ratna). Look up the actual category from our
+                # local brands mirror so Fundle accepts the transaction after an admin
+                # Fix-Brand action.
+                resolved_category = "Shopping"
+                try:
+                    brand_doc = await db.brands.find_one(
+                        {"brand_name": {"$regex": f"^{re.escape(brand_name)}$", "$options": "i"}},
+                        {"_id": 0, "category": 1},
+                        max_time_ms=3000,
+                    )
+                    if brand_doc and (brand_doc.get("category") or "").strip():
+                        resolved_category = brand_doc["category"].strip()
+                    else:
+                        logger.info(f"earn_points: brand '{brand_name}' not in local brands mirror — defaulting category='Shopping'")
+                except Exception as _bce:
+                    logger.warning(f"earn_points: brand category lookup failed for '{brand_name}': {_bce}")
                 data = {
                     "mobile_number": mobile_number,
                     "bill_amount": str(bill_amount),
@@ -481,11 +499,11 @@ class TagnPayClient:
                     "bill_date": bill_date,
                     "brand": brand_name,  # Store name from bill OCR
                     "brand_text": brand_name,  # Store name from bill OCR
-                    "category": "Shopping",
+                    "category": resolved_category,
                     "location": LOCATION_CODE
                 }
                 
-                logger.info(f"TagnPay earn-points request: mobile={mobile_number}, amount={bill_amount}, brand={brand_name}")
+                logger.info(f"TagnPay earn-points request: mobile={mobile_number}, amount={bill_amount}, brand={brand_name}, category={resolved_category}")
                 
                 files = {}
                 if temp_file_path:

@@ -1,5 +1,10 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Feb 10, 2026 — Session 80) — Client Points 45 & 49
+- **Point 45 — App Manager sidebar (real fix)**: Root cause was `/app/frontend/src/pages/Banners.jsx` NOT wrapping in `DashboardLayout` — so the sidebar disappeared for every user landing on `/banners` (which is exactly where `appmgr` lands). Wrapped Banners in DashboardLayout. Verified in Preview screenshot: appmgr now sees **Banners, Hot Deals, Events, Campaigns** in the sidebar with role label "App Manager".
+- **Point 49 — Sagar Ratna bill not visible in Fundle**: Root cause was `earn_points` hard-coding `category: "Shopping"` in the Fundle API payload — Fundle rejects restaurant brands (like Sagar Ratna) when the category doesn't match its master. Now `earn_points` looks up the actual category from our `brands` collection (case-insensitive brand_name match) before calling Fundle. Falls back to "Shopping" only when the brand isn't in our mirror.
+- **iOS project download (`cp67-ios-v1.1-build3.zip`)** shipped for App Store resubmission (Point 40).
+
 ## Recently Shipped (Feb 5, 2026 — Session 79) — Client Points 45, 46, 47, 48
 - **Point 45 — App Manager role**: New restricted admin role `app_manager` can access ONLY Banners, Hot Deals, Events, Campaigns. Seed login: `appmgr` / `AppMgr@2025`.
 - **Point 46 — Bill Operator lockdown**: `bill_operator` now sees ONLY the Bills page (was previously showing Bills + Brands). Seed login: `billop` / `BillOp@2025`.

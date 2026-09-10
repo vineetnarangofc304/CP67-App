@@ -1,0 +1,23 @@
+{
+  "summary": "Iteration 79 backend-only regression for CP67 Mall Points 45 + 49. All 8 pytest cases pass. Point 49 (category lookup in earn_points): (a) with a seeded brand 'TEST_SagarRatnaTest' category='Dining' in db.brands, the outbound TagnPay earn-points payload correctly carries category='Dining' — verified via httpx.AsyncClient patch capturing kwargs; (b) case-insensitive regex match confirmed (lowercase brand still resolves to 'Dining'); (c) fallback to category='Shopping' verified when brand not in db.brands (backward compatibility for non-seeded brands); (d) earn_points signature unchanged (mobile_number, bill_amount, bill_number, bill_date, store_name, bill_image_base64) — no regression for _reprocess_single_bill / WhatsApp / consumer callers. Point 45 RBAC surface: appmgr/AppMgr@2025 -> /admin/me role='app_manager'; billop/BillOp@2025 -> role='bill_operator'. Regression: /admin/login, /admin/me, /admin/users, /api/bills, /api/consumer/home, /api/consumer/wallet, /api/consumer/profile, /api/consumer/tier-info, /api/consumer/bills all return 200. Test brand cleaned up in fixture teardown.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration79_point49_category.py",
+    "/app/test_reports/pytest/iter79.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/backend/server.py L484-490 (earn_points brand lookup) uses re.escape(brand_name) inside a case-insensitive anchored regex — safe. However the brand_name defaults to 'CP67 Mall' when store_name is falsy (L476), which will always fall through to 'Shopping' unless a brand row for 'CP67 Mall' exists. Not a bug but worth noting.",
+    "Point 49 fix silently falls back to 'Shopping' whenever the local brands mirror doesn't have the resolved brand — no warning log distinguishes 'lookup errored' vs 'brand simply absent'. Consider a single info log line 'brand X not in local mirror, defaulting category=Shopping' so future Fundle rejections are easier to diagnose.",
+    "server.py earn_points still opens the temp bill_file with open() but only closes it after client.post via garbage collection; the finally-clean of temp_file_path happens after response.json(). File-handle leak risk on very slow TagnPay responses. Not new to this iteration."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration79_point49_category.py"],
+  "success_rate": {"backend": "100% (8/8 pass)", "frontend": "n/a (backend-only per request)"},
+  "test_credentials": "admin/CP67Admin@2025 · appmgr/AppMgr@2025 · billop/BillOp@2025 · consumer 9876543210 OTP 1234",
+  "seed_data_creation": "Idempotent per-session fixture creates brand 'TEST_SagarRatnaTest' (category=Dining, atv=500) via POST /api/admin/brands and deletes it in teardown. No consumer or bill data was created.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Point 49 fix (earn_points category lookup at /app/backend/server.py L474-502) is verified working. New pytest file /app/backend/tests/test_iteration79_point49_category.py has method-level tests that patch httpx.AsyncClient to capture the outbound TagnPay payload — reuse this pattern for any future earn_points regressions. Note: both invocations must share ONE event loop (asyncio.run once) because motor's db handle is loop-bound. Point 45 backend surface only exercised for role storage; roleAccess.js frontend gating still untested per request.",
+  "rca of the issue": "Not applicable — no new bugs found. Point 49 fix works as designed: db.brands lookup with case-insensitive anchored regex ($regex ^name$ /i), 3s max_time_ms guard, exception-safe fallback to 'Shopping'. Payload verified: category='Dining' when brand exists, category='Shopping' when brand missing."
+}

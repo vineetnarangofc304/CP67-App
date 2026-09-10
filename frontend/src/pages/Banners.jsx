@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../App';
 import { toast } from 'sonner';
 import { Plus, Trash2, Edit, Image, ToggleLeft, ToggleRight, Upload } from 'lucide-react';
+import DashboardLayout from '../components/DashboardLayout';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -129,9 +130,10 @@ export default function Banners() {
     setShowForm(true);
   };
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Loading...</div>;
+  if (loading) return <DashboardLayout title="Banners"><div style={{ padding: 40, textAlign: 'center' }}>Loading...</div></DashboardLayout>;
 
   return (
+    <DashboardLayout title="Banners">
     <div style={{ padding: '24px', maxWidth: 1000, margin: '0 auto' }} data-testid="admin-banners-page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700 }}>Banner Management</h1>
@@ -261,5 +263,6 @@ export default function Banners() {
         )}
       </div>
     </div>
+    </DashboardLayout>
   );
 }
