@@ -197,32 +197,50 @@ const Bills = () => {
     // Re-fetching is cheap (server-side cached) and eliminates the "image not
     // opening" symptom the user hit on production.
     if (!bill.id) return;
+    // Point 49-b (Sep 2026): use the /stream endpoint that returns raw bytes
+    // instead of a base64 JSON blob. Cuts admin UI load from ~180KB/image to
+    // raw bytes and eliminates the JSON->base64->blob->img round-trip.
     try {
-      const res = await fetch(`${API_URL}/bills/${bill.id}/image`, {
+      const res = await fetch(`${API_URL}/bills/${bill.id}/image/stream`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
-        const d = await res.json();
-        const url = d.image_url || null;
-        // Detect suspiciously small data URLs (broken/placeholder) so the UI can
-        // show a clear "unreadable" state instead of a blank <img>.
-        const looksPlaceholder = typeof url === 'string' && url.startsWith('data:') && url.length < 200;
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
         setSelectedBill(prev => prev && prev.id === bill.id
-          ? {
-              ...prev,
-              image_url: looksPlaceholder ? null : url,
-              image_fetch_error: looksPlaceholder ? 'Stored image is a placeholder / corrupted. Ask the customer to resend the bill.' : (d.fetch_error || null)
-            }
+          ? { ...prev, image_url: objectUrl, image_fetch_error: null }
           : prev);
       } else {
         setSelectedBill(prev => prev && prev.id === bill.id
-          ? { ...prev, image_url: null, image_fetch_error: `Image endpoint returned HTTP ${res.status}` }
+          ? { ...prev, image_url: null, image_fetch_error: res.status === 404 ? 'No image on record for this bill.' : `Image stream returned HTTP ${res.status}` }
           : prev);
       }
     } catch (e) {
       setSelectedBill(prev => prev && prev.id === bill.id
         ? { ...prev, image_url: null, image_fetch_error: 'Network error while loading image' }
         : prev);
+    }
+  };
+
+  // Point 49-d: push a locally force-credited bill to Fundle
+  const pushToFundle = async (bill) => {
+    if (!bill?.id) return;
+    if (!window.confirm(`Push bill ${bill.bill_no || bill.id} to Fundle now? Local balance will be adjusted by the Fundle-vs-local delta.`)) return;
+    try {
+      const res = await fetch(`${API_URL}/admin/bills/${bill.id}/push-to-fundle`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const d = await res.json();
+      if (!res.ok || d.success === false) {
+        toast.error(d.message || d.detail || `Push failed (HTTP ${res.status})`);
+        return;
+      }
+      toast.success(d.message);
+      fetchBills();
+      fetchPendingBills();
+    } catch (e) {
+      toast.error('Network error while pushing to Fundle');
     }
   };
 
@@ -670,8 +688,13 @@ const Bills = () => {
           <div className="p-4 md:col-span-2">
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h3 className="font-semibold text-lg text-slate-900">
+                <h3 className="font-semibold text-lg text-slate-900 flex items-center gap-2">
                   {bill.store_name || 'Unknown Store'}
+                  {bill.brand_in_mirror === false && (bill.store_name || '') && (
+                    <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300" data-testid={`brand-missing-${bill.id}`}>
+                      Not in brands mirror
+                    </Badge>
+                  )}
                 </h3>
                 <p className="text-sm text-slate-500">Bill #{bill.bill_no || 'N/A'}</p>
               </div>
@@ -782,6 +805,19 @@ const Bills = () => {
                     Fix Brand
                   </Button>
                 </>
+              )}
+              {/* Point 49-d: locally force-credited bills can be pushed to Fundle */}
+              {bill.force_credited && !bill.fundle_pushed_at && (
+                <Button
+                  variant="outline"
+                  className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                  onClick={() => pushToFundle(bill)}
+                  data-testid={`push-fundle-${bill.id}`}
+                  title="Resend this locally credited bill to Fundle"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Push to Fundle
+                </Button>
               )}
             </div>
           </div>
@@ -997,6 +1033,20 @@ const Bills = () => {
                                 Fix Brand
                               </Button>
                             </>
+                          )}
+                          {/* Point 49-d: Push force-credited bills to Fundle */}
+                          {bill.force_credited && !bill.fundle_pushed_at && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                              onClick={() => pushToFundle(bill)}
+                              data-testid={`push-fundle-all-${bill.id}`}
+                              title="Resend this locally credited bill to Fundle"
+                            >
+                              <RefreshCw className="h-3 w-3 mr-1" />
+                              Push to Fundle
+                            </Button>
                           )}
                         </div>
                       </div>

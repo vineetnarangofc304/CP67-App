@@ -2928,6 +2928,35 @@ async def get_phone_conversation(phone: str, payload: dict = Depends(verify_jwt_
 
 # ======================== BILL ROUTES ========================
 
+# ---- Point 49-b: brand mirror cache for audit badge ----
+_BRAND_MIRROR_CACHE = {"names": set(), "expires_at": 0.0}
+
+async def _brand_names_norm() -> set:
+    """Return set of normalised brand_name strings from db.brands. Cached 60s."""
+    import time as _t
+    now = _t.time()
+    if now < _BRAND_MIRROR_CACHE["expires_at"] and _BRAND_MIRROR_CACHE["names"]:
+        return _BRAND_MIRROR_CACHE["names"]
+    names = set()
+    try:
+        async for d in db.brands.find({"brand_name": {"$exists": True, "$ne": ""}}, {"_id": 0, "brand_name": 1}):
+            n = (d.get("brand_name") or "").strip().lower()
+            if n:
+                names.add(re.sub(r"[^a-z0-9]+", "", n))
+    except Exception as e:
+        logger.warning(f"_brand_names_norm failed: {e}")
+    _BRAND_MIRROR_CACHE["names"] = names
+    _BRAND_MIRROR_CACHE["expires_at"] = now + 60.0
+    return names
+
+
+def _brand_in_mirror(store_name: str, mirror: set) -> bool:
+    if not store_name:
+        return False
+    key = re.sub(r"[^a-z0-9]+", "", (store_name or "").strip().lower())
+    return bool(key and key in mirror)
+
+
 @api_router.get("/bills")
 async def get_bills(
     skip: int = 0,
@@ -2971,6 +3000,16 @@ async def get_bills(
         "ocr_raw_data": 0,
     }
     bills = await db.bills.find(query, projection).skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
+
+    # Point 49-c: mark bills whose store_name isn't in the local brands
+    # mirror so the admin UI can flag them (missing brand → likely Fundle
+    # rejection on upload). Cheap in-memory set membership check.
+    try:
+        mirror = await _brand_names_norm()
+        for b in bills:
+            b["brand_in_mirror"] = _brand_in_mirror(b.get("store_name") or "", mirror)
+    except Exception as _e:
+        logger.warning(f"brand_in_mirror flag skip: {_e}")
 
     return {"bills": bills, "total": total, "skip": skip, "limit": limit}
 
@@ -3053,8 +3092,206 @@ async def get_pending_bills(payload: dict = Depends(verify_jwt_token)):
         {"$sort": {"created_at": 1}}
     ]
     bills_list = await db.bills.aggregate(pipeline).to_list(100)
+    # Point 49-c: brand-in-mirror flag for pending review too
+    try:
+        mirror = await _brand_names_norm()
+        for b in bills_list:
+            b["brand_in_mirror"] = _brand_in_mirror(b.get("store_name") or "", mirror)
+    except Exception as _e:
+        logger.warning(f"brand_in_mirror flag (pending) skip: {_e}")
     # $project already drops _id; map to plain dicts so the EB lint stays happy
     return [dict(b) for b in bills_list]
+
+
+@api_router.get("/bills/{bill_id}/image/stream")
+async def stream_bill_image(bill_id: str, payload: dict = Depends(verify_jwt_token)):
+    """Point 49-b: Raw byte stream for bill images. Cuts admin UI load from
+    ~180KB base64 JSON per image to raw bytes — Bill Review opens instantly
+    even for legacy multi-MB images. Auth-gated (admin JWT).
+    """
+    from fastapi.responses import StreamingResponse, Response
+    from pymongo.errors import NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout
+    _retryable = (NetworkTimeout, AutoReconnect, ServerSelectionTimeoutError, ExecutionTimeout)
+    try:
+        b = None
+        for attempt in range(2):
+            try:
+                b = await db.bills.find_one({"id": bill_id}, {"_id": 0, "image_url": 1}, max_time_ms=25000)
+                break
+            except _retryable:
+                if attempt == 0:
+                    await asyncio.sleep(0.3); continue
+                raise
+        if not b:
+            raise HTTPException(status_code=404, detail="Bill not found")
+        raw = (b.get("image_url") or "") if isinstance(b.get("image_url"), str) else ""
+        data: Optional[bytes] = None
+        ctype = "image/jpeg"
+        if raw.startswith("objstore:"):
+            try:
+                from storage import aresolve_objstore_url
+                fetched = await aresolve_objstore_url(raw)
+                if fetched:
+                    data, ctype = fetched
+            except Exception as e:
+                logger.warning(f"stream_bill_image objstore read failed: {e}")
+        elif raw.startswith("data:"):
+            try:
+                head, b64 = raw.split(",", 1)
+                if ";" in head and ":" in head:
+                    ctype = head.split(":", 1)[1].split(";", 1)[0] or "image/jpeg"
+                data = base64.b64decode(b64, validate=False)
+            except Exception:
+                data = None
+        elif raw.startswith("base64:"):
+            try:
+                data = base64.b64decode(raw[7:], validate=False)
+            except Exception:
+                data = None
+        elif raw.startswith("http"):
+            try:
+                async with httpx.AsyncClient(timeout=8.0) as cx:
+                    headers = {"Authorization": f"Bearer {KARIX_API_KEY}"} if KARIX_API_KEY else {}
+                    r = await cx.get(raw, headers=headers)
+                    if r.status_code != 200 and headers:
+                        r = await cx.get(raw)
+                    if r.status_code == 200 and r.content:
+                        data = r.content
+                        ctype = r.headers.get("content-type", "image/jpeg").split(";")[0].strip() or "image/jpeg"
+            except Exception as e:
+                logger.warning(f"stream_bill_image http fetch failed: {e}")
+        if not data:
+            raise HTTPException(status_code=404, detail="Image not available")
+        return Response(content=data, media_type=ctype, headers={
+            "Cache-Control": "private, max-age=300",
+            "Content-Length": str(len(data)),
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"stream_bill_image failed for {bill_id}: {e}")
+        raise HTTPException(status_code=500, detail="Image stream failed")
+
+
+@api_router.get("/admin/bills/brand-audit")
+async def brand_audit_bills(
+    limit: int = 100,
+    skip: int = 0,
+    payload: dict = Depends(verify_jwt_token),
+):
+    """Point 49-c: List every bill whose store_name isn't in the local
+    brands mirror. Admins use this to seed missing brands/categories BEFORE
+    customers upload — pre-empting Fundle rejections."""
+    mirror = await _brand_names_norm()
+    # Pull recent bills, then filter in-process by mirror membership.
+    total_scanned = 0
+    missing = []
+    async for b in db.bills.find(
+        {"store_name": {"$exists": True, "$ne": ""}},
+        {"_id": 0, "id": 1, "store_name": 1, "amount": 1, "status": 1, "user_phone": 1, "created_at": 1, "points_issued": 1, "force_credited": 1},
+    ).sort("created_at", -1).limit(2000):
+        total_scanned += 1
+        sn = (b.get("store_name") or "").strip()
+        if not _brand_in_mirror(sn, mirror):
+            missing.append(b)
+    return {
+        "total_scanned": total_scanned,
+        "total_missing": len(missing),
+        "bills": missing[skip:skip+limit],
+    }
+
+
+class PushToFundleResponse(BaseModel):
+    success: bool
+    message: str
+    fundle_points: int = 0
+    delta_points: int = 0
+
+
+@api_router.post("/admin/bills/{bill_id}/push-to-fundle", response_model=PushToFundleResponse)
+async def push_bill_to_fundle(bill_id: str, payload: dict = Depends(verify_jwt_token)):
+    """Point 49-d: Resend a locally force-credited bill to Fundle. Reconciles
+    the user's local balance to match Fundle's earned points (adjusts by the
+    delta between the old force-credit and the new Fundle credit). If Fundle
+    still rejects, the bill stays force-credited and admin sees the error."""
+    bill = await db.bills.find_one({"id": bill_id}, {"_id": 0}, max_time_ms=15000)
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    if not bill.get("force_credited"):
+        raise HTTPException(status_code=400, detail="Only force-credited bills can be pushed to Fundle")
+    if bill.get("fundle_pushed_at"):
+        raise HTTPException(status_code=400, detail="Already pushed to Fundle")
+
+    phone = bill.get("user_phone") or ""
+    mobile_10 = re.sub(r"\D", "", phone)[-10:]
+    if not mobile_10:
+        raise HTTPException(status_code=400, detail="Bill has no valid user phone")
+    amount = float(bill.get("amount") or 0)
+    bill_no = bill.get("bill_no") or f"WA-{bill_id[:8].upper()}"
+    bill_date = bill.get("bill_date") or datetime.now().strftime("%Y-%m-%d")
+    store_name = (bill.get("store_name") or "").strip()
+
+    # Load image bytes for Fundle attachment (same as OCR / reprocess path)
+    image_base64 = None
+    raw = bill.get("image_url") or ""
+    if isinstance(raw, str):
+        if raw.startswith("objstore:"):
+            try:
+                from storage import aresolve_objstore_url
+                fetched = await aresolve_objstore_url(raw)
+                if fetched:
+                    image_base64 = base64.b64encode(fetched[0]).decode()
+            except Exception:
+                pass
+        elif raw.startswith("data:") and "," in raw:
+            image_base64 = raw.split(",", 1)[1]
+        elif raw.startswith("base64:"):
+            image_base64 = raw[7:]
+
+    earn = await tagnpay_client.earn_points(
+        mobile_number=mobile_10, bill_amount=amount, bill_number=bill_no,
+        bill_date=bill_date, store_name=store_name, bill_image_base64=image_base64,
+    )
+    fundle_points = 0
+    if earn.get("success") and earn.get("data"):
+        fundle_points = int(earn["data"].get("earned_points", 0) or 0)
+    if fundle_points <= 0:
+        err = earn.get("error") or (earn.get("data") or {}).get("message") or "Fundle returned 0 points"
+        # Reviewer feedback (iter-80): persist the last push attempt so admins
+        # see why repeated clicks aren't landing.
+        try:
+            await db.bills.update_one({"id": bill_id}, {"$set": {
+                "last_push_attempt_at": datetime.now(timezone.utc).isoformat(),
+                "last_push_error": err[:200],
+            }})
+        except Exception:
+            pass
+        return PushToFundleResponse(success=False, message=f"Fundle rejected: {err}", fundle_points=0, delta_points=0)
+
+    # Reconcile local balance: delta = fundle_points - old force-credited points
+    old_local = int(bill.get("points_issued") or 0)
+    delta = fundle_points - old_local
+    if delta != 0:
+        user_id = bill.get("user_id")
+        if user_id:
+            await db.users.update_one(
+                {"id": user_id},
+                {"$inc": {"balance_points": delta, "total_earned_points": delta}},
+            )
+    await db.bills.update_one({"id": bill_id}, {"$set": {
+        "points_issued": fundle_points,
+        "force_credited": False,
+        "processed_by": "admin_push_to_fundle",
+        "processed_by_username": payload.get("username") or "admin",
+        "fundle_pushed_at": datetime.now(timezone.utc).isoformat(),
+        "fundle_original_error": None,
+    }})
+    return PushToFundleResponse(
+        success=True,
+        message=f"Fundle accepted with {fundle_points} pts (local balance adjusted by {delta:+d})",
+        fundle_points=fundle_points,
+        delta_points=delta,
+    )
 
 
 @api_router.get("/bills/{bill_id}/image")
@@ -4178,17 +4415,45 @@ async def _reprocess_single_bill(bill: dict, *, re_ocr: bool, send_whatsapp_flag
         return {"bill_id": bill_id, "action": "approved",
                 "status": "approved", "points": fc_points, "error": None}
 
-    try:
-        earn_result = await tagnpay_client.earn_points(
-            mobile_number=mobile_10,
-            bill_amount=amount,
-            bill_number=bill_no,
-            bill_date=bill_date or datetime.now().strftime("%Y-%m-%d"),
-            store_name=store_name,
-            bill_image_base64=image_base64  # <-- send image, exactly like WhatsApp upload
-        )
-    except Exception as e:
-        earn_result = {"success": False, "error": str(e)}
+    # Point 49-a (Sep 2026): Fundle sometimes rejects on punctuation/case
+    # quirks in the brand name (e.g. "sagar ratna" vs "Sagar Ratna"). Try
+    # the admin-corrected name first, then Title Case, then UPPER — stop at
+    # the first accept. This makes Fix Brand succeed on the first admin
+    # click for the most common case-only mismatch.
+    def _brand_variants(name: str):
+        seen = set()
+        for v in (name, name.strip().title(), name.strip().upper()):
+            key = (v or "").strip()
+            if key and key not in seen:
+                seen.add(key); yield key
+    earn_result = {"success": False, "error": "no_attempt"}
+    tried_variants = []
+    for variant in _brand_variants(store_name or ""):
+        tried_variants.append(variant)
+        try:
+            earn_result = await tagnpay_client.earn_points(
+                mobile_number=mobile_10,
+                bill_amount=amount,
+                bill_number=bill_no,
+                bill_date=bill_date or datetime.now().strftime("%Y-%m-%d"),
+                store_name=variant,
+                bill_image_base64=image_base64  # <-- send image, exactly like WhatsApp upload
+            )
+        except Exception as e:
+            earn_result = {"success": False, "error": str(e)}
+        pts_probe = int(((earn_result.get("data") or {}).get("earned_points") or 0)) if earn_result.get("success") else 0
+        if pts_probe > 0:
+            if variant != (store_name or "").strip():
+                logger.info(f"Point 49-a: bill {bill_id} accepted by Fundle after brand variant retry '{variant}' (original='{store_name}')")
+                # Persist the accepted variant so future reads show the exact name Fundle knows.
+                update_payload["store_name"] = variant
+                store_name = variant
+            break
+        else:
+            err_probe = str(earn_result.get("error") or (earn_result.get("data") or {}).get("message") or "").lower()
+            if not (("brand" in err_probe) or ("match" in err_probe) or ("not found" in err_probe) or ("0 points" in err_probe)):
+                # Non-brand error (mobile not registered, image missing, etc.) — variants won't help.
+                break
 
     points_earned = 0
     if earn_result.get("success") and earn_result.get("data"):

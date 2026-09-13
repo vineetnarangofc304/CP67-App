@@ -1,5 +1,12 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Feb 13, 2026 — Session 82) — 4 Backlog Features
+- **Bill Image Streaming** (`GET /api/bills/{id}/image/stream`): returns raw image bytes with proper Content-Type (StreamingResponse). Handles objstore:, data:, base64:, http:// legacy shapes. Bills.jsx modal now fetches via blob → objectURL, so admins open Bill Review instantly even on legacy multi-MB bills. The JSON `/image` endpoint is preserved for backward compat.
+- **Brand Name Variants on Retry**: `_reprocess_single_bill` now retries `earn_points` with the original name → Title Case → UPPER before giving up. If a variant succeeds, the accepted name is persisted so future reads use the exact name Fundle knows. Only retries on brand-mismatch class errors; non-brand errors abort early.
+- **Fundle Brand Audit** (`GET /api/admin/bills/brand-audit`): returns every bill whose store_name isn't in the local brands mirror. `GET /api/bills` and `GET /api/bills/pending-review` now include `brand_in_mirror: bool`. Bills.jsx renders an amber "Not in brands mirror" badge next to the store name so admins can seed missing brands+category before customers upload.
+- **Push To Fundle** (`POST /api/admin/bills/{id}/push-to-fundle`): retries a locally force-credited bill against Fundle. On success, adjusts local balance by the delta (`fundle_points - old_local_points`), flips `force_credited=false`, records `fundle_pushed_at`. On rejection, bill remains force-credited and admin sees the Fundle error. Bills.jsx shows a green "Push to Fundle" button on every force-credited bill (both pending and all-bills tabs).
+- Smoke-verified: `/api/bills?limit=2` returns `brand_in_mirror` flag; `/api/admin/bills/brand-audit?limit=3` scanned 19, flagged 14 missing; stream endpoint returns 200 with proper Content-Type on an objstore bill.
+
 ## Recently Shipped (Feb 11, 2026 — Session 81) — Point 49 (round 2)
 - **Point 49 — Fix Brand now pushes to Fundle, no silent local force-credit**: User feedback was crystal clear — "hit Fundle API and not force points". Root cause: `EditBrandRequest.auto_force_credit_on_fundle_reject` defaulted to `True` AND the frontend explicitly sent `true`, so any Fundle rejection after Fix Brand → local force-credit + bill marked approved locally → transaction never appears on Fundle platform.
   - Flipped the default in `EditBrandRequest` (backend) to `False`.
