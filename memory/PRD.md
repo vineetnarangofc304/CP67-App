@@ -1,5 +1,12 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Feb 11, 2026 — Session 81) — Point 49 (round 2)
+- **Point 49 — Fix Brand now pushes to Fundle, no silent local force-credit**: User feedback was crystal clear — "hit Fundle API and not force points". Root cause: `EditBrandRequest.auto_force_credit_on_fundle_reject` defaulted to `True` AND the frontend explicitly sent `true`, so any Fundle rejection after Fix Brand → local force-credit + bill marked approved locally → transaction never appears on Fundle platform.
+  - Flipped the default in `EditBrandRequest` (backend) to `False`.
+  - Changed `submitFixBrand()` in `Bills.jsx` to send `auto_force_credit_on_fundle_reject: false`.
+  - Updated toast copy: on Fundle rejection, admin now sees "Fundle rejected: <reason>. Bill left in review — try a different brand name variant" instead of a silent "auto force-credited" success.
+  - Behavior now: Fix Brand → reprocess with new store_name + correct category (from Sept 5 fix) → Fundle receives the transaction. If Fundle rejects, bill stays in `manual_review` with the actual Fundle error visible; admin can retry with another brand variant OR use the separate **Force Credit** action to intentionally credit locally.
+
 ## Recently Shipped (Feb 10, 2026 — Session 80) — Client Points 45 & 49
 - **Point 45 — App Manager sidebar (real fix)**: Root cause was `/app/frontend/src/pages/Banners.jsx` NOT wrapping in `DashboardLayout` — so the sidebar disappeared for every user landing on `/banners` (which is exactly where `appmgr` lands). Wrapped Banners in DashboardLayout. Verified in Preview screenshot: appmgr now sees **Banners, Hot Deals, Events, Campaigns** in the sidebar with role label "App Manager".
 - **Point 49 — Sagar Ratna bill not visible in Fundle**: Root cause was `earn_points` hard-coding `category: "Shopping"` in the Fundle API payload — Fundle rejects restaurant brands (like Sagar Ratna) when the category doesn't match its master. Now `earn_points` looks up the actual category from our `brands` collection (case-insensitive brand_name match) before calling Fundle. Falls back to "Shopping" only when the brand isn't in our mirror.

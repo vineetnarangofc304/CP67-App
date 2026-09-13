@@ -378,19 +378,18 @@ const Bills = () => {
         return;
       }
       if (data.reprocessed === 'queued') {
-        toast.success(`Brand fixed → "${trimmed}". Reprocessing in background — refreshing list in 10s.`);
+        toast.success(`Brand fixed → "${trimmed}". Pushing to Fundle in background — refreshing list in 10s. If Fundle rejects, the bill will show the exact reason so you can try another variant.`);
         closeAndRefresh();
         setTimeout(() => { fetchBills(); fetchPendingBills(); }, 10000);
         setTimeout(() => { fetchBills(); fetchPendingBills(); }, 25000);
       } else if (data.action === 'approved') {
-        if (data.fallback === 'force_credit') {
-          toast.success(`Brand fixed → "${trimmed}". Fundle rejected but auto force-credited ${data.points || 0} pts locally.`);
-        } else {
-          toast.success(`Brand fixed → "${trimmed}". Approved with ${data.points || 0} pts`);
-        }
+        // Point 49: force-credit fallback is OFF by default now — this
+        // branch only fires when Fundle actually accepted the transaction.
+        toast.success(`Brand fixed → "${trimmed}". Fundle accepted with ${data.points || 0} pts`);
         closeAndRefresh();
       } else if (data.error) {
-        toast.warning(`Brand updated but Fundle: ${data.error}. Try a different variant.`);
+        // Fundle rejected — bill stays in manual_review with the real reason.
+        toast.warning(`Fundle rejected: ${data.error}. Bill left in review — try a different brand name variant.`);
         closeAndRefresh();
       } else {
         toast.success(`Brand updated to "${trimmed}". Status: ${data.status || 'pending'}`);
@@ -413,10 +412,14 @@ const Bills = () => {
     };
 
     try {
+      // Point 49 (Sep 2026): admin explicitly used Fix Brand — they want the
+      // transaction pushed to Fundle, NOT force-credited locally. If Fundle
+      // still rejects, surface the error so admin can pick a different
+      // variant of the brand name.
       xhr.send(JSON.stringify({
         new_store_name: trimmed,
         reprocess: true,
-        auto_force_credit_on_fundle_reject: true,
+        auto_force_credit_on_fundle_reject: false,
       }));
     } catch (_) {
       setFixBrandBusy(false);

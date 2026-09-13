@@ -4727,7 +4727,14 @@ class EditBrandRequest(BaseModel):
     """Payload for admin brand-name correction on a pending bill."""
     new_store_name: str
     reprocess: bool = True  # queue background reprocess (returns immediately)
-    auto_force_credit_on_fundle_reject: bool = True  # fall back to local force-credit if Fundle still rejects
+    # Point 49 (Sep 2026): default OFF. When admin taps Fix Brand they want
+    # the transaction to actually reach Fundle. If Fundle still rejects, the
+    # bill stays in manual_review with the Fundle error so admin can try a
+    # different brand variant (or use the separate "Force Credit" action to
+    # credit locally on purpose). This avoids silently masking Fundle
+    # rejections that keep the transaction from ever appearing on the Fundle
+    # platform.
+    auto_force_credit_on_fundle_reject: bool = False
     wait_for_result: bool = False  # opt-in: block until Fundle responds (legacy sync mode)
 
 
