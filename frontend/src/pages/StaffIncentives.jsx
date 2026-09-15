@@ -8,7 +8,7 @@ import { Label } from '../components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Users, QrCode, Award, Wallet, Settings, Plus, Trophy, RefreshCw, Upload, FileText } from 'lucide-react';
+import { Users, QrCode, Award, Wallet, Settings, Plus, Trophy, RefreshCw, Upload, FileText, Trash2 } from 'lucide-react';
 
 export default function StaffIncentives() {
   const { token, API_URL, logout } = useAuth();
@@ -284,6 +284,59 @@ export default function StaffIncentives() {
       toast.success('Template downloaded');
     } catch (e) {
       toast.error('Download failed: ' + e.message);
+    }
+  };
+
+  // Point 16 (Sep 2026): inline editable brand ↔ category CRUD
+  const saveBrandCategory = async (brandId, patch) => {
+    try {
+      const r = await fetch(`${API_URL}/admin/brands/${brandId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(patch),
+      });
+      if (handle401(r.status)) return;
+      if (!r.ok) { const d = await r.json().catch(() => ({})); toast.error(d.detail || 'Update failed'); return; }
+      toast.success('Brand updated');
+      loadAll();
+    } catch (e) {
+      toast.error('Update failed: ' + e.message);
+    }
+  };
+
+  const deleteBrandRow = async (brandId, brandName) => {
+    if (!window.confirm(`Delete "${brandName}" from the mapping?`)) return;
+    try {
+      const r = await fetch(`${API_URL}/admin/brands/${brandId}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (handle401(r.status)) return;
+      if (!r.ok) { const d = await r.json().catch(() => ({})); toast.error(d.detail || 'Delete failed'); return; }
+      toast.success('Removed');
+      loadAll();
+    } catch (e) {
+      toast.error('Delete failed: ' + e.message);
+    }
+  };
+
+  const addBrandRow = async (brandName, category) => {
+    const bn = (brandName || '').trim();
+    const cat = (category || '').trim();
+    if (!bn || !cat) { toast.error('Brand name and category required'); return false; }
+    try {
+      const r = await fetch(`${API_URL}/admin/brands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ brand_name: bn, category: cat, atv: 0, is_active: true }),
+      });
+      if (handle401(r.status)) return false;
+      if (!r.ok) { const d = await r.json().catch(() => ({})); toast.error(d.detail || 'Add failed'); return false; }
+      toast.success('Brand added');
+      loadAll();
+      return true;
+    } catch (e) {
+      toast.error('Add failed: ' + e.message);
+      return false;
     }
   };
 
@@ -926,6 +979,15 @@ export default function StaffIncentives() {
                         <button className="mt-1 text-slate-500 underline" onClick={() => { setMappingResult(null); setPendingMappingFile(null); }}>dismiss</button>
                       </div>
                     )}
+
+                    {/* Point 16 (Sep 2026): inline editable Brand ↔ Category table */}
+                    <BrandCategoryEditableTable
+                      brands={catalog.brands || []}
+                      categoryOptions={(catalog.categories || [])}
+                      onEdit={saveBrandCategory}
+                      onDelete={deleteBrandRow}
+                      onAdd={addBrandRow}
+                    />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
@@ -1421,6 +1483,121 @@ function BillValueSlabsEditor({ config, setConfig, categoryOptions }) {
           <Button size="sm" variant="outline" onClick={() => addSlab(k)} data-testid={`bill-value-slabs-addrow-${k}`}><Plus size={12} className="mr-1" /> Add row</Button>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Point 16 (Sep 2026): inline editable Brand ↔ Category table
+function BrandCategoryEditableTable({ brands, categoryOptions, onEdit, onDelete, onAdd }) {
+  const [filter, setFilter] = useState('');
+  const [newBrand, setNewBrand] = useState('');
+  const [newCat, setNewCat] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [savingId, setSavingId] = useState(null);
+
+  const rows = React.useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return brands;
+    return brands.filter(b =>
+      (b.brand_name || '').toLowerCase().includes(q) ||
+      (b.category || '').toLowerCase().includes(q)
+    );
+  }, [brands, filter]);
+
+  const handleCategoryChange = async (b, nextCategory) => {
+    if ((nextCategory || '') === (b.category || '')) return;
+    setSavingId(b.id);
+    await onEdit(b.id, { category: nextCategory });
+    setSavingId(null);
+  };
+
+  const handleAdd = async () => {
+    setAdding(true);
+    const ok = await onAdd(newBrand, newCat);
+    setAdding(false);
+    if (ok) { setNewBrand(''); setNewCat(''); }
+  };
+
+  return (
+    <div className="mt-4 border-t pt-4" data-testid="brand-category-editable-table">
+      <div className="flex items-center justify-between mb-2">
+        <div className="font-medium text-sm">Editable mapping ({brands.length} brands)</div>
+        <input
+          type="text"
+          placeholder="Search brand or category…"
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          className="h-8 px-2 text-xs rounded border border-slate-200 w-48"
+          data-testid="mapping-search"
+        />
+      </div>
+
+      {/* Add row */}
+      <div className="grid grid-cols-[2fr_2fr_auto] gap-2 mb-3 items-center bg-emerald-50/40 p-2 rounded border border-emerald-100">
+        <Input
+          value={newBrand}
+          onChange={e => setNewBrand(e.target.value)}
+          placeholder="New brand name"
+          data-testid="mapping-new-brand"
+        />
+        <select
+          value={newCat}
+          onChange={e => setNewCat(e.target.value)}
+          className="h-10 px-3 rounded-md border border-slate-200 bg-white text-sm"
+          data-testid="mapping-new-category"
+        >
+          <option value="">Pick category</option>
+          {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <Button size="sm" onClick={handleAdd} disabled={adding} data-testid="mapping-add-btn">
+          <Plus size={14} className="mr-1" /> {adding ? 'Adding…' : 'Add'}
+        </Button>
+      </div>
+
+      {/* Table */}
+      <div className="max-h-96 overflow-auto border rounded">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 sticky top-0">
+            <tr>
+              <th className="text-left px-3 py-2 font-medium text-slate-600">Brand</th>
+              <th className="text-left px-3 py-2 font-medium text-slate-600">Category</th>
+              <th className="w-10"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={3} className="text-center py-6 text-slate-400">No brands</td></tr>
+            )}
+            {rows.map(b => (
+              <tr key={b.id || b.brand_name} className="border-t hover:bg-slate-50/60" data-testid={`mapping-row-${b.brand_name}`}>
+                <td className="px-3 py-2">{b.brand_name}</td>
+                <td className="px-3 py-2">
+                  <select
+                    value={b.category || ''}
+                    disabled={!b.id || savingId === b.id}
+                    onChange={e => handleCategoryChange(b, e.target.value)}
+                    className="h-8 px-2 rounded border border-slate-200 bg-white text-sm w-full"
+                    data-testid={`mapping-cat-${b.brand_name}`}
+                  >
+                    <option value="">— pick category —</option>
+                    {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                    {b.category && !categoryOptions.includes(b.category) && (
+                      <option value={b.category}>{b.category}</option>
+                    )}
+                  </select>
+                </td>
+                <td className="px-2 py-2 text-right">
+                  {b.id && (
+                    <Button size="sm" variant="ghost" onClick={() => onDelete(b.id, b.brand_name)} data-testid={`mapping-del-${b.brand_name}`}>
+                      <Trash2 size={14} className="text-red-500" />
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

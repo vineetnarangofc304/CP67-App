@@ -1,5 +1,10 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Feb 15, 2026 — Session 83) — Retailer Points 16 & 17
+- **Point 17 (P0 BUG)**: Rs 62 Subway bill was awarding Rs 80 instead of Rs 10. Root cause in `_amount_for_value_slab` at `/app/backend/routes/staff.py` — when bill_value didn't fit any slab range (e.g. below the lowest slab's min_value), the fallback silently returned `slabs[-1].amount` (the TOP slab). Fixed: now returns 0 when bill_value < lowest slab min, and only caps at `slabs[-1].amount` when bill_value > highest slab max. Verified with 5 slab-boundary tests.
+- **Point 16 (P1 FEATURE)**: Added editable Brand ↔ Category mapping table inside the Retailer Staff Incentive tab. New `BrandCategoryEditableTable` component in StaffIncentives.jsx: search filter, inline category dropdown edit (via existing `PUT /api/admin/brands/{id}`), row delete (via existing `DELETE /api/admin/brands/{id}`), inline add-new row (via existing `POST /api/admin/brands`). No new backend endpoints needed — reused the existing brand CRUD.
+- The existing CSV bulk upload is preserved above the new editable table for backwards compat with bulk seeding.
+
 ## Recently Shipped (Feb 13, 2026 — Session 82) — 4 Backlog Features
 - **Bill Image Streaming** (`GET /api/bills/{id}/image/stream`): returns raw image bytes with proper Content-Type (StreamingResponse). Handles objstore:, data:, base64:, http:// legacy shapes. Bills.jsx modal now fetches via blob → objectURL, so admins open Bill Review instantly even on legacy multi-MB bills. The JSON `/image` endpoint is preserved for backward compat.
 - **Brand Name Variants on Retry**: `_reprocess_single_bill` now retries `earn_points` with the original name → Title Case → UPPER before giving up. If a variant succeeds, the accepted name is persisted so future reads use the exact name Fundle knows. Only retries on brand-mismatch class errors; non-brand errors abort early.

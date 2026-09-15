@@ -132,7 +132,11 @@ def _amount_for_slab(count: int, slabs: List[Dict]) -> int:
 
 def _amount_for_value_slab(bill_value: float, slabs: List[Dict]) -> int:
     """Point 9: pick the slab whose [min_value, max_value] range contains bill_value.
-    Falls back to the last slab if bill_value exceeds all ranges."""
+    Point 17 (Sep 2026 bug fix): if bill_value is BELOW the lowest slab's
+    min_value → 0 (no reward). If bill_value EXCEEDS the highest slab's
+    max_value → use the last slab's amount (cap). Previously any miss
+    fell through to `slabs[-1].amount`, so a ₹62 bill under a config that
+    starts at ₹100 wrongly earned the top-tier reward."""
     if not slabs:
         return 0
     for s in slabs:
@@ -140,6 +144,10 @@ def _amount_for_value_slab(bill_value: float, slabs: List[Dict]) -> int:
         hi = float(s.get("max_value", 0))
         if lo <= bill_value <= hi:
             return int(s.get("amount", 0))
+    # Determine floor/ceiling behaviour based on where bill_value lies.
+    lowest_min = min(float(s.get("min_value", 0)) for s in slabs)
+    if bill_value < lowest_min:
+        return 0
     return int(slabs[-1].get("amount", 0))
 
 
