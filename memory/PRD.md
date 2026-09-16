@@ -1,5 +1,10 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Feb 16, 2026 — Session 84) — Retailer Point 18
+- **Point 18 (P0 BUG)**: Rs 353 Subway (Food Court) bill was awarding **Rs 0** instead of the universal-fallback Rs 10. Root cause: `_resolve_bill_upload_amount` returned as soon as the category tier was defined, even if the bill_value didn't fit any of the category's slabs. With the Point 17 fix in place, below-floor bills correctly returned 0 — but only from the category tier, without falling through to `__ALL__`.
+  - Fix: introduced `_amount_for_value_slab_match(bill_value, slabs)` which returns `None` on miss (rather than 0), and cascaded `_resolve_bill_upload_amount` through **category → __ALL__** before applying the deepest tier's floor/ceiling rule. Category still wins when its slab covers the bill.
+  - Verified with 13 pytest cases (`iteration_82`): category-hit wins, category-miss falls to universal, both-miss returns 0, above-ceiling of category falls to universal, universal-only still works, and Point 17 boundary semantics preserved.
+
 ## Recently Shipped (Feb 15, 2026 — Session 83) — Retailer Points 16 & 17
 - **Point 17 (P0 BUG)**: Rs 62 Subway bill was awarding Rs 80 instead of Rs 10. Root cause in `_amount_for_value_slab` at `/app/backend/routes/staff.py` — when bill_value didn't fit any slab range (e.g. below the lowest slab's min_value), the fallback silently returned `slabs[-1].amount` (the TOP slab). Fixed: now returns 0 when bill_value < lowest slab min, and only caps at `slabs[-1].amount` when bill_value > highest slab max. Verified with 5 slab-boundary tests.
 - **Point 16 (P1 FEATURE)**: Added editable Brand ↔ Category mapping table inside the Retailer Staff Incentive tab. New `BrandCategoryEditableTable` component in StaffIncentives.jsx: search filter, inline category dropdown edit (via existing `PUT /api/admin/brands/{id}`), row delete (via existing `DELETE /api/admin/brands/{id}`), inline add-new row (via existing `POST /api/admin/brands`). No new backend endpoints needed — reused the existing brand CRUD.

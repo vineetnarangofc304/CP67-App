@@ -130,6 +130,20 @@ def _amount_for_slab(count: int, slabs: List[Dict]) -> int:
     return int(slabs[-1]["amount"]) if slabs else 0
 
 
+def _amount_for_value_slab_match(bill_value: float, slabs: List[Dict]) -> Optional[int]:
+    """Return the slab amount if bill_value fits any [min,max] range, or None on miss.
+    Point 18 (Sep 2026): caller uses None to cascade to the next fallback tier
+    (e.g. category slabs → __ALL__ slabs → 0) instead of prematurely returning 0."""
+    if not slabs:
+        return None
+    for s in slabs:
+        lo = float(s.get("min_value", 0))
+        hi = float(s.get("max_value", 0))
+        if lo <= bill_value <= hi:
+            return int(s.get("amount", 0))
+    return None
+
+
 def _amount_for_value_slab(bill_value: float, slabs: List[Dict]) -> int:
     """Point 9: pick the slab whose [min_value, max_value] range contains bill_value.
     Point 17 (Sep 2026 bug fix): if bill_value is BELOW the lowest slab's
@@ -139,11 +153,9 @@ def _amount_for_value_slab(bill_value: float, slabs: List[Dict]) -> int:
     starts at ₹100 wrongly earned the top-tier reward."""
     if not slabs:
         return 0
-    for s in slabs:
-        lo = float(s.get("min_value", 0))
-        hi = float(s.get("max_value", 0))
-        if lo <= bill_value <= hi:
-            return int(s.get("amount", 0))
+    matched = _amount_for_value_slab_match(bill_value, slabs)
+    if matched is not None:
+        return matched
     # Determine floor/ceiling behaviour based on where bill_value lies.
     lowest_min = min(float(s.get("min_value", 0)) for s in slabs)
     if bill_value < lowest_min:
@@ -183,17 +195,38 @@ async def _resolve_registration_amount(cfg: Dict, staff: Dict, reg_count: int) -
 async def _resolve_bill_upload_amount(cfg: Dict, staff: Dict, bill_value: float, upload_count: int) -> int:
     """Point 9: Value-based bill-upload reward with category and universal support.
     Priority:
-      1. bill_upload_value_slabs_by_category[<staff's brand category>]
-      2. bill_upload_value_slabs_by_category["__ALL__"]
-      3. Legacy count-based slab table
+      1. bill_upload_value_slabs_by_category[<staff's brand category>]  (only if a slab matches)
+      2. bill_upload_value_slabs_by_category["__ALL__"]                 (fallback if category didn't match)
+      3. Cap-or-zero on the deepest tier that was configured
+      4. Legacy count-based slab table
+
+    Point 18 (Sep 2026): when the category slabs are configured but none of
+    them cover bill_value (e.g. category has slabs starting at ₹500 but the
+    bill is ₹353), we now CASCADE to the universal `__ALL__` slabs before
+    returning 0. Previously the code stopped at the category tier and paid 0
+    even though the universal rule said ₹10.
     """
     value_map = cfg.get("bill_upload_value_slabs_by_category") or {}
     category = await _brand_category((staff.get("brand_name") or "").strip())
+
+    tiers: List[List[Dict]] = []
     if category and value_map.get(category):
-        return _amount_for_value_slab(bill_value, value_map[category])
+        tiers.append(value_map[category])
     if value_map.get("__ALL__"):
-        return _amount_for_value_slab(bill_value, value_map["__ALL__"])
-    # Legacy count-based fallback
+        tiers.append(value_map["__ALL__"])
+
+    # 1+2: try each tier for a direct in-range match
+    for slabs in tiers:
+        matched = _amount_for_value_slab_match(bill_value, slabs)
+        if matched is not None:
+            return matched
+
+    # 3: no tier matched → use the deepest configured tier's floor/ceiling rule
+    if tiers:
+        deepest = tiers[-1]
+        return _amount_for_value_slab(bill_value, deepest)
+
+    # 4: legacy count-based fallback (nothing configured in value_map)
     slabs = await _resolve_slabs_for_staff(cfg, staff, "bill_upload_slabs")
     return _amount_for_slab(upload_count, slabs)
 
