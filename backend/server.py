@@ -2166,12 +2166,22 @@ async def update_brand(brand_id: str, data: dict, payload: dict = Depends(verify
     # Core fields
     for field in ["atv", "category", "is_active", "brand_name", "description",
                   "floor", "timing", "unit_no", "tags", "is_featured", "is_eligible", "contact_phone",
-                  "contact_email", "website", "hidden_from_app"]:
+                  "contact_email", "website", "hidden_from_app", "aliases"]:
         if field in data:
             if field == "atv":
                 update_data[field] = float(data[field])
             elif field == "brand_name":
                 update_data[field] = data[field].strip()
+            elif field == "aliases":
+                # Point 20 (Sep 2026): accept a list OR a comma-separated string
+                raw = data[field]
+                if isinstance(raw, str):
+                    parts = [x.strip() for x in raw.split(",")]
+                elif isinstance(raw, list):
+                    parts = [str(x).strip() for x in raw]
+                else:
+                    parts = []
+                update_data[field] = [p for p in parts if p]
             else:
                 update_data[field] = data[field]
     

@@ -1528,6 +1528,50 @@ async def create_registration_incentive(customer_phone: str, staff: Dict):
     return doc
 
 
+async def _brand_alias_set(brand_name: str) -> set:
+    """Point 20 (Sep 2026): return the set of normalised name variants for
+    a brand — brand_name + any admin-configured aliases. Two brand names
+    "match" if their normalised forms share a common member of this set.
+    """
+    def _n(s: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+    names = {_n(brand_name)} if brand_name else set()
+    if not brand_name:
+        return names
+    try:
+        doc = await _db.brands.find_one(
+            {"brand_name": {"$regex": f"^{re.escape(brand_name)}$", "$options": "i"}},
+            {"_id": 0, "brand_name": 1, "aliases": 1},
+        )
+        if doc:
+            names.add(_n(doc.get("brand_name") or ""))
+            for a in (doc.get("aliases") or []):
+                names.add(_n(a))
+    except Exception as e:
+        logger.warning(f"_brand_alias_set failed for '{brand_name}': {e}")
+    names.discard("")
+    return names
+
+
+async def _brands_match(a: str, b: str) -> bool:
+    """Point 20: a and b match if either raw-normalised forms are equal
+    OR either name's alias-set contains the other's normalised form."""
+    def _n(s: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
+    na, nb = _n(a), _n(b)
+    if na and nb and na == nb:
+        return True
+    if not (a and b):
+        return False
+    aliases_a = await _brand_alias_set(a)
+    if nb and nb in aliases_a:
+        return True
+    aliases_b = await _brand_alias_set(b)
+    if na and na in aliases_b:
+        return True
+    return False
+
+
 async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, bill_status: str, bill_value: float = 0.0):
     """Called from the bill-upload pipeline after each bill status change.
       - If a matching active attribution exists → create a bill_upload incentive.
@@ -1546,6 +1590,31 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
     attribution = await find_active_attribution(customer_phone)
     cfg = await get_staff_config()
 
+    # Point 19 (Sep 2026): when a bill arrives without an active attribution
+    # window, still leave an audit trail so admins can diagnose why a QR-scan
+    # customer didn't earn incentive for their retailer (window expired,
+    # already-used, or never opened).
+    if not attribution:
+        try:
+            bill_doc_probe = await _db.bills.find_one({"id": bill_id}, {"_id": 0, "store_name": 1, "brand": 1})
+            probe_brand = ""
+            if bill_doc_probe:
+                probe_brand = (bill_doc_probe.get("store_name") or bill_doc_probe.get("brand") or "").strip()
+            await _db.staff_attribution_misses.insert_one({
+                "id": str(uuid.uuid4()),
+                "staff_id": None,
+                "staff_code": None,
+                "customer_phone": customer_phone,
+                "bill_id": bill_id,
+                "bill_brand": probe_brand,
+                "staff_brand": None,
+                "reason": "no_active_attribution",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as e:
+            logger.warning(f"no_active_attribution miss log failed: {e}")
+        logger.info(f"Point 19: no active attribution for {customer_phone} bill_id={bill_id} — no incentive credited")
+
     if attribution:
         # Check we haven't already credited this exact bill
         already = await _db.staff_incentives.find_one({
@@ -1561,10 +1630,9 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
                 bill_brand = (bill_doc.get("store_name") or bill_doc.get("brand") or "").strip()
             staff_brand = (attributed_staff.get("brand_name") or "").strip()
 
-            def _norm(s: str) -> str:
-                return re.sub(r"[^a-z0-9]+", "", (s or "").lower())
-
-            brand_match = bool(bill_brand and staff_brand and _norm(bill_brand) == _norm(staff_brand))
+            # Point 20 (Sep 2026): match via brand aliases too, so "Domino's"
+            # vs "Dominos Pizza" doesn't drop the incentive on the floor.
+            brand_match = bool(bill_brand and staff_brand and await _brands_match(bill_brand, staff_brand))
 
             if brand_match:
                 count_so_far = await _db.staff_incentives.count_documents({"staff_id": staff_id, "type": "bill_upload"})

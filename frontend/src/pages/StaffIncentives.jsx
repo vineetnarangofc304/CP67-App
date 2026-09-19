@@ -1494,6 +1494,7 @@ function BrandCategoryEditableTable({ brands, categoryOptions, onEdit, onDelete,
   const [newCat, setNewCat] = useState('');
   const [adding, setAdding] = useState(false);
   const [savingId, setSavingId] = useState(null);
+  const [aliasDraft, setAliasDraft] = useState({}); // { [brandId]: "alias1, alias2" }
 
   const rows = React.useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -1509,6 +1510,23 @@ function BrandCategoryEditableTable({ brands, categoryOptions, onEdit, onDelete,
     setSavingId(b.id);
     await onEdit(b.id, { category: nextCategory });
     setSavingId(null);
+  };
+
+  // Point 20 (Sep 2026): save comma-separated aliases
+  const handleAliasesBlur = async (b) => {
+    const draft = aliasDraft[b.id];
+    if (draft === undefined) return;
+    const nextArr = draft.split(',').map(s => s.trim()).filter(Boolean);
+    const curArr = (b.aliases || []);
+    // No-op if unchanged
+    if (nextArr.length === curArr.length && nextArr.every((v, i) => v === curArr[i])) {
+      setAliasDraft(prev => { const n = { ...prev }; delete n[b.id]; return n; });
+      return;
+    }
+    setSavingId(b.id);
+    await onEdit(b.id, { aliases: nextArr });
+    setSavingId(null);
+    setAliasDraft(prev => { const n = { ...prev }; delete n[b.id]; return n; });
   };
 
   const handleAdd = async () => {
@@ -1561,12 +1579,15 @@ function BrandCategoryEditableTable({ brands, categoryOptions, onEdit, onDelete,
             <tr>
               <th className="text-left px-3 py-2 font-medium text-slate-600">Brand</th>
               <th className="text-left px-3 py-2 font-medium text-slate-600">Category</th>
+              <th className="text-left px-3 py-2 font-medium text-slate-600" title="Alternate names that appear on bill OCR. Comma-separated. Used to match staff QR incentive when bill store_name is a variant (Point 20).">
+                Aliases <span className="text-slate-400 font-normal">(comma-separated)</span>
+              </th>
               <th className="w-10"></th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
-              <tr><td colSpan={3} className="text-center py-6 text-slate-400">No brands</td></tr>
+              <tr><td colSpan={4} className="text-center py-6 text-slate-400">No brands</td></tr>
             )}
             {rows.map(b => (
               <tr key={b.id || b.brand_name} className="border-t hover:bg-slate-50/60" data-testid={`mapping-row-${b.brand_name}`}>
@@ -1585,6 +1606,18 @@ function BrandCategoryEditableTable({ brands, categoryOptions, onEdit, onDelete,
                       <option value={b.category}>{b.category}</option>
                     )}
                   </select>
+                </td>
+                <td className="px-3 py-2">
+                  <input
+                    type="text"
+                    disabled={!b.id || savingId === b.id}
+                    value={aliasDraft[b.id] !== undefined ? aliasDraft[b.id] : (b.aliases || []).join(', ')}
+                    placeholder="e.g. Dominos, Dominos Pizza"
+                    onChange={e => setAliasDraft(prev => ({ ...prev, [b.id]: e.target.value }))}
+                    onBlur={() => handleAliasesBlur(b)}
+                    className="h-8 px-2 rounded border border-slate-200 bg-white text-sm w-full"
+                    data-testid={`mapping-aliases-${b.brand_name}`}
+                  />
                 </td>
                 <td className="px-2 py-2 text-right">
                   {b.id && (

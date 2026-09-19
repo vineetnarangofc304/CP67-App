@@ -1,5 +1,10 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Feb 19, 2026 — Session 85) — Retailer Points 19 & 20
+- **Point 20 (FEATURE) — Brand Aliases**: New `aliases: List[str]` field on brand docs. When matching a bill's `store_name` to a staff's `brand_name` during retailer-incentive credit, the resolver (`_brands_match` in `/app/backend/routes/staff.py`) now checks both raw-normalised equality AND alias-set membership. Admins edit aliases inline in the Brand ↔ Category editable table (Point 16) via a comma-separated column. Save via existing `PUT /admin/brands/{id}` which now accepts `aliases` (list or comma-separated string).
+- **Point 19 (BUG) — Domino's 8810928180 staff didn't get incentive**: Directly resolved by Point 20's alias matching (OCR variants like "Dominos Pizza" now match staff brand "Domino's"). Additionally, `create_or_activate_bill_incentive` now always writes a `staff_attribution_misses` row with `reason: no_active_attribution` when the bill arrives without an active window — giving admins a full audit trail to diagnose why an incentive wasn't credited (window expired, already-used, or never opened).
+- **Tested**: `iteration_83` — 6/6 pytest pass (exact-match, alias-match, no-match, empty-input, alias-set includes own name, missing-brand safe fallback). Live-API smoke: PUT aliases persisted correctly.
+
 ## Recently Shipped (Feb 16, 2026 — Session 84) — Retailer Point 18
 - **Point 18 (P0 BUG)**: Rs 353 Subway (Food Court) bill was awarding **Rs 0** instead of the universal-fallback Rs 10. Root cause: `_resolve_bill_upload_amount` returned as soon as the category tier was defined, even if the bill_value didn't fit any of the category's slabs. With the Point 17 fix in place, below-floor bills correctly returned 0 — but only from the category tier, without falling through to `__ALL__`.
   - Fix: introduced `_amount_for_value_slab_match(bill_value, slabs)` which returns `None` on miss (rather than 0), and cascaded `_resolve_bill_upload_amount` through **category → __ALL__** before applying the deepest tier's floor/ceiling rule. Category still wins when its slab covers the bill.
