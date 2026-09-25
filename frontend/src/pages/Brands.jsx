@@ -33,7 +33,7 @@ const Brands = () => {
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [showQRDialog, setShowQRDialog] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState(null);
-  const [formData, setFormData] = useState({ brand_name: '', atv: '', category: '' });
+  const [formData, setFormData] = useState({ brand_name: '', atv: '', category: '', aliases: '' });
   const [storeData, setStoreData] = useState({ description: '', floor: '', timing: '11:00 AM - 9:00 PM', unit_no: '', tags: '', is_featured: false, hidden_from_app: false });
   const [uploading, setUploading] = useState(false);
   const [uploadHistory, setUploadHistory] = useState([]);
@@ -61,9 +61,9 @@ const Brands = () => {
       const res = await fetch(`${API_URL}/admin/brands`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand_name: formData.brand_name.trim(), atv: parseFloat(formData.atv) || 0, category: formData.category.trim() || null })
+        body: JSON.stringify({ brand_name: formData.brand_name.trim(), atv: parseFloat(formData.atv) || 0, category: formData.category.trim() || null, aliases: formData.aliases ? formData.aliases.split(',').map(s => s.trim()).filter(Boolean) : [] })
       });
-      if (res.ok) { toast.success('Brand added'); setShowAddDialog(false); setFormData({ brand_name: '', atv: '', category: '' }); fetchBrands(); }
+      if (res.ok) { toast.success('Brand added'); setShowAddDialog(false); setFormData({ brand_name: '', atv: '', category: '', aliases: '' }); fetchBrands(); }
       else { const e = await res.json(); toast.error(e.detail || 'Failed'); }
     } catch { toast.error('Failed'); }
   };
@@ -75,6 +75,7 @@ const Brands = () => {
         brand_name: formData.brand_name.trim(),
         atv: parseFloat(formData.atv) || 0,
         category: formData.category.trim() || null,
+        aliases: formData.aliases ? formData.aliases.split(',').map(s => s.trim()).filter(Boolean) : [],
         description: storeData.description,
         floor: storeData.floor,
         timing: storeData.timing,
@@ -103,7 +104,7 @@ const Brands = () => {
 
   const openEditDialog = (brand) => {
     setSelectedBrand(brand);
-    setFormData({ brand_name: brand.brand_name, atv: (brand.atv || '').toString(), category: brand.category || '' });
+    setFormData({ brand_name: brand.brand_name, atv: (brand.atv || '').toString(), category: brand.category || '', aliases: (brand.aliases || []).join(', ') });
     setStoreData({
       description: brand.description || '',
       floor: brand.floor || '',
@@ -327,6 +328,7 @@ const Brands = () => {
                       <TableHead>Brand Name</TableHead>
                       <TableHead className="text-right">ATV (₹)</TableHead>
                       <TableHead>Category</TableHead>
+                      <TableHead>Aliases</TableHead>
                       <TableHead>Floor</TableHead>
                       <TableHead>Eligible</TableHead>
                       <TableHead>App</TableHead>
@@ -336,7 +338,7 @@ const Brands = () => {
                   </TableHeader>
                   <TableBody>
                     {filteredBrands.length === 0 ? (
-                      <TableRow><TableCell colSpan={9} className="text-center py-8 text-slate-500">{searchQuery ? 'No brands match' : 'No brands'}</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={10} className="text-center py-8 text-slate-500">{searchQuery ? 'No brands match' : 'No brands'}</TableCell></TableRow>
                     ) : filteredBrands.map((brand) => (
                       <TableRow key={brand.id} data-testid={`brand-row-${brand.id}`}>
                         <TableCell>
@@ -351,6 +353,9 @@ const Brands = () => {
                         <TableCell className="font-medium">{brand.brand_name}</TableCell>
                         <TableCell className="text-right font-mono">{brand.atv ? `₹${brand.atv.toLocaleString('en-IN')}` : '-'}</TableCell>
                         <TableCell>{brand.category || '-'}</TableCell>
+                        <TableCell className="text-xs text-slate-500 max-w-[220px] truncate" title={(brand.aliases || []).join(', ')} data-testid={`brand-aliases-${brand.id}`}>
+                          {(brand.aliases || []).length ? (brand.aliases || []).join(', ') : <span className="text-slate-300">—</span>}
+                        </TableCell>
                         <TableCell className="text-sm text-slate-500">{brand.floor || '-'}</TableCell>
                         <TableCell>
                           <button onClick={() => toggleEligibility(brand)} className="flex items-center" data-testid={`eligibility-${brand.id}`}>
@@ -411,6 +416,10 @@ const Brands = () => {
                 {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+            <div className="space-y-2">
+              <Label>Aliases <span className="text-xs text-slate-400 font-normal">(comma-separated, matches bill OCR variants)</span></Label>
+              <Input value={formData.aliases} onChange={e => setFormData({...formData, aliases: e.target.value})} placeholder="e.g. Dominos, Dominos Pizza, Jubilant Foodworks" data-testid="add-brand-aliases" />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
@@ -456,6 +465,10 @@ const Brands = () => {
                       {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Aliases <span className="text-xs text-slate-400 font-normal">(comma-separated bill-OCR variants — Point 20)</span></Label>
+                  <Input value={formData.aliases} onChange={e => setFormData({...formData, aliases: e.target.value})} placeholder="e.g. Dominos, Dominos Pizza, Jubilant Foodworks" data-testid="edit-brand-aliases" />
                 </div>
               </>
             )}

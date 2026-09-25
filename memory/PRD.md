@@ -1,5 +1,13 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Feb 25, 2026 — Session 86) — Retailer Point 21
+- **Point 21 — Editable Aliases + Category on Brands page**: The Slabs → editable mapping table already had both editable columns (Session 84/85), but the main **Brands** admin page (`/brands`) was missing them. Added:
+  - New **Aliases** column in the brands table (comma-separated display, truncated with hover tooltip)
+  - **Aliases** input in the Add Brand dialog
+  - **Aliases** input in the Edit Brand dialog under the Basic tab
+  - All three save via the same `PUT/POST /api/admin/brands` endpoint that already accepts `aliases` (list or comma-separated string) from Session 85
+- Now admins can edit aliases and category from **either** /brands or /staff-incentives (Slabs tab), with a single source of truth.
+
 ## Recently Shipped (Feb 19, 2026 — Session 85) — Retailer Points 19 & 20
 - **Point 20 (FEATURE) — Brand Aliases**: New `aliases: List[str]` field on brand docs. When matching a bill's `store_name` to a staff's `brand_name` during retailer-incentive credit, the resolver (`_brands_match` in `/app/backend/routes/staff.py`) now checks both raw-normalised equality AND alias-set membership. Admins edit aliases inline in the Brand ↔ Category editable table (Point 16) via a comma-separated column. Save via existing `PUT /admin/brands/{id}` which now accepts `aliases` (list or comma-separated string).
 - **Point 19 (BUG) — Domino's 8810928180 staff didn't get incentive**: Directly resolved by Point 20's alias matching (OCR variants like "Dominos Pizza" now match staff brand "Domino's"). Additionally, `create_or_activate_bill_incentive` now always writes a `staff_attribution_misses` row with `reason: no_active_attribution` when the bill arrives without an active window — giving admins a full audit trail to diagnose why an incentive wasn't credited (window expired, already-used, or never opened).
