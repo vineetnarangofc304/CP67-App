@@ -1,5 +1,12 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Feb 26, 2026 — Session 87) — Consumer Point 51
+- **Point 51 (BUG) — Reprocess silently force-crediting**: Tapping **Reprocess** on a stuck bill was locally force-crediting whenever Fundle rejected — even though admin only wanted to retry Fundle. Root cause: `_do_reprocess_bill_bg` and `_do_reprocess_bill_sync` both hardcoded `force_credit_on_fundle_reject=True` (with a stale comment "admin explicitly clicked Reprocess — they want it credited"). Flipped both to `False`.
+  - Now Reprocess → hits Fundle only. If Fundle rejects, bill stays in `manual_review` with the exact Fundle error visible; admin can Fix Brand, add an alias, or click the dedicated **Force Credit** button if local credit is truly intended.
+  - Frontend toast updated: on Fundle rejection it now shows the error and points admin at Fix Brand / Force Credit instead of a generic "failed" message.
+  - Bulk Reprocess default (`force_credit_on_fundle_reject=False`) unchanged — admin still needs to explicitly tick "Auto force-credit if Fundle rejects" on the bulk modal to opt in.
+- **Tested**: `iteration_84` — 4/4 pytest pass (bg wrapper default False, sync wrapper default False, bulk default False regression, Point 49 EditBrand default False regression).
+
 ## Recently Shipped (Feb 25, 2026 — Session 86) — Retailer Point 21
 - **Point 21 — Editable Aliases + Category on Brands page**: The Slabs → editable mapping table already had both editable columns (Session 84/85), but the main **Brands** admin page (`/brands`) was missing them. Added:
   - New **Aliases** column in the brands table (comma-separated display, truncated with hover tooltip)

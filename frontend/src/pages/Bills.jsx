@@ -322,11 +322,11 @@ const Bills = () => {
         clearTimeout(timeoutId);
         const data = await res.json();
         if (data.reprocessed === 'queued') {
-          toast.success('Reprocess queued. Refreshing list — result in ~15s.');
+          toast.success('Reprocess queued — pushing to Fundle. If Fundle rejects, the bill will stay in review with the exact reason. Refresh in ~15s.');
         } else if (data.success) {
-          toast.success(`Bill reprocessed! ${data.points_earned || 0} points credited.`);
+          toast.success(`Bill reprocessed! ${data.points_earned || 0} points credited by Fundle.`);
         } else if (data.error) {
-          toast.error(`Reprocess failed: ${data.error}`);
+          toast.warning(`Fundle rejected: ${data.error}. Bill left in review — Fix Brand or use Force Credit if intentional.`);
         } else {
           toast.error('Reprocess failed — refresh to see the latest status.');
         }

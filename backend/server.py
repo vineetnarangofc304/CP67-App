@@ -3849,8 +3849,14 @@ async def reprocess_bill(bill_id: str, background_tasks: BackgroundTasks,
 async def _do_reprocess_bill_bg(bill_id: str):
     """Background wrapper — runs the full sync reprocess pipeline off the
     request thread so the browser/Cloudflare fetch doesn't time out on slow
-    Fundle calls. Always enables force_credit_on_fundle_reject because the
-    admin explicitly clicked "Reprocess" — they want it credited."""
+    Fundle calls.
+
+    Point 51 (Sep 2026): tapping Reprocess now HITS FUNDLE ONLY — never
+    silently force-credits locally. If Fundle rejects the bill stays in
+    manual_review with the exact Fundle error, so admin can either fix the
+    brand/aliases or use the dedicated "Force Credit" button when local
+    credit is truly intended. Prior behaviour was masking rejections.
+    """
     from fastapi import BackgroundTasks as _BG
     bg = _BG()
     try:
@@ -3862,7 +3868,7 @@ async def _do_reprocess_bill_bg(bill_id: str):
             return
         await _reprocess_single_bill(
             bill, re_ocr=False, send_whatsapp_flag=True, background_tasks=bg,
-            force_credit_on_fundle_reject=True
+            force_credit_on_fundle_reject=False
         )
     except Exception as e:
         logger.exception(f"Background reprocess failed for bill {bill_id}: {e}")
@@ -3886,7 +3892,7 @@ async def _do_reprocess_bill_sync(bill_id: str, background_tasks: BackgroundTask
         raise HTTPException(status_code=404, detail="Bill not found")
     res = await _reprocess_single_bill(
         bill, re_ocr=False, send_whatsapp_flag=True, background_tasks=background_tasks,
-        force_credit_on_fundle_reject=True
+        force_credit_on_fundle_reject=False
     )
     await db.bills.update_one({"id": bill_id},
         {"$set": {"reprocessing_finished_at": datetime.now(timezone.utc).isoformat()}}
