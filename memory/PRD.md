@@ -1,5 +1,8 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Feb 26, 2026 — Session 88) — Consumer Point 50
+- **Point 50 (FEATURE)** — Event banner creative-size hint on admin: added the recommended dimensions **1200 × 600 px (2:1)**, format list (JPG/PNG/WebP) and 5MB cap directly inside the Events upload dialog on `/events`, matching the pattern already used for Banners on `/banners` (Point 29). Admins now see the exact target size right above the file picker; larger uploads are centre-cropped.
+
 ## Recently Shipped (Feb 26, 2026 — Session 87) — Consumer Point 51
 - **Point 51 (BUG) — Reprocess silently force-crediting**: Tapping **Reprocess** on a stuck bill was locally force-crediting whenever Fundle rejected — even though admin only wanted to retry Fundle. Root cause: `_do_reprocess_bill_bg` and `_do_reprocess_bill_sync` both hardcoded `force_credit_on_fundle_reject=True` (with a stale comment "admin explicitly clicked Reprocess — they want it credited"). Flipped both to `False`.
   - Now Reprocess → hits Fundle only. If Fundle rejects, bill stays in `manual_review` with the exact Fundle error visible; admin can Fix Brand, add an alias, or click the dedicated **Force Credit** button if local credit is truly intended.

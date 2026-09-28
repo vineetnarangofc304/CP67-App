@@ -135,10 +135,15 @@ export default function Events() {
               </div>
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-slate-600 mb-1">Image</label>
+                {/* Point 50 (Sep 2026): show recommended creative size inline so admins upload correctly-sized banners for Upcoming Events */}
+                <div className="mb-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800" data-testid="event-dimensions-hint">
+                  <strong>Recommended:</strong> 1200 × 600 px (2:1) &middot; JPG, PNG or WebP &middot; ≤ 5 MB
+                  <div className="text-blue-700 mt-0.5">Displayed in the app's Events &amp; Happenings carousel. Larger images will be centre-cropped.</div>
+                </div>
                 <div className="border-2 border-dashed rounded-lg p-4 text-center cursor-pointer hover:border-slate-400"
                   onClick={() => fileRef.current?.click()}>
                   {preview ? <img src={preview} alt="preview" className="h-32 mx-auto object-contain rounded" /> :
-                    <div className="text-slate-400"><Upload size={24} className="mx-auto mb-1" /><p className="text-xs">Click to upload image</p></div>}
+                    <div className="text-slate-400"><Upload size={24} className="mx-auto mb-1" /><p className="text-xs">Click to upload image</p><p className="text-xs text-slate-300 mt-1">Target: 1200 × 600 px</p></div>}
                   <input ref={fileRef} type="file" accept="image/*" onChange={onFileSelect} className="hidden" />
                 </div>
               </div>
