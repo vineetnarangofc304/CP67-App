@@ -1,5 +1,13 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Feb 28, 2026 — Session 89) — Retailer Point 21 (inline)
+- **Point 21** — Made Category + Aliases inline-editable **directly in the /brands table row** (previously read-only display; edit was only via the modal dialog). Client wanted "editable mapping editable" — now every row has:
+  - Category dropdown that auto-saves on change
+  - Aliases text input (comma-separated) that auto-saves on blur
+  - Loading state per-row prevents concurrent double-saves
+  - Reuses `PUT /api/admin/brands/{id}` — no new endpoints
+- Verified in Preview screenshot: inline dropdowns + inputs render for every brand across all 192 rows.
+
 ## Recently Shipped (Feb 26, 2026 — Session 88) — Consumer Point 50
 - **Point 50 (FEATURE)** — Event banner creative-size hint on admin: added the recommended dimensions **1200 × 600 px (2:1)**, format list (JPG/PNG/WebP) and 5MB cap directly inside the Events upload dialog on `/events`, matching the pattern already used for Banners on `/banners` (Point 29). Admins now see the exact target size right above the file picker; larger uploads are centre-cropped.
 

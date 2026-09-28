@@ -102,6 +102,42 @@ const Brands = () => {
     } catch { toast.error('Failed'); }
   };
 
+  // Point 21 (Sep 2026): inline-editable category + aliases directly on the brands table
+  const [inlineSavingId, setInlineSavingId] = useState(null);
+  const [aliasDrafts, setAliasDrafts] = useState({}); // { [brandId]: "a, b, c" }
+
+  const saveInline = async (brand, patch) => {
+    setInlineSavingId(brand.id);
+    try {
+      const res = await fetch(`${API_URL}/admin/brands/${brand.id}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (res.ok) { toast.success('Saved'); fetchBrands(); }
+      else { const e = await res.json().catch(() => ({})); toast.error(e.detail || 'Save failed'); }
+    } catch { toast.error('Save failed'); }
+    setInlineSavingId(null);
+  };
+
+  const handleInlineCategory = (brand, next) => {
+    if ((next || '') === (brand.category || '')) return;
+    saveInline(brand, { category: next || null });
+  };
+
+  const handleInlineAliasesBlur = (brand) => {
+    const draft = aliasDrafts[brand.id];
+    if (draft === undefined) return;
+    const nextArr = draft.split(',').map(s => s.trim()).filter(Boolean);
+    const curArr = brand.aliases || [];
+    if (nextArr.length === curArr.length && nextArr.every((v, i) => v === curArr[i])) {
+      setAliasDrafts(prev => { const n = { ...prev }; delete n[brand.id]; return n; });
+      return;
+    }
+    saveInline(brand, { aliases: nextArr });
+    setAliasDrafts(prev => { const n = { ...prev }; delete n[brand.id]; return n; });
+  };
+
   const openEditDialog = (brand) => {
     setSelectedBrand(brand);
     setFormData({ brand_name: brand.brand_name, atv: (brand.atv || '').toString(), category: brand.category || '', aliases: (brand.aliases || []).join(', ') });
@@ -352,9 +388,34 @@ const Brands = () => {
                         </TableCell>
                         <TableCell className="font-medium">{brand.brand_name}</TableCell>
                         <TableCell className="text-right font-mono">{brand.atv ? `₹${brand.atv.toLocaleString('en-IN')}` : '-'}</TableCell>
-                        <TableCell>{brand.category || '-'}</TableCell>
-                        <TableCell className="text-xs text-slate-500 max-w-[220px] truncate" title={(brand.aliases || []).join(', ')} data-testid={`brand-aliases-${brand.id}`}>
-                          {(brand.aliases || []).length ? (brand.aliases || []).join(', ') : <span className="text-slate-300">—</span>}
+                        <TableCell>
+                          {/* Point 21: inline-editable category dropdown */}
+                          <select
+                            value={brand.category || ''}
+                            disabled={inlineSavingId === brand.id}
+                            onChange={(e) => handleInlineCategory(brand, e.target.value)}
+                            className="h-8 px-2 rounded border border-slate-200 bg-white text-sm w-full min-w-[130px] disabled:opacity-60"
+                            data-testid={`inline-category-${brand.id}`}
+                          >
+                            <option value="">— pick —</option>
+                            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            {brand.category && !CATEGORIES.includes(brand.category) && (
+                              <option value={brand.category}>{brand.category}</option>
+                            )}
+                          </select>
+                        </TableCell>
+                        <TableCell className="min-w-[220px]">
+                          {/* Point 21: inline-editable aliases (comma-separated, save on blur) */}
+                          <input
+                            type="text"
+                            disabled={inlineSavingId === brand.id}
+                            value={aliasDrafts[brand.id] !== undefined ? aliasDrafts[brand.id] : (brand.aliases || []).join(', ')}
+                            placeholder="e.g. Dominos, Dominos Pizza"
+                            onChange={(e) => setAliasDrafts(prev => ({ ...prev, [brand.id]: e.target.value }))}
+                            onBlur={() => handleInlineAliasesBlur(brand)}
+                            className="h-8 px-2 rounded border border-slate-200 bg-white text-xs w-full disabled:opacity-60"
+                            data-testid={`inline-aliases-${brand.id}`}
+                          />
                         </TableCell>
                         <TableCell className="text-sm text-slate-500">{brand.floor || '-'}</TableCell>
                         <TableCell>
