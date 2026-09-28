@@ -350,11 +350,16 @@ async def admin_list_brand_catalog(auth=Depends(_verify_admin)):
     brands = []
     categories = set()
     brand_to_cat: Dict[str, str] = {}
-    async for b in _db.brands.find({}, {"_id": 0, "brand_name": 1, "category": 1}):
+    async for b in _db.brands.find({}, {"_id": 0, "id": 1, "brand_name": 1, "category": 1, "aliases": 1}):
         bn = (b.get("brand_name") or "").strip()
         cat = (b.get("category") or "").strip()
         if bn:
-            brands.append({"brand_name": bn, "category": cat})
+            brands.append({
+                "id": b.get("id"),
+                "brand_name": bn,
+                "category": cat,
+                "aliases": b.get("aliases") or [],
+            })
             brand_to_cat[bn.lower()] = cat
         if cat:
             categories.add(cat)

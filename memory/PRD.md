@@ -1,5 +1,10 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Feb 28, 2026 — Session 90) — Retailer Point 21 (fix: broken inline)
+- **Point 21 (BUG in the fix)**: The Slabs → editable mapping table had dropdowns/inputs that would not open or accept text. Root cause: `/api/admin/staff/catalog/brands-categories` returned only `brand_name` + `category` — no `id` and no `aliases`. My inline table disables every row when `b.id` is missing (safety guard against saving without an ID), so all 192 rows were effectively disabled → client saw "nothing working / cant open drop down / cant write anything".
+  - Fix: added `id` and `aliases` to the endpoint's brand projection.
+  - Verified in Preview: 192 brands now return with proper IDs and aliases arrays; dropdowns open and change fires save; alias input accepts text and persists on blur.
+
 ## Recently Shipped (Feb 28, 2026 — Session 89) — Retailer Point 21 (inline)
 - **Point 21** — Made Category + Aliases inline-editable **directly in the /brands table row** (previously read-only display; edit was only via the modal dialog). Client wanted "editable mapping editable" — now every row has:
   - Category dropdown that auto-saves on change
