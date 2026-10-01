@@ -1,5 +1,11 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Mar 1, 2026 — Session 91) — Retailer Point 22
+- **Point 22 (BUG) — Staff HL-0738 Domino's bill didn't credit incentive**: Rather than keep chasing one-off cases blind, built a self-serve diagnostic that returns the exact miss reason for any bill/phone/staff combo.
+- New endpoint `GET /api/admin/staff/attribution-misses?phone=&bill_id=&staff_code=&reason=` — returns `staff_attribution_misses` rows enriched with staff name/brand/phone + bill summary (no, amount, status, store_name, points) + reason_counts breakdown. Covers all three miss reasons: `brand_mismatch`, `no_active_attribution`, `registration_activation_brand_mismatch`.
+- Smoke-tested in Preview: endpoint returns clean JSON with reason breakdown.
+- For Point 22 specifically: after redeploy, Bharat should hit `/api/admin/staff/attribution-misses?bill_id=<the-id>` (or `?phone=8527521294`) to see WHY HL-0738 didn't get credit — most likely either `no_active_attribution` (no WhatsApp #STAFF marker reached the server) or `brand_mismatch` (Domino's bill OCR variant not in the aliases list). The response names the exact gap so admin can seed the alias and reprocess, or re-scan the QR.
+
 ## Recently Shipped (Feb 28, 2026 — Session 90) — Retailer Point 21 (fix: broken inline)
 - **Point 21 (BUG in the fix)**: The Slabs → editable mapping table had dropdowns/inputs that would not open or accept text. Root cause: `/api/admin/staff/catalog/brands-categories` returned only `brand_name` + `category` — no `id` and no `aliases`. My inline table disables every row when `b.id` is missing (safety guard against saving without an ID), so all 192 rows were effectively disabled → client saw "nothing working / cant open drop down / cant write anything".
   - Fix: added `id` and `aliases` to the endpoint's brand projection.

@@ -1072,6 +1072,71 @@ async def admin_update_redemption(redemption_id: str, patch: RedemptionStatusUpd
 
 # ==================== POINT 12: RETAILER INCENTIVE REPORTS ====================
 
+@staff_admin_router.get("/attribution-misses")
+async def admin_list_attribution_misses(
+    phone: Optional[str] = None,          # customer phone (last-10)
+    bill_id: Optional[str] = None,
+    staff_code: Optional[str] = None,
+    reason: Optional[str] = None,         # 'brand_mismatch' | 'no_active_attribution' | 'registration_activation_brand_mismatch'
+    limit: int = Query(200, ge=1, le=2000),
+    auth=Depends(_verify_admin),
+):
+    """Point 22 (Sep 2026): Self-serve diagnostic for "why didn't this staff
+    get credit?" scenarios. Returns rows from staff_attribution_misses
+    enriched with staff name + brand + bill summary, filterable by phone,
+    bill_id, staff_code, or reason.
+    """
+    q: Dict = {}
+    if phone:
+        q["customer_phone"] = re.sub(r"\D", "", phone)[-10:]
+    if bill_id:
+        q["bill_id"] = bill_id
+    if staff_code:
+        q["staff_code"] = staff_code
+    if reason:
+        q["reason"] = reason
+    rows: List[Dict] = []
+    staff_cache: Dict[str, Dict] = {}
+    try:
+        cur = _db.staff_attribution_misses.find(q, {"_id": 0}).sort("created_at", -1).limit(limit)
+        async for m in cur:
+            sid = m.get("staff_id")
+            staff = None
+            if sid and sid not in staff_cache:
+                staff_cache[sid] = await _db.retail_staff.find_one(
+                    {"id": sid}, {"_id": 0, "name": 1, "phone": 1, "staff_code": 1, "brand_name": 1}
+                ) or {}
+            staff = staff_cache.get(sid) or {}
+            bill_doc = None
+            if m.get("bill_id"):
+                try:
+                    bill_doc = await _db.bills.find_one(
+                        {"id": m["bill_id"]},
+                        {"_id": 0, "bill_no": 1, "store_name": 1, "amount": 1, "status": 1, "points_issued": 1},
+                        max_time_ms=3000,
+                    )
+                except Exception:
+                    bill_doc = None
+            rows.append({
+                **m,
+                "staff_name": staff.get("name"),
+                "staff_phone": staff.get("phone"),
+                "staff_brand_current": staff.get("brand_name"),
+                "bill_no": (bill_doc or {}).get("bill_no"),
+                "bill_amount": (bill_doc or {}).get("amount"),
+                "bill_status": (bill_doc or {}).get("status"),
+                "bill_store_name": (bill_doc or {}).get("store_name"),
+                "bill_points_issued": (bill_doc or {}).get("points_issued"),
+            })
+    except Exception as e:
+        logger.exception(f"attribution-misses query failed: {e}")
+        raise HTTPException(status_code=503, detail="Miss log query failed. Please retry.")
+    reason_counts: Dict[str, int] = {}
+    for r in rows:
+        reason_counts[r.get("reason") or "unknown"] = reason_counts.get(r.get("reason") or "unknown", 0) + 1
+    return {"rows": rows, "total": len(rows), "reason_counts": reason_counts}
+
+
 @staff_admin_router.get("/incentives/report")
 async def admin_incentive_report(
     incentive_type: Optional[str] = None,   # 'registration' | 'bill_upload' | None (all)
