@@ -2311,14 +2311,34 @@ async def get_app_download_qr():
 
 
 PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.homelandadvantage.cp67&hl=en_IN"
+APP_STORE_URL  = "https://apps.apple.com/in/app/homeland-advantage/id6795809359"
+
+
+def _resolve_store_from_ua(ua: str) -> tuple:
+    """Point 52 (Sep 2026): classify a User-Agent as iOS / Android / other
+    and return (platform, store_url). iPadOS 13+ identifies as "Macintosh"
+    with touch; we detect that too so iPads land on the App Store (not Play).
+    """
+    s = (ua or "").lower()
+    if "iphone" in s or "ipad" in s or "ipod" in s or "ios" in s:
+        return "ios", APP_STORE_URL
+    # iPadOS 13+ masquerades as desktop Safari — ("Macintosh" + "Mobile" or touch hint)
+    if "macintosh" in s and ("mobile" in s or "crios" in s or "fxios" in s):
+        return "ios", APP_STORE_URL
+    if "android" in s:
+        return "android", PLAY_STORE_URL
+    return "other", PLAY_STORE_URL  # default fallback keeps old behaviour
 
 
 @api_router.get("/app-download-qr/scan")
 async def app_download_qr_scan(request: Request):
-    """Tracked redirect for the App Install QR (Point 31). Logs each scan then 302s to Play Store."""
+    """Point 31 + Point 52: Tracked redirect for the App Install QR. Logs
+    each scan and routes iOS devices to the App Store and Android (or
+    anything else) to the Play Store from a SINGLE QR code."""
     from fastapi.responses import RedirectResponse
     ua = request.headers.get("user-agent", "")[:400]
     ip = (request.headers.get("x-forwarded-for") or request.client.host if request.client else "").split(",")[0].strip()
+    platform, store_url = _resolve_store_from_ua(ua)
     now = datetime.now(timezone.utc)
     await db.app_qr_scans.insert_one({
         "id": str(uuid.uuid4()),
@@ -2326,17 +2346,19 @@ async def app_download_qr_scan(request: Request):
         "day": now.strftime("%Y-%m-%d"),
         "user_agent": ua,
         "ip": ip,
+        "platform": platform,  # Point 52: ios | android | other
     })
-    return RedirectResponse(PLAY_STORE_URL, status_code=302)
+    return RedirectResponse(store_url, status_code=302)
 
 
 @api_router.get("/admin/app-download-qr/stats")
 async def app_download_qr_stats(payload: dict = Depends(verify_jwt_token)):
-    """Admin: total scans + daily counts for the last 30 days (Point 31)."""
+    """Admin: total scans + daily counts for the last 30 days + Point 52
+    per-platform breakdown (iOS / Android / other) so admins can see which
+    store customers are landing on from the single smart QR."""
     total = await db.app_qr_scans.count_documents({})
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     today_count = await db.app_qr_scans.count_documents({"day": today})
-    # Daily buckets for the last 30 days
     from datetime import timedelta
     since = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
     pipeline = [
@@ -2345,12 +2367,19 @@ async def app_download_qr_stats(payload: dict = Depends(verify_jwt_token)):
         {"$sort": {"_id": 1}},
     ]
     daily = [{"day": r["_id"], "count": r["count"]} async for r in db.app_qr_scans.aggregate(pipeline)]
+    # Point 52: platform split
+    platform_pipeline = [{"$group": {"_id": "$platform", "count": {"$sum": 1}}}]
+    platform_counts = {}
+    async for r in db.app_qr_scans.aggregate(platform_pipeline):
+        platform_counts[r["_id"] or "unknown"] = r["count"]
     backend_url = os.environ.get("BACKEND_PUBLIC_URL", "")
     return {
         "total_scans": total,
         "today_scans": today_count,
         "daily": daily,
+        "platform_counts": platform_counts,
         "play_store_url": PLAY_STORE_URL,
+        "app_store_url": APP_STORE_URL,
         "qr_image_url": f"{backend_url}/api/app-download-qr",
         "scan_target_url": f"{backend_url}/api/app-download-qr/scan",
     }

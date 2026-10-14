@@ -1,5 +1,15 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Mar 2, 2026 — Session 92) — Consumer Point 52
+- **Point 52 — Single smart QR routing to Play Store / App Store**: Previously `/api/app-download-qr/scan` always redirected to the Play Store. Now it classifies the User-Agent and routes:
+  - iPhone / iPad / iOS Safari → **App Store** (`https://apps.apple.com/in/app/homeland-advantage/id6795809359`)
+  - iPadOS 13+ masquerading as "Macintosh" + Mobile → **App Store**
+  - Android → **Play Store** (`...homelandadvantage.cp67`)
+  - Everything else → **Play Store** (safe fallback preserving pre-fix behaviour)
+- The existing admin QR at `/qr-codes` keeps working — no new QR needed; the one QR already pointing at `/api/app-download-qr/scan` is now a smart QR.
+- Admin stats endpoint now returns `platform_counts` so admins can see iOS vs Android split in the Download QR panel.
+- **Tested**: `iteration_85` — 6/6 pytest pass (iPhone → App Store, iPad → App Store, iPad masquerade → App Store, Android → Play, desktop → Play, empty UA → Play).
+
 ## Recently Shipped (Mar 1, 2026 — Session 91) — Retailer Point 22
 - **Point 22 (BUG) — Staff HL-0738 Domino's bill didn't credit incentive**: Rather than keep chasing one-off cases blind, built a self-serve diagnostic that returns the exact miss reason for any bill/phone/staff combo.
 - New endpoint `GET /api/admin/staff/attribution-misses?phone=&bill_id=&staff_code=&reason=` — returns `staff_attribution_misses` rows enriched with staff name/brand/phone + bill summary (no, amount, status, store_name, points) + reason_counts breakdown. Covers all three miss reasons: `brand_mismatch`, `no_active_attribution`, `registration_activation_brand_mismatch`.
