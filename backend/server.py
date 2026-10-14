@@ -2332,23 +2332,55 @@ def _resolve_store_from_ua(ua: str) -> tuple:
 
 @api_router.get("/app-download-qr/scan")
 async def app_download_qr_scan(request: Request):
-    """Point 31 + Point 52: Tracked redirect for the App Install QR. Logs
-    each scan and routes iOS devices to the App Store and Android (or
-    anything else) to the Play Store from a SINGLE QR code."""
-    from fastapi.responses import RedirectResponse
+    """Point 31 + Point 52 (patched): Tracked redirect for the App Install
+    QR. Routes iOS → App Store and Android/other → Play Store from a single
+    QR. Returns a 200 HTML page carrying BOTH a `Location`-style meta-refresh
+    AND a JS `window.location.replace` fallback, so even if an intermediate
+    CDN strips the Location header (as observed on prod for iOS targets),
+    the device still gets redirected.
+    """
+    from fastapi.responses import HTMLResponse
     ua = request.headers.get("user-agent", "")[:400]
     ip = (request.headers.get("x-forwarded-for") or request.client.host if request.client else "").split(",")[0].strip()
     platform, store_url = _resolve_store_from_ua(ua)
     now = datetime.now(timezone.utc)
-    await db.app_qr_scans.insert_one({
-        "id": str(uuid.uuid4()),
-        "scanned_at": now.isoformat(),
-        "day": now.strftime("%Y-%m-%d"),
-        "user_agent": ua,
-        "ip": ip,
-        "platform": platform,  # Point 52: ios | android | other
-    })
-    return RedirectResponse(store_url, status_code=302)
+    try:
+        await db.app_qr_scans.insert_one({
+            "id": str(uuid.uuid4()),
+            "scanned_at": now.isoformat(),
+            "day": now.strftime("%Y-%m-%d"),
+            "user_agent": ua,
+            "ip": ip,
+            "platform": platform,
+        })
+    except Exception as e:
+        logger.warning(f"app_qr_scan log skip: {e}")
+    # HTML-escape the URL just to be safe (though it's a trusted constant)
+    safe_url = (store_url or PLAY_STORE_URL).replace('"', '%22')
+    body = (
+        "<!doctype html>"
+        "<html><head>"
+        "<meta charset=\"utf-8\">"
+        f"<meta http-equiv=\"refresh\" content=\"0; url={safe_url}\">"
+        "<title>Opening Homeland Advantage…</title>"
+        "<style>body{background:#000;color:#fff;font-family:-apple-system,Segoe UI,sans-serif;"
+        "display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;text-align:center}"
+        "a{color:#4ea1ff}</style>"
+        "</head><body>"
+        f"<div><p>Opening <strong>Homeland Advantage</strong>…</p>"
+        f"<p style=\"opacity:.7;font-size:14px\">If nothing happens, <a href=\"{safe_url}\">tap here</a>.</p></div>"
+        f"<script>setTimeout(function(){{window.location.replace({safe_url!r});}},10);</script>"
+        "</body></html>"
+    )
+    return HTMLResponse(
+        content=body,
+        status_code=200,
+        headers={
+            "Location": safe_url,       # keep Location too for strict clients
+            "Cache-Control": "no-store", # Safari must re-fetch every scan
+            "Content-Type": "text/html; charset=utf-8",
+        },
+    )
 
 
 @api_router.get("/admin/app-download-qr/stats")
@@ -9585,9 +9617,10 @@ async def download_ios_build():
     )
 
 
-# Point 23 — QR that redirects to Play Store listing.
-PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.homelandadvantage.cp67&hl=en_IN"
-APP_STORE_URL = os.environ.get("APP_STORE_URL", "")  # fill once iOS app is live
+# Point 23 + Point 52: Store URL constants are defined once at the top of
+# the file (near /api/app-download-qr/scan). We re-use them here instead of
+# redeclaring, so the env-override no longer wipes out APP_STORE_URL and
+# breaks iPhone redirects.
 
 @app.get("/api/downloads/play-store-qr")
 async def download_play_store_qr(size: int = 512):
@@ -9624,10 +9657,7 @@ async def download_app_redirect(request: Request):
     if "android" in ua:
         return RedirectResponse(url=PLAY_STORE_URL, status_code=302)
     if any(k in ua for k in ("iphone", "ipad", "ipod")):
-        if APP_STORE_URL:
-            return RedirectResponse(url=APP_STORE_URL, status_code=302)
-        # No App Store link yet → send iPhone users to install guide
-        return RedirectResponse(url="/ios-install", status_code=302)
+        return RedirectResponse(url=APP_STORE_URL, status_code=302)
     # Desktop / other — bounce to Play Store (biggest audience) as default
     return RedirectResponse(url=PLAY_STORE_URL, status_code=302)
 

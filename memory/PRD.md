@@ -1,5 +1,13 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Mar 2, 2026 — Session 93) — Point 52 iPhone QR fix
+- **Root cause** of the "scan - Zero KB" file on iPhone: there were TWO sets of store-URL constants in `server.py`. The Session 92 constants at line 2313 had the real App Store URL, but a duplicate at line 9621 overrode them with `APP_STORE_URL = os.environ.get("APP_STORE_URL", "")` — **empty** on both Preview and Production. iPhone's RedirectResponse got Location="", browser rendered a blank response as a "scan" file.
+- **Fix**:
+  1. Deleted the duplicate `PLAY_STORE_URL` / `APP_STORE_URL` at line 9621 so the real constants are the single source of truth.
+  2. Swapped the `/api/app-download-qr/scan` endpoint to return a **200 HTML page** with BOTH a `Location` header AND an inline `<meta refresh>` + JS `window.location.replace` fallback — so even if any CDN strips the Location header (as prod did for iOS targets), the browser still redirects via the HTML body.
+- **Verified in Preview**: iPhone UA → body & Location both carry `apps.apple.com/.../id6795809359`. Android → `play.google.com/.../homelandadvantage.cp67`.
+- ⚠️ Redeploy Preview → Production so the client's iPhone QR scan opens the App Store.
+
 ## Recently Shipped (Mar 2, 2026 — Session 92) — Consumer Point 52
 - **Point 52 — Single smart QR routing to Play Store / App Store**: Previously `/api/app-download-qr/scan` always redirected to the Play Store. Now it classifies the User-Agent and routes:
   - iPhone / iPad / iOS Safari → **App Store** (`https://apps.apple.com/in/app/homeland-advantage/id6795809359`)
