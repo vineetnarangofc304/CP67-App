@@ -15,6 +15,9 @@ import { Ticket, Upload, FileText, RefreshCw } from 'lucide-react';
 const SOURCE_OPTIONS = [
   { code: 'SRC_RWA', label: 'RWA (Resident Welfare)' },
   { code: 'SRC_OFFICE', label: 'Offices' },
+  // Point 54: allow optional coupon inventory per volunteer QR too
+  { code: 'SRC_VOLUNTEER_1', label: 'Volunteer 1' },
+  { code: 'SRC_VOLUNTEER_2', label: 'Volunteer 2' },
 ];
 
 export default function Coupons() {

@@ -1,5 +1,19 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Oct 15, 2026 — Session 94) — Point 54 + OTP delivery hardening
+- **Point 54 (FEATURE) — Volunteer registration QRs**: Added two new WhatsApp registration QRs so the client can measure on-ground volunteers separately.
+  - `QR0124012` → **Volunteer 1** → `SRC_VOLUNTEER_1` (prefilled "Hi! Register me for CP67 Loyalty — Volunteer 1")
+  - `QR0124013` → **Volunteer 2** → `SRC_VOLUNTEER_2` (prefilled "Hi! Register me for CP67 Loyalty — Volunteer 2")
+  - Both appear automatically on `/qr-codes` admin page, generate a scannable PNG, and are also exposed via the public `/api/qr-links` feed.
+  - Attribution flows into `users.first_touch_source`; the admin `/users?source=SRC_VOLUNTEER_1|2` filter + `/api/admin/users/sources` analytics endpoint now return "Volunteer 1" / "Volunteer 2" counts.
+  - Also wired the Coupons admin page to let the client load coupon inventory per volunteer source (same pattern as RWA/Office if they decide to issue coupons later).
+  - **Tested in Preview**: curl smoke — both QRs enumerate, Volunteer 1 WhatsApp registration test → user shows up with `first_touch_source=SRC_VOLUNTEER_1`, analytics endpoint returns `{"code": "SRC_VOLUNTEER_1", "label": "Volunteer 1", "count": 1}`.
+- **OTP delivery hardening (Oct 15 WhatsApp report from Bharat)**: Consumer app OTPs were "not getting triggered" on production iOS/Android. Preview + direct Karix hits for `9811123206` and `8527521294` both returned `Platform Accepted` with real Karix Request IDs — i.e. the backend code & DLT template are correct and SMSes are being handed off to Karix.
+  - Suspected root cause on prod: `.env` on the production pod lost one or more of the Karix SMS keys (API URL / key / sender / entity id / template id), so `send_otp_sms` short-circuited with "SMS gateway not configured" and silently returned failure.
+  - Baked **last-resort fallbacks** for all five Karix SMS env vars into `server.py` (`_KARIX_SMS_DEFAULTS` + `_env_or_default`) using the exact DLT values Bharat shared on WhatsApp (PEID `1701172802304667512`, Temp ID `1707172914885560615`, Header `CP67`). If `.env` has the value it still wins; the fallback only kicks in for a mis-synced deploy — so prod OTP delivery is now resilient to env drift.
+  - Client action: redeploy Preview → Production and ask Bharat to retry on `9811123206` / `8527521294`. He should also have received the two test OTPs (`123456` to 9811123206, `654321` to 8527521294) that I sent directly through Karix during diagnosis — if those landed, the fallback will fix prod login immediately after redeploy.
+
+
 ## Recently Shipped (Mar 2, 2026 — Session 93) — Point 52 iPhone QR fix
 - **Root cause** of the "scan - Zero KB" file on iPhone: there were TWO sets of store-URL constants in `server.py`. The Session 92 constants at line 2313 had the real App Store URL, but a duplicate at line 9621 overrode them with `APP_STORE_URL = os.environ.get("APP_STORE_URL", "")` — **empty** on both Preview and Production. iPhone's RedirectResponse got Location="", browser rendered a blank response as a "scan" file.
 - **Fix**:

@@ -947,6 +947,26 @@ QR_CODES = [
         "prefilled_message": "Hi! Register me for CP67 Loyalty — Office",
         "category": "loyalty",
         "description": "For office building distribution — captures Office as registration source for reporting"
+    },
+    # Point 54 (Oct 2026): Two unique volunteer QRs so on-ground volunteers 1 & 2 can be
+    # measured separately. Each QR drops the user into WhatsApp with a prefilled message
+    # that carries its own SRC_VOLUNTEER_* code, which flows through to users.first_touch_source
+    # and the /api/users/sources analytics endpoint.
+    {
+        "qr_code_id": "QR0124012",
+        "location": "Volunteer 1",
+        "source_code": "SRC_VOLUNTEER_1",
+        "prefilled_message": "Hi! Register me for CP67 Loyalty — Volunteer 1",
+        "category": "loyalty",
+        "description": "For on-ground Volunteer 1 — captures Volunteer 1 as the registration source"
+    },
+    {
+        "qr_code_id": "QR0124013",
+        "location": "Volunteer 2",
+        "source_code": "SRC_VOLUNTEER_2",
+        "prefilled_message": "Hi! Register me for CP67 Loyalty — Volunteer 2",
+        "category": "loyalty",
+        "description": "For on-ground Volunteer 2 — captures Volunteer 2 as the registration source"
     }
 ]
 
@@ -1226,6 +1246,8 @@ async def list_user_sources(payload: dict = Depends(verify_jwt_token)):
         "SRC_APP", "SRC_BRANDS", "SRC_FOODCOURT", "SRC_PARKING",
         "SRC_DIGITAL", "SRC_SOCIAL", "SRC_WEBSITE", "SRC_RWA",
         "SRC_OFFICE", "SRC_WHATSAPP", "SRC_MARKETING", "SRC_REFERRAL",
+        # Point 54: Volunteer tracking
+        "SRC_VOLUNTEER_1", "SRC_VOLUNTEER_2",
     ]
     for c in curated:
         counts.setdefault(c, 0)
@@ -1236,6 +1258,8 @@ async def list_user_sources(payload: dict = Depends(verify_jwt_token)):
         "SRC_PARKING": "Parking", "SRC_DIGITAL": "Digital Screens", "SRC_SOCIAL": "Social",
         "SRC_WEBSITE": "Website", "SRC_RWA": "RWA", "SRC_OFFICE": "Office",
         "SRC_WHATSAPP": "WhatsApp", "SRC_MARKETING": "Marketing", "SRC_REFERRAL": "Referral",
+        # Point 54 (Oct 2026): Volunteer-wise registration attribution
+        "SRC_VOLUNTEER_1": "Volunteer 1", "SRC_VOLUNTEER_2": "Volunteer 2",
     }
     sources = [
         {"code": code, "label": LABELS.get(code, code.replace("SRC_", "").title()), "count": cnt}
@@ -5404,11 +5428,29 @@ Please add the brand "{brand_name}" to TagnPay panel, then click "Reprocess" in 
         return False
 
 # ======================== KARIX WHATSAPP HELPER ========================
-KARIX_SMS_API_URL = os.environ.get('KARIX_SMS_API_URL', 'https://pod2-japi.instaalerts.zone/httpapi/QueryStringReceiver')
-KARIX_SMS_API_KEY = os.environ.get('KARIX_SMS_API_KEY', '')
-KARIX_SMS_SENDER_ID = os.environ.get('KARIX_SMS_SENDER_ID', 'CP67')
-KARIX_SMS_DLT_ENTITY_ID = os.environ.get('KARIX_SMS_DLT_ENTITY_ID', '')
-KARIX_SMS_DLT_TEMPLATE_ID = os.environ.get('KARIX_SMS_DLT_TEMPLATE_ID', '')
+# Oct 2026 (OTP delivery hardening):
+# Production deployments have repeatedly dropped these env vars, causing silent OTP
+# failures (Karix needs ALL four — API key, sender header, DLT entity id, DLT template
+# id — to accept the request). Client has confirmed the following values are the
+# active DLT-approved template for CP67 Mall, so we embed them as last-resort fallbacks
+# below. If `.env` provides a non-empty value it ALWAYS wins; the fallback only kicks
+# in when the env var is missing/blank on a mis-synced deployment.
+_KARIX_SMS_DEFAULTS = {
+    "KARIX_SMS_API_URL": "https://pod2-japi.instaalerts.zone/httpapi/QueryStringReceiver",
+    "KARIX_SMS_API_KEY": "8iRt9ytmxeyMgtpdMdOpMw==",
+    "KARIX_SMS_SENDER_ID": "CP67",
+    "KARIX_SMS_DLT_ENTITY_ID": "1701172802304667512",   # PEID
+    "KARIX_SMS_DLT_TEMPLATE_ID": "1707172914885560615", # Temp ID
+}
+def _env_or_default(key: str) -> str:
+    v = (os.environ.get(key, "") or "").strip()
+    return v if v else _KARIX_SMS_DEFAULTS.get(key, "")
+
+KARIX_SMS_API_URL = _env_or_default('KARIX_SMS_API_URL')
+KARIX_SMS_API_KEY = _env_or_default('KARIX_SMS_API_KEY')
+KARIX_SMS_SENDER_ID = _env_or_default('KARIX_SMS_SENDER_ID')
+KARIX_SMS_DLT_ENTITY_ID = _env_or_default('KARIX_SMS_DLT_ENTITY_ID')
+KARIX_SMS_DLT_TEMPLATE_ID = _env_or_default('KARIX_SMS_DLT_TEMPLATE_ID')
 OTP_DEV_BYPASS = os.environ.get('OTP_DEV_BYPASS', '')
 
 # Point 25: Admin alert channel — WhatsApp text messages are pushed here
