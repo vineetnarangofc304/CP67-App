@@ -45,3 +45,10 @@ Vineet to pick A / B / C explicitly. No code change will be made for this delta 
 - Any Karix dashboard configuration change (deferred).
 - Any app-store submission (not in scope).
 - Any auth/permission/security change (not in scope).
+
+## Production baseline check (read-only)
+- Repo has only local branch `main` (HEAD 39c5403). No git remotes, no tags, no other refs, no stash.
+- No marker in `.emergent/` or git history records which commit is Published to `cp67bot.fundlexperiences.com` or `mall-rewards-1.emergent.host`.
+- `_KARIX_SMS_DEFAULTS` first appears in commit 4803530 (2026-10-16), server.py:5438. Whether that commit was ever published cannot be determined from this environment.
+- RESULT: Production source baseline NOT accessible. Release preparation STOPPED per instruction. Code left unchanged.
+

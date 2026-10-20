@@ -1525,3 +1525,7 @@ Extended the same normalized brand-match rule to registration-incentive activati
 Redeploy PREVIEW → PRODUCTION. From this point forward, incentives strictly follow the bill's brand — the registration source can NEVER leak credit for someone else's activity.
 
 Existing production data note: any registration incentives that were WRONGLY activated in the past are already 'redeemable' — this fix stops the bleeding but doesn't retro-cancel. If you want a backfill script that reverts wrongly-activated rows (i.e. redeemable registration incentives where NO corresponding brand-matched bill exists), say so and I'll ship it.
+
+## 2026-06 — Doc #55 release isolation check
+- Read-only check: production source baseline is not accessible from this environment (only local `main`, no remotes/tags/deploy markers). Release preparation stopped. `_KARIX_SMS_DEFAULTS` left unchanged in preview code. See `RELEASE_DELTA_doc55.md`.
+
