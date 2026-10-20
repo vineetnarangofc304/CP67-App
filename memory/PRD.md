@@ -47,6 +47,14 @@
 - Admin stats endpoint now returns `platform_counts` so admins can see iOS vs Android split in the Download QR panel.
 - **Tested**: `iteration_85` — 6/6 pytest pass (iPhone → App Store, iPad → App Store, iPad masquerade → App Store, Android → Play, desktop → Play, empty UA → Play).
 
+## Jun 2026 — Retailer Point 22 code repair (Preview only, not deployed)
+- Ownership: retailer staff incentive module = `backend/routes/staff.py` (this app).
+- Preview DB does NOT contain the reported records (HL-0738 is "House Of Candy (SF)" in Preview; bills 64523/26/34753 absent). Ledger-vs-reporting for that exact case unverifiable here.
+- Defect fixed in `create_or_activate_bill_incentive`: scan is atomically bound to the bill on upload (`used_by_bill_id`); later status changes re-evaluate against that bound scan (admin brand correction now credits); only the latest scan with created_at <= bill.created_at <= expires_at qualifies (later QR never bound); atomic `awarded` claim = one award per bill; no duplicate miss rows; missing bill.created_at → no bind.
+- Report brand filter (`/admin/staff/incentives/report` + .csv) now alias-aware.
+- Tests: iteration_87 (16/16) + 18/18 pytest after race/dup fixes. Throwaway P22TEST records cleaned up.
+- PENDING (separate approval): historical compensating award for HL-0738 — no backfill done.
+
 ## Recently Shipped (Mar 1, 2026 — Session 91) — Retailer Point 22
 - **Point 22 (BUG) — Staff HL-0738 Domino's bill didn't credit incentive**: Rather than keep chasing one-off cases blind, built a self-serve diagnostic that returns the exact miss reason for any bill/phone/staff combo.
 - New endpoint `GET /api/admin/staff/attribution-misses?phone=&bill_id=&staff_code=&reason=` — returns `staff_attribution_misses` rows enriched with staff name/brand/phone + bill summary (no, amount, status, store_name, points) + reason_counts breakdown. Covers all three miss reasons: `brand_mismatch`, `no_active_attribution`, `registration_activation_brand_mismatch`.

@@ -139,3 +139,40 @@ def test_mismatch_stays_uncredited_without_correction():
         finally:
             await _cleanup(db)
     run(t())
+
+
+def test_concurrent_evaluations_single_award():
+    async def t():
+        db = await _setup(); await _cleanup(db)
+        try:
+            now = datetime.now(timezone.utc)
+            sid = await _staff(db)
+            await _scan(db, sid, now - timedelta(minutes=1))
+            bid = await _bill(db, "Dominos", now)
+            bid2 = await _bill(db, "Dominos", now + timedelta(seconds=5))
+            await asyncio.gather(*[staff_mod.create_or_activate_bill_incentive(bid, PHONE, "approved") for _ in range(3)],
+                                 staff_mod.create_or_activate_bill_incentive(bid2, PHONE, "approved"))
+            assert await db.staff_incentives.count_documents({"customer_phone": PHONE, "type": "bill_upload"}) == 1
+        finally:
+            await _cleanup(db)
+    run(t())
+
+
+def test_no_active_attribution_logged_once_and_missing_created_at_not_bound():
+    async def t():
+        db = await _setup(); await _cleanup(db)
+        try:
+            now = datetime.now(timezone.utc)
+            bid = await _bill(db, "Dominos", now)
+            for st in ("manual_review", "approved", "approved"):
+                await staff_mod.create_or_activate_bill_incentive(bid, PHONE, st)
+            assert await db.staff_attribution_misses.count_documents({"bill_id": bid, "reason": "no_active_attribution"}) == 1
+            sid = await _staff(db)
+            aid = await _scan(db, sid, now)
+            bid2 = await _bill(db, "Dominos", now)
+            await db.bills.update_one({"id": bid2}, {"$unset": {"created_at": ""}})
+            await staff_mod.create_or_activate_bill_incentive(bid2, PHONE, "approved")
+            assert (await db.staff_attributions.find_one({"id": aid}))["used"] is False
+        finally:
+            await _cleanup(db)
+    run(t())

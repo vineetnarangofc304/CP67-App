@@ -1,0 +1,29 @@
+{
+  "summary": "Point 22 backend-only verification. Tested create_or_activate_bill_incentive / sync_incentive_on_bill_status_change directly in Python (routes.staff._db = motor client) and admin incentive report (JSON + CSV) via public HTTP with admin JWT, using only throwaway P22TEST records (phones 7000022001/7000022002, brand doc 'P22TEST Brand' aliases ['P22TEST Alias']). No approve/reject/force-credit/reprocess/WhatsApp/OTP endpoints called. 16/16 pytest pass (4 existing + 12 new). All requested features work as specified. Extra probes found 2 robustness issues (concurrency race, duplicate no_active_attribution miss rows) - not in the stated acceptance criteria. Cleanup verified: 0 P22TEST/70000220xx rows left in retail_staff, staff_attributions, staff_incentives, staff_attribution_misses, bills, brands.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "routes/staff.py create_or_activate_bill_incentive", "issue": "Race condition: the 'already' check (find_one on staff_incentives) and the attribution bind (update_one without a {used: False} condition) are not atomic, and there is no unique index on staff_incentives(type,bill_id). Probe: 3 concurrent evaluations of the same bill created 3 bill_upload incentive rows. 2 different bills evaluated at the same time against one scan produced 2 awards. This can happen with a double-clicked admin approve (BackgroundTask) or overlapping upload and approve paths, and it breaks the 'one eligible award per bill' rule."},
+      {"endpoint": "routes/staff.py create_or_activate_bill_incentive", "issue": "A bill with no eligible attribution writes a new 'no_active_attribution' miss row on every re-evaluation (manual_review -> approved -> approved gave 3 rows for one bill). This is the same kind of duplicate that was already fixed for brand_mismatch, and it inflates reason_counts in the misses report. This behaviour predates this change."},
+      {"endpoint": "routes/staff.py create_or_activate_bill_incentive", "issue": "If bill.created_at is missing, upload_at falls back to now(), so a QR scan made after the upload could be bound. 2 legacy TEST bills in Preview have created_at=None. Low risk."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_point22_attribution.py", "/app/backend/tests/test_point22_extended.py", "/app/test_reports/pytest/pytest_point22.xml"],
+  "action_items": [
+    "Make awarding idempotent under concurrency: add a unique partial index on staff_incentives {bill_id:1,type:1} where type='bill_upload' (and catch DuplicateKeyError), and bind the scan atomically with find_one_and_update({id, used: False}, {$set: {used: True, used_by_bill_id}}) before inserting the award.",
+    "Dedupe no_active_attribution miss rows per bill_id (upsert keyed by bill_id + reason), as was done for brand_mismatch.",
+    "Optional: when bill.created_at is missing, skip binding (or use another upload timestamp) instead of falling back to now()."
+  ],
+  "critical_code_review_comments": [
+    "Non-atomic read-then-write in the award path (see minor issue 1). This is the main remaining risk to 'one award per bill'.",
+    "admin_incentive_report brand filter scans the whole brands and retail_staff collections on each request. Fine at the current scale; for larger data, consider caching or precomputing normalised brand keys.",
+    "Registration activation (14b) still uses strict normalised equality, not aliases. Per the request this is unchanged, but it differs from the alias-aware bill_upload match (e.g. a 'Domino's Pizza' bill would not activate a 'Dominos' registration unless the normalised strings are equal)."
+  ],
+  "updated_files": ["/app/backend/tests/test_point22_extended.py"],
+  "success_rate": {"backend": "100% (16/16 requested-scope tests); 2 extra robustness probes failed (concurrency, duplicate misses)", "frontend": "N/A (skipped as requested)"},
+  "seed_data_creation": "None persisted. All P22TEST throwaway rows were deleted after each test; final counts = 0.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run: cd /app/backend && python -m pytest tests/test_point22_attribution.py tests/test_point22_extended.py -v. The tests call the incentive functions directly against the Preview DB with P22TEST-tagged rows and clean up afterwards. Report tests use admin/CP67Admin@2025 and forged retail_staff/retailer_manager JWTs (via routes.staff._make_*_token) to check the 403s. The concurrency probe script was /tmp/probe_p22.py (not committed)."
+}

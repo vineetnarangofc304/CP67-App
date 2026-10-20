@@ -1680,20 +1680,30 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
     if not already:
         attribution = await _db.staff_attributions.find_one({"used_by_bill_id": bill_id}, {"_id": 0})
         rebound = bool(attribution)
-        if not attribution:
-            upload_at = (bill_doc or {}).get("created_at") or datetime.now(timezone.utc).isoformat()
+        upload_at = (bill_doc or {}).get("created_at")
+        if not attribution and upload_at:
             latest = await _db.staff_attributions.find_one({
                 "customer_phone": customer_phone,
                 "created_at": {"$lte": upload_at},
                 "expires_at": {"$gte": upload_at},
             }, {"_id": 0}, sort=[("created_at", -1)])
-            attribution = latest if latest and not latest.get("used") else None
+            if latest and not latest.get("used"):
+                # Atomic bind: one scan = one bill decision, even under concurrent evaluations.
+                attribution = await _db.staff_attributions.find_one_and_update(
+                    {"id": latest["id"], "used": False},
+                    {"$set": {"used": True, "used_by_bill_id": bill_id}},
+                    projection={"_id": 0},
+                )
+                if not attribution:
+                    attribution = await _db.staff_attributions.find_one({"id": latest["id"], "used_by_bill_id": bill_id}, {"_id": 0})
+                    rebound = bool(attribution)
 
     # Point 19 (Sep 2026): when a bill arrives without an active attribution
     # window, still leave an audit trail so admins can diagnose why a QR-scan
     # customer didn't earn incentive for their retailer (window expired,
     # already-used, or never opened).
-    if not attribution and not already:
+    if not attribution and not already and not await _db.staff_attribution_misses.find_one(
+            {"bill_id": bill_id, "reason": "no_active_attribution"}, {"_id": 1}):
         try:
             probe_brand = ""
             if bill_doc:
@@ -1727,7 +1737,15 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
         brand_match = bool(bill_brand and staff_brand and await _brands_match(bill_brand, staff_brand))
         status = _status_from_bill(bill_status)
 
+        claimed = False
         if brand_match and not (rebound and status == "cancelled"):
+            # Atomic claim on the bound scan guarantees a single award per bill.
+            claimed = bool(await _db.staff_attributions.find_one_and_update(
+                {"id": attribution["id"], "awarded": {"$ne": True}},
+                {"$set": {"awarded": True}},
+                projection={"_id": 1},
+            ))
+        if claimed:
             count_so_far = await _db.staff_incentives.count_documents({"staff_id": staff_id, "type": "bill_upload"})
             if not bill_value and bill_doc:
                 bill_value = float(bill_doc.get("amount") or bill_doc.get("total_amount") or bill_doc.get("bill_amount") or 0)
@@ -1765,13 +1783,6 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
             except Exception as e:
                 logger.warning(f"attribution miss log failed: {e}")
             logger.info(f"Point 14: brand-mismatch, no credit. staff='{staff_brand}' bill='{bill_brand}' bill_id={bill_id}")
-
-        # Point 14: whether or not the bill matched, consume the attribution and
-        # bind it to this bill — one scan = one bill decision.
-        if not rebound:
-            await _db.staff_attributions.update_one(
-                {"id": attribution["id"]}, {"$set": {"used": True, "used_by_bill_id": bill_id}}
-            )
 
     # 2. If bill approved, activate any pending registration incentive whose
     #    staff belongs to the SAME brand as the current bill.
