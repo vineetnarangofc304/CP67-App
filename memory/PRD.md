@@ -1,5 +1,20 @@
 # CP67 Mall - Homeland Advantage PWA
 
+## Recently Shipped (Oct 20, 2026 — Session 94 cont.) — Doc #55 truthful OTP + Point 54 verified
+- **Doc #55 (BUG)** — Previously `/api/consumer/auth/send-otp` ran `send_login_otp` as a `BackgroundTask` and *always* returned `{"success": true}`. When both Karix channels silently rejected (bad env, stale deploy, carrier bin, DND), the phone saw "OTP sent" and nothing arrived — matching Bharat's "no error, no OTP" report.
+  - **Fix 1 (ordinary error handling)** — awaited `send_login_otp` inline, raised `HTTPException(503, "We couldn't send your OTP right now. Please try again in a few seconds.")` when all configured channels reject. Response on success now carries a `delivery: {whatsapp, sms}` dict with values `"accepted" | "rejected" | "skipped"` so admin/ops can tell gateway handoff apart from no gateway at all. TagnPay sync *remained* on `BackgroundTasks` (slow + non-fatal to login). All existing OTP policy preserved: 5-min TTL, 5-attempt lockout, `OTP_CHANNEL` fan-out, `OTP_DEV_BYPASS=1234`, reviewer phone `9999999999 / 123456` short-circuit (never touches a gateway).
+  - **Fix 2** — `send_login_otp` now stamps per-channel acceptance on the `otp_codes` document as `delivery_last: {whatsapp, sms, channel_policy, at}` plus `delivery_failed: bool`. The OTP value itself is never overwritten. Enables admin diagnosis without a new endpoint, a DLR webhook, or any Karix-dashboard change.
+  - **Acceptance ≠ delivery** — the spec is explicit: `"accepted"` means Karix returned a 200 handoff, not that the SMS reached the handset. True delivery verification needs a DLR webhook, which is tracked separately in RELEASE_DELTA_doc55.md.
+  - **Consumer UI** — `/app/frontend/src/consumer/pages/Login.jsx` already surfaces `data.detail` on non-2xx (the toast now reads the exact 503 message, no change needed).
+  - **Tests** — 17/17 isolated pytest at `/app/.doc55_iso/` (mocked Karix, in-memory `otp_codes`, zero outbound traffic). 13/13 live-Preview normal testing agent at `/app/backend/tests/test_doc54_55_live_preview.py` + `/app/test_reports/iteration_86.json` — all green, zero critical issues.
+- **Point 54 (VERIFIED on real Preview DB)** — Volunteer QR records intact (`QR0124012 / SRC_VOLUNTEER_1`, `QR0124013 / SRC_VOLUNTEER_2`). PNG rendering live (1445 / 1430 bytes). `GET /api/admin/users/sources` returns both with correct labels; `SRC_VOLUNTEER_1=1`, `SRC_VOLUNTEER_2=0` — no duplicates, no attribution reset. The pre-existing `917000700071` registration stays tagged `SRC_VOLUNTEER_1` through re-login.
+- **Release readiness (coherent view)**
+  - PASS: route behaviour, OTP persistence, verification, lockout, channel fan-out, reviewer bypass, Volunteer QR records + rendering + analytics on Preview.
+  - UNVERIFIED (handset reach): we have Karix *acceptance* on Preview; we do **not** have independent delivery proof to a non-customer handset. Needs a named authorised recipient before go-live — flagged separately, not blocking code merge.
+  - RELEASE DELTA (held pending explicit approval): the Oct-15 staged fallback-credential block (`_KARIX_SMS_DEFAULTS`) is present on Preview `server.py:5431-5455`. Not activated at runtime (env wins). See `/app/memory/RELEASE_DELTA_doc55.md`. Must be reviewed before any merge-to-prod.
+  - UNCHANGED: Point 45 (App Manager role), Point 40 (iOS App Store rejection), auth, env, perms, security.
+
+
 ## Recently Shipped (Oct 15, 2026 — Session 94) — Point 54 + OTP delivery hardening
 - **Point 54 (FEATURE) — Volunteer registration QRs**: Added two new WhatsApp registration QRs so the client can measure on-ground volunteers separately.
   - `QR0124012` → **Volunteer 1** → `SRC_VOLUNTEER_1` (prefilled "Hi! Register me for CP67 Loyalty — Volunteer 1")

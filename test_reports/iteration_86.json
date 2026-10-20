@@ -1,0 +1,27 @@
+{
+  "summary": "Session 94 live-Preview backend verification of Doc #54 (Volunteer QRs) and Doc #55 (truthful consumer send-otp). 13/13 pytest tests pass against https://mall-engagement-hub.preview.emergentagent.com. Safety rules followed: only 9999999999 and 7000700071 used for OTP, and 7000700071 send-otp was called exactly once (200, delivery whatsapp=accepted, sms=accepted). Blocked-phone test used a blocked_phones entry, which returns 403 before any OTP is stored or sent. No /admin/otp/send-test, no bill routes, no app code changed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/admin/qr-codes/stats", "issue": "This path does not exist and returns 404, not 500. The platform_counts endpoint is actually GET /api/admin/app-download-qr/stats, which returns 200 with a platform_counts dict. The review request used the wrong path name."},
+      {"endpoint": "/api/users?source=", "issue": "The response is {users:[...], total, skip, limit}, not a bare array. The users field is an array, as the existing admin UI expects."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_doc54_55_live_preview.py", "/app/test_reports/pytest/pytest_iteration86.xml"],
+  "action_items": [
+    "None blocking. If needed, correct the stats endpoint name in docs or the handoff to /api/admin/app-download-qr/stats."
+  ],
+  "critical_code_review_comments": [
+    "consumer.py send-otp: the blocked check comes before the reviewer bypass, and the reviewer bypass comes before store_otp/send_login_otp, so the reviewer path never reaches a gateway. Verified: no delivery key in the response.",
+    "If send_login_otp raises (instead of returning a dict) the route gives an unhandled 500 rather than a 503. send_otp_whatsapp/sms are believed to catch internally, but wrapping the await in try/except and returning 503 would be more robust.",
+    "verify-otp dev bypass (1234) leaves the stored otp_codes record in place (attempts=0). This is pre-existing behaviour and unchanged by #55.",
+    "The delivery_last/delivery_failed stamp is confirmed on the Preview otp_codes record for 7000700071: whatsapp=accepted, sms=accepted, channel_policy=both, delivery_failed=false. The OTP value is not overwritten."
+  ],
+  "updated_files": ["/app/backend/tests/test_doc54_55_live_preview.py"],
+  "success_rate": {"backend": "100%", "frontend": "N/A (skipped per request)"},
+  "seed_data_creation": "None. A single OTP record for 7000700071 was refreshed by the one send-otp call.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Run: REACT_APP_BACKEND_URL=<preview> pytest /app/backend/tests/test_doc54_55_live_preview.py. WARNING: test_synth_send_once_then_dev_bypass makes one real Karix hit to 7000700071, so run it sparingly. Volunteer counts at test time: SRC_VOLUNTEER_1=1 (917000700071), SRC_VOLUNTEER_2=0. Attribution stayed SRC_VOLUNTEER_1 after verify-otp login. blocked_phones has 1050 entries (e.g. 5807941844)."
+}
