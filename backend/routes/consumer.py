@@ -395,22 +395,28 @@ async def send_otp(request: SendOTPRequest, background_tasks: BackgroundTasks):
     otp = str(random.randint(100000, 999999))
     await store_otp(phone_10, otp)
 
-    # Send the OTP in the background — WhatsApp/SMS gateways can take 30+ seconds and
-    # we don't want the user staring at a loading spinner on the login screen.
-    async def _send_otp_bg(p10: str, code: str):
-        try:
-            res = await send_login_otp(p10, code)
-            wa = (res.get("whatsapp") or {}) if isinstance(res, dict) else {}
-            sms = (res.get("sms") or {}) if isinstance(res, dict) else {}
-            if wa.get("success") or sms.get("success"):
-                logger.info(f"OTP sent to {p10} via {'whatsapp' if wa.get('success') else ''}{'+sms' if sms.get('success') else ''}")
-            else:
-                logger.warning(f"OTP gateways all failed for {p10}: whatsapp={wa} sms={sms}")
-        except Exception as e:
-            logger.warning(f"OTP send error for {p10}: {e}")
-    background_tasks.add_task(_send_otp_bg, phone_10, otp)
+    # Doc #55 (Oct 2026): we previously ran send_login_otp as a BackgroundTask and
+    # returned {"success": true} unconditionally — which meant that whenever both
+    # Karix channels silently rejected (e.g. a stale .env or carrier bin), the user
+    # saw "OTP sent" and then nothing arrived. We now AWAIT the fan-out so the
+    # response is truthful: 503 when every configured channel rejected, 200 only
+    # when at least one gateway accepted the handoff. TagnPay sync stays
+    # non-blocking (it is slow and non-fatal to login). Acceptance ≠ delivery:
+    # the response surfaces per-channel acceptance for admin diagnostics only.
+    delivery = await send_login_otp(phone_10, otp)
+    wa = (delivery.get("whatsapp") or {}) if isinstance(delivery, dict) else {}
+    sms = (delivery.get("sms") or {}) if isinstance(delivery, dict) else {}
+    wa_ok = bool(wa.get("success"))
+    sms_ok = bool(sms.get("success"))
+    if not (wa_ok or sms_ok):
+        logger.warning(f"OTP gateways all failed for {phone_10}: whatsapp={wa} sms={sms}")
+        raise HTTPException(
+            status_code=503,
+            detail="We couldn't send your OTP right now. Please try again in a few seconds.",
+        )
+    logger.info(f"OTP accepted for {phone_10} via whatsapp={wa_ok} sms={sms_ok}")
 
-    # TagnPay sync also runs in the background.
+    # TagnPay sync stays in the background — slow + non-fatal to login.
     async def _tagnpay_bg_sync(p10: str):
         try:
             existing = await _tagnpay_client.send_login_otp(p10)
@@ -420,7 +426,15 @@ async def send_otp(request: SendOTPRequest, background_tasks: BackgroundTasks):
             logger.warning(f"TagnPay sync (non-fatal) failed for {p10}: {e}")
     background_tasks.add_task(_tagnpay_bg_sync, phone_10)
 
-    return {"success": True, "message": "OTP sent to your phone", "phone": phone}
+    return {
+        "success": True,
+        "message": "OTP sent to your phone",
+        "phone": phone,
+        "delivery": {
+            "whatsapp": "accepted" if wa_ok else ("rejected" if wa else "skipped"),
+            "sms": "accepted" if sms_ok else ("rejected" if sms else "skipped"),
+        },
+    }
 
 
 @consumer_router.post("/auth/verify-otp")

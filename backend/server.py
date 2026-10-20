@@ -5679,7 +5679,14 @@ OTP_CHANNEL = os.environ.get("OTP_CHANNEL", "both").strip().lower()  # 'whatsapp
 
 async def send_login_otp(phone_10: str, otp: str) -> dict:
     """Dispatch OTP via the configured channel(s). Always returns a dict with
-    per-channel results so admin diagnostics can see exactly what happened."""
+    per-channel results so admin diagnostics can see exactly what happened.
+
+    Doc #55 (Oct 2026): also annotate the stored OTP record with the per-channel
+    outcome so admin/ops can tell apart gateway-acceptance from no-gateway at all
+    without a new endpoint. We never overwrite the OTP value — only metadata.
+    'accepted' here means the provider accepted the handoff (HTTP 200 + ok code);
+    actual carrier delivery is a separate signal we don't have without a DLR.
+    """
     results = {"whatsapp": None, "sms": None, "success": False}
     if OTP_CHANNEL in ("whatsapp", "both"):
         results["whatsapp"] = await send_otp_whatsapp(phone_10, otp)
@@ -5690,6 +5697,24 @@ async def send_login_otp(phone_10: str, otp: str) -> dict:
         results["sms"] = await send_otp_sms(phone_10, otp)
         if results["sms"].get("success"):
             results["success"] = True
+    # Stamp per-channel acceptance (not delivery) onto the OTP record.
+    try:
+        wa = results.get("whatsapp") or {}
+        sms = results.get("sms") or {}
+        await db.otp_codes.update_one(
+            {"phone": phone_10},
+            {"$set": {
+                "delivery_last": {
+                    "whatsapp": "accepted" if wa.get("success") else ("rejected" if wa else "skipped"),
+                    "sms": "accepted" if sms.get("success") else ("rejected" if sms else "skipped"),
+                    "channel_policy": OTP_CHANNEL,
+                    "at": datetime.now(timezone.utc).isoformat(),
+                },
+                "delivery_failed": not results["success"],
+            }},
+        )
+    except Exception as e:
+        logger.warning(f"OTP delivery annotation skipped for {phone_10}: {e}")
     return results
 
 
