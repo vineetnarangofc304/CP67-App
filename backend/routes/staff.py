@@ -1175,10 +1175,19 @@ async def admin_incentive_report(
     # Point 12 (iter 53 fix): apply brand filter at the Mongo layer BEFORE the limit,
     # otherwise a filter on 1000+ staff can silently miss rows past the cursor cap.
     if brand:
-        brand_norm = brand.strip().lower()
+        # Point 22: alias-aware brand filter (same matching rule as the award path).
+        def _n(x: str) -> str:
+            return re.sub(r"[^a-z0-9]+", "", (x or "").lower())
+        brand_n = _n(brand)
+        targets = {brand_n} if brand_n else set()
+        async for b in _db.brands.find({}, {"_id": 0, "brand_name": 1, "aliases": 1}):
+            names = {_n(b.get("brand_name") or "")} | {_n(a) for a in (b.get("aliases") or [])}
+            if brand_n in names:
+                targets |= names
+        targets.discard("")
         matched_staff_ids: List[str] = []
         async for s in _db.retail_staff.find({}, {"_id": 0, "id": 1, "brand_name": 1}):
-            if (s.get("brand_name") or "").strip().lower() == brand_norm:
+            if _n(s.get("brand_name") or "") in targets:
                 matched_staff_ids.append(s["id"])
         if not matched_staff_ids:
             return {"rows": [], "summary": {"total": 0, "registration_count": 0, "bill_upload_count": 0, "total_amount": 0, "redeemable_amount": 0}}
@@ -1656,20 +1665,39 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
     scan — one scan = one bill decision (the client's "immediately after"
     rule from the spec doc).
     """
-    # 1. Try to find an active attribution
-    attribution = await find_active_attribution(customer_phone)
     cfg = await get_staff_config()
+    bill_doc = await _db.bills.find_one(
+        {"id": bill_id},
+        {"_id": 0, "amount": 1, "total_amount": 1, "bill_amount": 1, "store_name": 1, "brand": 1, "created_at": 1},
+    )
+    already = await _db.staff_incentives.find_one({"type": "bill_upload", "bill_id": bill_id}, {"_id": 0, "id": 1})
+
+    # Point 22: re-use the attribution captured on THIS bill's upload (so an admin
+    # brand correction can still credit it); otherwise bind the latest scan that
+    # was active at upload time — never a scan made after the upload.
+    attribution = None
+    rebound = False
+    if not already:
+        attribution = await _db.staff_attributions.find_one({"used_by_bill_id": bill_id}, {"_id": 0})
+        rebound = bool(attribution)
+        if not attribution:
+            upload_at = (bill_doc or {}).get("created_at") or datetime.now(timezone.utc).isoformat()
+            latest = await _db.staff_attributions.find_one({
+                "customer_phone": customer_phone,
+                "created_at": {"$lte": upload_at},
+                "expires_at": {"$gte": upload_at},
+            }, {"_id": 0}, sort=[("created_at", -1)])
+            attribution = latest if latest and not latest.get("used") else None
 
     # Point 19 (Sep 2026): when a bill arrives without an active attribution
     # window, still leave an audit trail so admins can diagnose why a QR-scan
     # customer didn't earn incentive for their retailer (window expired,
     # already-used, or never opened).
-    if not attribution:
+    if not attribution and not already:
         try:
-            bill_doc_probe = await _db.bills.find_one({"id": bill_id}, {"_id": 0, "store_name": 1, "brand": 1})
             probe_brand = ""
-            if bill_doc_probe:
-                probe_brand = (bill_doc_probe.get("store_name") or bill_doc_probe.get("brand") or "").strip()
+            if bill_doc:
+                probe_brand = (bill_doc.get("store_name") or bill_doc.get("brand") or "").strip()
             await _db.staff_attribution_misses.insert_one({
                 "id": str(uuid.uuid4()),
                 "staff_id": None,
@@ -1686,66 +1714,64 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
         logger.info(f"Point 19: no active attribution for {customer_phone} bill_id={bill_id} — no incentive credited")
 
     if attribution:
-        # Check we haven't already credited this exact bill
-        already = await _db.staff_incentives.find_one({
-            "type": "bill_upload", "bill_id": bill_id,
-        }, {"_id": 0, "id": 1})
-        if not already:
-            staff_id = attribution["staff_id"]
-            attributed_staff = await _db.retail_staff.find_one({"id": staff_id}, {"_id": 0}) or attribution
-            # Point 14: enforce brand match between the bill and the staff's brand.
-            bill_doc = await _db.bills.find_one({"id": bill_id}, {"_id": 0, "amount": 1, "total_amount": 1, "bill_amount": 1, "store_name": 1, "brand": 1})
-            bill_brand = ""
-            if bill_doc:
-                bill_brand = (bill_doc.get("store_name") or bill_doc.get("brand") or "").strip()
-            staff_brand = (attributed_staff.get("brand_name") or "").strip()
+        staff_id = attribution["staff_id"]
+        attributed_staff = await _db.retail_staff.find_one({"id": staff_id}, {"_id": 0}) or attribution
+        # Point 14: enforce brand match between the bill and the staff's brand.
+        bill_brand = ""
+        if bill_doc:
+            bill_brand = (bill_doc.get("store_name") or bill_doc.get("brand") or "").strip()
+        staff_brand = (attributed_staff.get("brand_name") or "").strip()
 
-            # Point 20 (Sep 2026): match via brand aliases too, so "Domino's"
-            # vs "Dominos Pizza" doesn't drop the incentive on the floor.
-            brand_match = bool(bill_brand and staff_brand and await _brands_match(bill_brand, staff_brand))
+        # Point 20 (Sep 2026): match via brand aliases too, so "Domino's"
+        # vs "Dominos Pizza" doesn't drop the incentive on the floor.
+        brand_match = bool(bill_brand and staff_brand and await _brands_match(bill_brand, staff_brand))
+        status = _status_from_bill(bill_status)
 
-            if brand_match:
-                count_so_far = await _db.staff_incentives.count_documents({"staff_id": staff_id, "type": "bill_upload"})
-                if not bill_value and bill_doc:
-                    bill_value = float(bill_doc.get("amount") or bill_doc.get("total_amount") or bill_doc.get("bill_amount") or 0)
-                amount = await _resolve_bill_upload_amount(cfg, attributed_staff, bill_value, count_so_far)
-                status = _status_from_bill(bill_status)
-                await _db.staff_incentives.insert_one({
+        if brand_match and not (rebound and status == "cancelled"):
+            count_so_far = await _db.staff_incentives.count_documents({"staff_id": staff_id, "type": "bill_upload"})
+            if not bill_value and bill_doc:
+                bill_value = float(bill_doc.get("amount") or bill_doc.get("total_amount") or bill_doc.get("bill_amount") or 0)
+            amount = await _resolve_bill_upload_amount(cfg, attributed_staff, bill_value, count_so_far)
+            await _db.staff_incentives.insert_one({
+                "id": str(uuid.uuid4()),
+                "staff_id": staff_id,
+                "staff_code": attribution["staff_code"],
+                "customer_phone": customer_phone,
+                "type": "bill_upload",
+                "status": status,
+                "amount": amount,
+                "bill_id": bill_id,
+                "bill_value": bill_value,
+                "bill_brand": bill_brand,
+                "attribution_id": attribution["id"],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "approved_at": datetime.now(timezone.utc).isoformat() if status == "redeemable" else None,
+            })
+            logger.info(f"Point 14: brand-matched incentive credited staff={staff_id} bill_brand='{bill_brand}' staff_brand='{staff_brand}' rebound={rebound}")
+        elif not brand_match and not rebound:
+            # Log an attribution_miss row for reporting / audit — no incentive credited.
+            try:
+                await _db.staff_attribution_misses.insert_one({
                     "id": str(uuid.uuid4()),
                     "staff_id": staff_id,
                     "staff_code": attribution["staff_code"],
                     "customer_phone": customer_phone,
-                    "type": "bill_upload",
-                    "status": status,
-                    "amount": amount,
                     "bill_id": bill_id,
-                    "bill_value": bill_value,
                     "bill_brand": bill_brand,
+                    "staff_brand": staff_brand,
+                    "reason": "brand_mismatch",
                     "created_at": datetime.now(timezone.utc).isoformat(),
-                    "approved_at": datetime.now(timezone.utc).isoformat() if status == "redeemable" else None,
                 })
-                logger.info(f"Point 14: brand-matched incentive credited staff={staff_id} bill_brand='{bill_brand}' staff_brand='{staff_brand}'")
-            else:
-                # Log an attribution_miss row for reporting / audit — no incentive credited.
-                try:
-                    await _db.staff_attribution_misses.insert_one({
-                        "id": str(uuid.uuid4()),
-                        "staff_id": staff_id,
-                        "staff_code": attribution["staff_code"],
-                        "customer_phone": customer_phone,
-                        "bill_id": bill_id,
-                        "bill_brand": bill_brand,
-                        "staff_brand": staff_brand,
-                        "reason": "brand_mismatch",
-                        "created_at": datetime.now(timezone.utc).isoformat(),
-                    })
-                except Exception as e:
-                    logger.warning(f"attribution miss log failed: {e}")
-                logger.info(f"Point 14: brand-mismatch, no credit. staff='{staff_brand}' bill='{bill_brand}' bill_id={bill_id}")
+            except Exception as e:
+                logger.warning(f"attribution miss log failed: {e}")
+            logger.info(f"Point 14: brand-mismatch, no credit. staff='{staff_brand}' bill='{bill_brand}' bill_id={bill_id}")
 
-            # Point 14: whether or not the bill matched, consume the attribution.
-            # This enforces "one scan = one bill decision" — later bills need a new QR scan.
-            await _db.staff_attributions.update_one({"id": attribution["id"]}, {"$set": {"used": True}})
+        # Point 14: whether or not the bill matched, consume the attribution and
+        # bind it to this bill — one scan = one bill decision.
+        if not rebound:
+            await _db.staff_attributions.update_one(
+                {"id": attribution["id"]}, {"$set": {"used": True, "used_by_bill_id": bill_id}}
+            )
 
     # 2. If bill approved, activate any pending registration incentive whose
     #    staff belongs to the SAME brand as the current bill.
@@ -1757,12 +1783,6 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
     #    registration stays pending until the customer eventually uploads a
     #    matching Brand A bill within the 60-day window.
     if bill_status in ("auto_approved", "approved"):
-        # Reuse the bill_doc we already fetched above if present; otherwise fetch a lean copy.
-        if 'bill_doc' not in locals() or bill_doc is None:
-            bill_doc = await _db.bills.find_one(
-                {"id": bill_id},
-                {"_id": 0, "store_name": 1, "brand": 1},
-            )
         current_bill_brand = ""
         if bill_doc:
             current_bill_brand = (bill_doc.get("store_name") or bill_doc.get("brand") or "").strip()
