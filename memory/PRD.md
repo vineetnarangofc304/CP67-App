@@ -47,6 +47,13 @@
 - Admin stats endpoint now returns `platform_counts` so admins can see iOS vs Android split in the Download QR panel.
 - **Tested**: `iteration_85` — 6/6 pytest pass (iPhone → App Store, iPad → App Store, iPad masquerade → App Store, Android → Play, desktop → Play, empty UA → Play).
 
+## Jun 2026 — Doc points 56–59 (Preview, not deployed)
+- 56: tier now from Fundle (spend-based): current = slab below Fundle next_tier_name; 'Spend ₹X more' = next_tier_pending_amt. `fundle_tier()` in routes/consumer.py used by /home, /profile, /wallet, /wallet/detailed, /tier-info. Fallback = stored users.tier (unsynced hides progress).
+- 57: iOS SplashView + LaunchScreen use AppLogo asset (needs new iOS build); PWA boot loader shows /ha-logo-full.png.
+- 58: Mall Map removed from side menu. 59: 'Call for Dining Reservation' (tel:7038770387) at top of Amenities.
+- Tests: iteration_88 100%.
+- Backlog: cache Fundle token/points (2-4 Fundle calls per Home load).
+
 ## Jun 2026 — Retailer Point 22 code repair (Preview only, not deployed)
 - Ownership: retailer staff incentive module = `backend/routes/staff.py` (this app).
 - Preview DB does NOT contain the reported records (HL-0738 is "House Of Candy (SF)" in Preview; bills 64523/26/34753 absent). Ledger-vs-reporting for that exact case unverifiable here.

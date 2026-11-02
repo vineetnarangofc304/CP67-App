@@ -139,7 +139,7 @@ export default function Wallet() {
       </div>
 
       {/* Tier Progress */}
-      {tier.next && (
+      {tier.next && tier.synced !== false && (
         <div className="wallet-tier-progress" data-testid="tier-progress">
           <div className="tier-progress-header">
             <span><TrendingUp size={14} /> {tier.progress}% to {tier.next}</span>

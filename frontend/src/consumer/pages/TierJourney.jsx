@@ -126,7 +126,7 @@ export default function TierJourney() {
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.7)', fontSize: 12, marginBottom: 6 }}>
               <span>{current.current_spend != null ? `₹${Math.round(current.current_spend).toLocaleString('en-IN')} spent` : `${totalEarned.toLocaleString()} pts earned`}</span>
-              {current.next_at && <span data-testid="tier-journey-next">₹{Math.round(current.next_at).toLocaleString('en-IN')} for {current.next_tier}</span>}
+              {current.next_at && current.current_spend != null && <span data-testid="tier-journey-next">₹{Math.round(current.next_at).toLocaleString('en-IN')} for {current.next_tier}</span>}
             </div>
             <AnimatedProgress
               value={current.next_at ? (current.progress || 0) : 100}

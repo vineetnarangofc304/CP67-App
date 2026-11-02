@@ -1,0 +1,37 @@
+{
+  "summary": "Tested Points 56-59. Backend: fundle_tier() unit tests (6) incl. client example payload => Platinum, to_next 51187, next_at 150001, progress 31, synced true; top tier, spend fallback, Fundle failure fallback to stored tier. API (reviewer 9999999999/123456): /tier-info shape + min_spend list [0,10001,25001,75001,150001,300001,500001], tier consistent across /home, /profile, /wallet, /wallet/detailed; unauth 401/403; /ha-logo-full.png 200 image. 10/10 pass. Reviewer is not a Fundle customer (get-customer-points returns 400) so live data is synced=false/Bronze. Frontend (390x844): Home shows no tier-progress-text when unsynced, badge Bronze matches tier-info; drawer has no Mall Map; Amenities dining card at top href tel:7038770387; boot loader img src /ha-logo-full.png captured. Synced rendering verified by intercepting API responses with the Platinum example: Home 'Spend ₹51,187 more to reach Titanium' + Platinum badge; Wallet '31% to Titanium' / '₹51,187 spend to go'; Tier Journey '₹98,814 spent' / '₹1,50,001 for Titanium', rows '₹X+ spend'. iOS static check: Image(\"AppLogo\") in ContentView.swift, LaunchScreen.storyboard references AppLogo, AppLogo.imageset has AppLogo.png + Contents.json.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "Fundle client (all consumer tier endpoints)", "issue": "Every request calls generate-token then get-customer-points (no token caching); Home loads tier-info + home in parallel, so 2-4 Fundle calls per screen. Consider caching the Fundle token / short-TTL cache of points result."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Wallet (unsynced)", "issues": ["When Fundle not synced, tier-progress still shows '0% to Silver' with empty tier-to-next; Home hides the hint in this case - inconsistent. Consider hiding wallet tier-progress when !tier.synced."]},
+      {"screen": "Tier Journey (unsynced)", "issues": ["Shows 'X pts earned' on left but '₹10,001 for Silver' (spend) on right - mixed units when unsynced."]},
+      {"screen": "Wallet card", "issues": ["'BRONZE MEMBER' pill has gold text on gold/bronze background - low contrast (pre-existing)."]},
+      {"screen": "Home header", "issues": ["'Homeland Advantage' title wraps to two lines at 390px (pre-existing)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_points_56_59.py", "/app/test_reports/pytest/pytest_points_56_59.xml"],
+  "action_items": [
+    "Optional: hide Wallet tier-progress (or show neutral text) when tier.synced is false",
+    "Optional: on Tier Journey use consistent units when unsynced",
+    "Optional: cache Fundle auth token to reduce per-request latency"
+  ],
+  "critical_code_review_comments": [
+    "fundle_tier: if Fundle next_tier_name is set but next_tier_target_amount missing, next_at falls back to SPEND_TIERS min - fine. If next_tier_name='Bronze' (index 0) it falls back to spend-based idx - acceptable.",
+    "tier-info 'tiers' still contains legacy min_points values alongside min_spend; frontend now uses min_spend - consider removing min_points to avoid confusion.",
+    "calculate_tier() (points-based) is now unused for display by these endpoints; remove or mark deprecated to avoid future divergence."
+  ],
+  "updated_files": ["/app/backend/tests/test_points_56_59.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Reviewer 9999999999 / OTP 123456 (no real sends). /app/memory/test_credentials.md lists 9876543210 which triggers real Karix sends - not used.",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Reviewer account is not in Fundle (400), so synced UI states must be tested with page.route interception of /api/consumer/tier-info, /home, /wallet. Token key in localStorage: cp67_consumer_token."
+}
