@@ -125,11 +125,11 @@ export default function TierJourney() {
           </div>
           <div style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.7)', fontSize: 12, marginBottom: 6 }}>
-              <span>{totalEarned.toLocaleString()} pts earned</span>
-              {current.next_at && <span>{current.next_at.toLocaleString()} pts for {current.next_tier}</span>}
+              <span>{current.current_spend != null ? `₹${Math.round(current.current_spend).toLocaleString('en-IN')} spent` : `${totalEarned.toLocaleString()} pts earned`}</span>
+              {current.next_at && <span data-testid="tier-journey-next">₹{Math.round(current.next_at).toLocaleString('en-IN')} for {current.next_tier}</span>}
             </div>
             <AnimatedProgress
-              value={current.next_at ? (totalEarned / current.next_at) * 100 : 100}
+              value={current.next_at ? (current.progress || 0) : 100}
               delay={0.3}
             />
           </div>
@@ -242,7 +242,7 @@ export default function TierJourney() {
                         <div style={{
                           fontSize: 12, color: 'var(--cp-text-2)', marginTop: 2,
                         }}>
-                          {tier.min_points.toLocaleString()}+ points
+                          ₹{(tier.min_spend ?? 0).toLocaleString('en-IN')}+ spend
                         </div>
                       </div>
                       {isExpanded ? <ChevronUp size={16} color="var(--cp-text-3)" /> : <ChevronDown size={16} color="var(--cp-text-3)" />}

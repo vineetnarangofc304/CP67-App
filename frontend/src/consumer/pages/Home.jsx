@@ -189,36 +189,17 @@ export default function Home({ onMenuOpen }) {
             </span>
             <h2 className="points-value"><AnimatedCounter value={u.balance_points || 0} /></h2>
             <span className="points-card-name">{firstName}</span>
-            {/* Point 41c fix (iter 52): read live thresholds from /consumer/tier-info so Home matches Tier Journey. Fallback to static TIER_META. */}
             {(() => {
-              const tierName = u.tier || 'Bronze';
-              // Prefer live tier-info payload
-              if (tierInfo && Array.isArray(tierInfo.tiers)) {
-                const nextName = tierInfo.next_tier;
-                const away = Math.max(0, Number(tierInfo.points_to_next || 0));
-                // Feb 2026: only trust "reached top tier" when current tier
-                // actually IS the top slab — a Bronze user with 0 pts must
-                // never see "top tier" copy (was a live bug on production).
-                const currentIsTop = !TIER_META[tierName]?.next;
-                if (!nextName && currentIsTop) {
-                  return <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>You&apos;ve reached the top tier</span>;
-                }
-                if (nextName) {
-                  return away > 0
-                    ? <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 4 }}>You are <strong>{away.toLocaleString()}</strong> points away from <strong>{nextName}</strong></span>
-                    : <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: '#FFDF73', marginTop: 4 }}>Ready to unlock {nextName}</span>;
-                }
-                // Fall through to static meta when tier-info payload is inconsistent
+              // Point 56: tier + "to next tier" come from Fundle (spend-based).
+              if (!tierInfo || !tierInfo.current_tier || !tierInfo.current_tier.synced) return null;
+              const nextName = tierInfo.next_tier;
+              if (!nextName) {
+                return <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>You&apos;ve reached the top tier</span>;
               }
-              // Static fallback (offline / API failure / stale tier-info)
-              const meta = TIER_META[tierName] || TIER_META.Bronze;
-              if (!meta.next || !meta.nextAt) {
-                return <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>You&apos;ve reached the top tier</span>;
-              }
-              const away = Math.max(0, meta.nextAt - (u.balance_points || 0));
+              const away = Math.max(0, Math.round(Number(tierInfo.to_next_amount || 0)));
               return away > 0
-                ? <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>You are <strong>{away.toLocaleString()}</strong> points away from <strong>{meta.next}</strong></span>
-                : <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: '#FFDF73', marginTop: 4 }}>Ready to unlock {meta.next}</span>;
+                ? <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 4 }}>Spend <strong>₹{away.toLocaleString('en-IN')}</strong> more to reach <strong>{nextName}</strong></span>
+                : <span data-testid="tier-progress-text" style={{ display: 'block', fontSize: 11, color: '#FFDF73', marginTop: 4 }}>Ready to unlock {nextName}</span>;
             })()}
           </div>
           <div className="points-card-right">

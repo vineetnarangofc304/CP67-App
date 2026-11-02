@@ -143,7 +143,7 @@ export default function Wallet() {
         <div className="wallet-tier-progress" data-testid="tier-progress">
           <div className="tier-progress-header">
             <span><TrendingUp size={14} /> {tier.progress}% to {tier.next}</span>
-            <span>{(tier.next_at - tier.current_points).toLocaleString()} pts to go</span>
+            <span data-testid="tier-to-next">{tier.to_next_amount != null ? `₹${Math.round(tier.to_next_amount).toLocaleString('en-IN')} spend to go` : ''}</span>
           </div>
           <div className="tier-progress-bar">
             <motion.div className="tier-progress-fill" initial={{ width: 0 }} animate={{ width: `${tier.progress}%` }}

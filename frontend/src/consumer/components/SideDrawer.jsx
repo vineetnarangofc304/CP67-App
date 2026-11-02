@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Gift, Receipt, FileText, HelpCircle, Shield, ChevronRight, LogOut, Map, Building2, Share2, Award, Crown, Download } from 'lucide-react';
+import { X, User, Gift, Receipt, FileText, HelpCircle, Shield, ChevronRight, LogOut, Building2, Share2, Award, Crown, Download } from 'lucide-react';
 import { useConsumerAuth } from '../ConsumerApp';
 import { PWAInstallGuideModal } from './PWAInstallGuide';
 
@@ -11,7 +11,6 @@ const menuItems = [
   { path: '/app/tier-journey', icon: Crown, label: 'Tier Journey' },
   { path: '/app/transactions', icon: Receipt, label: 'Transactions' },
   { path: '/app/bill-history', icon: FileText, label: 'Bill History' },
-  { path: '/app/mall-map', icon: Map, label: 'Mall Map' },
   { path: '/app/amenities', icon: Building2, label: 'Amenities' },
   { path: '/app/referrals', icon: Share2, label: 'Refer & Earn' },
   { path: '/app/help', icon: HelpCircle, label: 'Help & Support' },

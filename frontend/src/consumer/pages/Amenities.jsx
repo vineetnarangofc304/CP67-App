@@ -49,6 +49,14 @@ export default function Amenities() {
         <p>{totalItems} facilities across {amenities.length} categories</p>
       </div>
 
+      <a href="tel:7038770387" className="dining-call-card" data-testid="dining-reservation-call">
+        <span className="dining-call-icon"><Phone size={18} /></span>
+        <span className="dining-call-text">
+          <strong>Call for Dining Reservation</strong>
+          <small>+91 70387 70387</small>
+        </span>
+      </a>
+
       <div className="amenities-quick-grid" data-testid="amenities-quick-grid">
         {amenities.map(cat => {
           const Icon = CATEGORY_ICONS[cat.category] || ShieldCheck;

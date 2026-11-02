@@ -125,7 +125,7 @@ const ConsumerAuthProvider = ({ children }) => {
 
 const ProtectedConsumer = ({ children }) => {
   const { token, loading, user } = useConsumerAuth();
-  if (loading) return <div className="consumer-loading"><div className="consumer-spinner" /></div>;
+  if (loading) return <div className="consumer-loading boot" data-testid="app-boot-loader"><img src="/ha-logo-full.png" alt="Homeland Advantage" className="consumer-boot-logo" /><div className="consumer-spinner" /></div>;
   if (!token) return <Navigate to="/app/login" replace />;
   if (user && !user.onboarding_complete && window.location.pathname !== '/app/onboarding') {
     return <Navigate to="/app/onboarding" replace />;

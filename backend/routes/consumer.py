@@ -559,7 +559,7 @@ async def get_profile(current_user=Depends(get_current_consumer)):
 
     # Calculate tier — use shared calculate_tier() so /profile matches /wallet, /home, /tier-info
     # (Point 47: was previously using hardcoded thresholds that disagreed with /wallet)
-    tier = calculate_tier(total_earned)["name"]
+    tier = fundle_tier(points_result, user.get("tier"))["name"]
 
     await _db.users.update_one(
         {"id": user["id"]},
@@ -714,7 +714,7 @@ async def get_home(current_user=Depends(get_current_consumer)):
     local_earned = int(user.get("total_earned_points", 0)) if user else 0
     if local_earned > total_earned:
         total_earned = local_earned
-    live_tier = calculate_tier(total_earned)["name"]
+    live_tier = fundle_tier(points_result, (user or {}).get("tier"))["name"]
     # Persist so other reads stay in sync
     if user and user.get("tier") != live_tier:
         try:
@@ -974,8 +974,8 @@ async def get_wallet(current_user=Depends(get_current_consumer)):
         balance = int(points_result["data"].get("balance_points", 0))
         total_earned = int(points_result["data"].get("total_earned_points", balance))
 
-    # Calculate tier
-    tier_info = calculate_tier(total_earned)
+    wallet_user = await _db.users.find_one({"id": current_user["sub"]}, {"_id": 0, "tier": 1})
+    tier_info = fundle_tier(points_result, (wallet_user or {}).get("tier"))
 
     # Recent bills as transaction history
     transactions = []
@@ -998,6 +998,49 @@ async def get_wallet(current_user=Depends(get_current_consumer)):
         "total_earned": total_earned,
         "tier": tier_info,
         "transactions": transactions
+    }
+
+
+# Point 56: Fundle is the source of truth for tier (spend-based). Current tier is the
+# slab below Fundle's next_tier_name; "to next tier" is Fundle's pending spend amount.
+SPEND_TIERS = [
+    ("Bronze", 0, "#B87333"), ("Silver", 10001, "#A8A9AD"), ("Gold", 25001, "#DAA520"),
+    ("Platinum", 75001, "#C4C4C0"), ("Titanium", 150001, "#54545A"),
+    ("Diamond", 300001, "#A7D8DE"), ("Privilege", 500001, "#6B3FA0"),
+]
+
+
+def fundle_tier(points_result: dict, stored_tier: Optional[str] = None) -> dict:
+    names = [t[0] for t in SPEND_TIERS]
+    data = points_result.get("data") if points_result.get("success") else None
+    synced = bool(data) and data.get("total_customer_spend") is not None
+    spend = float(data.get("total_customer_spend") or 0) if synced else None
+    if synced:
+        nxt_name = data.get("next_tier_name")
+        if nxt_name in names and names.index(nxt_name) > 0:
+            idx = names.index(nxt_name) - 1
+        else:
+            idx = max(i for i, t in enumerate(SPEND_TIERS) if spend >= t[1])
+    else:
+        idx = names.index(stored_tier) if stored_tier in names else 0
+    name, min_spend, color = SPEND_TIERS[idx]
+    nxt = SPEND_TIERS[idx + 1] if idx + 1 < len(SPEND_TIERS) else None
+    next_at = to_next = None
+    progress = 0
+    if nxt:
+        next_at = float((data or {}).get("next_tier_target_amount") or nxt[1])
+        if synced:
+            pending = data.get("next_tier_pending_amt")
+            to_next = max(0, round(float(pending) if pending is not None else next_at - spend))
+            span = max(1.0, next_at - min_spend)
+            progress = max(0, min(100, int((spend - min_spend) / span * 100)))
+    elif synced:
+        progress = 100
+    return {
+        "name": name, "color": color, "min": min_spend,
+        "next": nxt[0] if nxt else None, "next_tier": nxt[0] if nxt else None,
+        "next_at": next_at, "current_spend": spend, "to_next_amount": to_next,
+        "progress": progress, "basis": "spend", "synced": synced,
     }
 
 
@@ -1821,7 +1864,7 @@ async def get_wallet_detailed(current_user=Depends(get_current_consumer)):
     # Calculate expired (earned - balance - redeemed = expired)
     expired = max(0, total_earned - balance - total_redeemed)
 
-    tier_info = calculate_tier(total_earned)
+    tier_info = fundle_tier(points_result, (user or {}).get("tier"))
 
     # Count bills
     bill_count = await _db.bills.count_documents(
@@ -2119,7 +2162,7 @@ async def get_tier_info(current_user=Depends(get_current_consumer)):
     if local_earned > total_earned:
         total_earned = local_earned
 
-    current_tier = calculate_tier(total_earned)
+    current_tier = fundle_tier(points_result, (user or {}).get("tier"))
 
     tiers = [
         {"name": "Bronze", "min_points": 0, "color": "#B87333", "purchase_range": "0 - 10,000", "retail": "10%", "jewellery": "5%"},
@@ -2131,9 +2174,16 @@ async def get_tier_info(current_user=Depends(get_current_consumer)):
         {"name": "Privilege", "min_points": 250000, "color": "#6B3FA0", "purchase_range": "5,00,001 & Above", "retail": "35%", "jewellery": "17.5%"},
     ]
 
+    min_spend = {t[0]: t[1] for t in SPEND_TIERS}
+    for t in tiers:
+        t["min_spend"] = min_spend[t["name"]]
+
     return {
         "current_tier": current_tier,
         "total_earned": total_earned,
+        "total_spend": current_tier["current_spend"],
+        "next_tier": current_tier["next_tier"],
+        "to_next_amount": current_tier["to_next_amount"],
         "tiers": tiers
     }
 
