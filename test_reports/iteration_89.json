@@ -1,0 +1,43 @@
+{
+  "summary": "Points 23/24 tested backend + frontend using only my own P2324TEST records (phones 70000230xx). Point 23: available = unlocked (redeemable+redeemed) - requested/approved/settled works everywhere: staff dashboard, redeem page, retailer manager dashboard (per-staff + summary), admin metrics/overview and the admin 'Available Balance' KPI. Over-balance, 0 and negative requests get 400; asking for exactly the full balance works; settling keeps the amount deducted and shows it as redeemed; rejecting gives it back. Point 24: a registration incentive unlocks only on an approved/auto_approved bill whose brand matches the staff brand (exact, case/punctuation-insensitive, or via an alias). Other-brand bills, empty-brand bills and pending_review/manual_review/rejected statuses all leave it pending. Two new issues: (1) HIGH: two redeem requests at the same time can spend the same balance twice. (2) MEDIUM: the admin PATCH accepts any status string. Cleanup verified: 0 P2324TEST records left in any collection.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/staff/redeem", "issue": "Race condition / double-spend. 8 parallel requests of Rs100 against a Rs100 balance all returned 200, leaving Rs800 in_process against Rs110 earned. The code reads the balance, checks it, then inserts the request, all in separate steps, so concurrent requests all pass the check. staff_balances() then clamps available to 0 with max(0, ...), which hides the overdraft. Fix: serialise per staff, e.g. an atomic findOneAndUpdate lock/counter on retail_staff (a 'redeem_lock' or a running 'held_amount' field updated with $inc and a condition), or re-check after insert and roll back if available < 0.", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "PATCH /api/admin/staff/redemptions/{id}", "issue": "RedemptionStatusUpdate.status is a free-form str. status='bogus' returned 200, and because 'bogus' is not in REDEMPTION_HOLD_STATUSES the amount silently went back into the balance. Use Literal['requested','approved','settled','rejected']. There is also no transition guard: settled -> rejected would put an amount that was already paid out back into the balance."},
+      {"endpoint": "POST /api/staff/redeem", "issue": "Error detail shows the float as 'Rs110.0'. Format it as an integer or with 2 decimals."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Admin Mark Settled", "issue": "settleRedemption uses window.prompt for the payout ref. If the admin presses Cancel, the redemption is still PATCHed to settled, with no payout ref. Cancel should abort the action.", "affected_selectors": ["[data-testid='redemptions-tbody'] button:has-text('Mark Settled')"]}
+    ],
+    "design_issues": [
+      {"screen": "Staff app dashboard / redeem", "issues": ["The settled ('redeemed') and in-process amounts are not shown to staff. Only 'ready to redeem' appears, so staff can't see why Total Earned Rs110 differs from Rs100 redeemable. Consider adding 'Rs10 redeemed · RsX in process'."]},
+      {"screen": "Admin /staff-incentives KPIs", "issues": ["settled_amount is returned by the API but not shown in the UI. Optional extra KPI card.", "The 'Mark Settled' / 'Reject' buttons have no data-testid."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_point23_24_api.py", "/app/backend/tests/test_point23_24_balance.py", "/app/backend/tests/p2324_ui_seed.py", "/app/backend/tests/p2324_race.py", "/app/test_reports/pytest/pytest_p2324.xml"],
+  "action_items": [
+    "HIGH: make /api/staff/redeem atomic per staff so concurrent requests can't overdraw (repro: backend/tests/p2324_race.py after p2324_ui_seed.py seed)",
+    "Validate the redemption PATCH status with a Literal enum and block settled->rejected/requested transitions",
+    "Make 'Cancel' on the payout-ref prompt abort Mark Settled",
+    "Optional: show redeemed / in-process amounts in the staff app; add data-testids to the redemption action buttons"
+  ],
+  "critical_code_review_comments": [
+    "staff_redeem: the check-then-insert is not atomic, so concurrent requests can double-spend. max(0, ...) in staff_balances hides negative balances.",
+    "staff_redeem still marks incentives 'redeemed' FIFO, and a later reject does not revert them. This is harmless for the balance (both statuses count as unlocked), but incentive statuses no longer reflect actual payouts.",
+    "JWT_SECRET falls back to a hardcoded default ('cp67-secret-key-2025') when the env var is missing. It should fail fast.",
+    "routes/staff.py is 2284 lines; split it into modules (auth, admin, staff-app, retailer, incentive engine).",
+    "retailer_dashboard matches staff to brands by exact lowercase name, not by _brands_match aliases, so it is inconsistent with the Point 20/24 alias logic."
+  ],
+  "updated_files": ["/app/backend/tests/test_point23_24_api.py", "/app/backend/tests/p2324_ui_seed.py", "/app/backend/tests/p2324_race.py"],
+  "success_rate": {"backend": "91% (10/11; the 1 failure is the report-only bogus-status validation probe). Separate race probe: double-spend reproduced", "frontend": "100% of tested flows"},
+  "seed_data_creation": "Throwaway only: retail_staff 7000023010/7000023020, retailer_managers 7000023011/7000023021, P2324TEST incentives, bills and redemptions. All deleted by id; final counts are 0 (staff, managers, incentives, orphan redemptions, bills, misses, brands).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Staff and retailer-manager JWTs come from /api/staff/auth/verify-otp and /api/staff/retailer/auth/verify-otp with OTP_DEV_BYPASS=1234. No need to call send-otp, which would trigger real SMS/WhatsApp. For the UI, set localStorage sa_staff_token/sa_staff_profile/sa_retailer_token/sa_retailer_profile and cp67_token (admin). Seed: python tests/p2324_ui_seed.py seed; clean up with: python tests/p2324_ui_seed.py cleanup. pytest test_08_unknown_status_patch is designed to fail until status validation is added. Real data before testing: the admin Available Balance KPI was Rs150 (other staff) plus our test staff.",
+  "rca of the issue": "Point 23 fix verified: the balance is now computed from the redemptions ledger. New double-spend RCA: staff_redeem calls staff_balances() (aggregate read), compares the amount, then insert_one. Requests arriving in parallel all read the same pre-insert balance. Mitigation: an atomic conditional update (e.g. retail_staff.find_one_and_update({id, held:{$lte: unlocked-amount}}, {$inc:{held: amount}})), or a per-staff lock document, or a post-insert re-check that deletes the request if available < 0."
+}

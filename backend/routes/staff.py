@@ -15,7 +15,7 @@ MVP defaults (user-picked):
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict
+from typing import Literal, Optional, List, Dict
 from datetime import datetime, timezone, timedelta
 import uuid
 import jwt
@@ -1080,7 +1080,7 @@ async def admin_list_redemptions(status: Optional[str] = None, limit: int = 200,
 
 
 class RedemptionStatusUpdate(BaseModel):
-    status: str  # requested | approved | settled | rejected
+    status: Literal["requested", "approved", "settled", "rejected"]
     admin_note: Optional[str] = None
     payout_ref: Optional[str] = None
 
@@ -1088,6 +1088,11 @@ class RedemptionStatusUpdate(BaseModel):
 @staff_admin_router.patch("/redemptions/{redemption_id}")
 async def admin_update_redemption(redemption_id: str, patch: RedemptionStatusUpdate,
                                     auth=Depends(_verify_admin)):
+    current = await _db.staff_redemptions.find_one({"id": redemption_id}, {"_id": 0, "status": 1})
+    if not current:
+        raise HTTPException(status_code=404, detail="Redemption not found")
+    if current.get("status") in ("settled", "rejected") and patch.status != current.get("status"):
+        raise HTTPException(status_code=400, detail=f"Redemption already {current.get('status')}")
     updates = {"status": patch.status, "updated_at": datetime.now(timezone.utc).isoformat()}
     if patch.admin_note:
         updates["admin_note"] = patch.admin_note
@@ -1909,9 +1914,25 @@ class StaffRedeemRequest(BaseModel):
 
 @staff_router.post("/redeem")
 async def staff_redeem(payload: StaffRedeemRequest, staff=Depends(_verify_staff)):
+    # Per-staff lock so parallel requests can't spend the same balance twice.
+    now = datetime.now(timezone.utc)
+    locked = await _db.retail_staff.find_one_and_update(
+        {"id": staff["id"], "$or": [{"redeem_lock_until": {"$exists": False}}, {"redeem_lock_until": {"$lt": now.isoformat()}}]},
+        {"$set": {"redeem_lock_until": (now + timedelta(seconds=15)).isoformat()}},
+        projection={"_id": 1},
+    )
+    if not locked:
+        raise HTTPException(status_code=409, detail="Another redemption request is in progress. Please try again.")
+    try:
+        return await _staff_redeem_locked(payload, staff)
+    finally:
+        await _db.retail_staff.update_one({"id": staff["id"]}, {"$unset": {"redeem_lock_until": ""}})
+
+
+async def _staff_redeem_locked(payload: StaffRedeemRequest, staff: Dict):
     total = (await staff_balances([staff["id"]])).get(staff["id"], {}).get("available", 0)
     if payload.amount <= 0 or payload.amount > total:
-        raise HTTPException(status_code=400, detail=f"Amount exceeds redeemable balance (₹{total})")
+        raise HTTPException(status_code=400, detail=f"Amount exceeds redeemable balance (₹{total:g})")
     # Simple FIFO redemption
     ref = f"RDM-{uuid.uuid4().hex[:8].upper()}"
     remaining = payload.amount

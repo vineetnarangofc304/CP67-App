@@ -66,3 +66,20 @@ def test_registration_unlocks_on_alias_brand_bill_only():
         finally:
             await _cleanup(db)
     asyncio.run(t())
+
+
+def test_parallel_redeem_cannot_double_spend():
+    async def t():
+        db = await _db(); await _cleanup(db)
+        try:
+            sid = f"{TAG}-{uuid.uuid4()}"
+            await db.retail_staff.insert_one({"id": sid, "staff_code": f"{TAG}-S", "brand_name": "X", "tag": TAG})
+            await db.staff_incentives.insert_one({"id": str(uuid.uuid4()), "staff_id": sid, "type": "bill_upload", "status": "redeemable", "amount": 100, "created_at": _now(), "tag": TAG})
+            res = await asyncio.gather(*[staff_mod.staff_redeem(staff_mod.StaffRedeemRequest(amount=100), staff={"id": sid}) for _ in range(8)], return_exceptions=True)
+            assert sum(1 for r in res if isinstance(r, dict)) == 1
+            assert await db.staff_redemptions.count_documents({"staff_id": sid}) == 1
+            await db.staff_redemptions.update_many({"staff_id": sid}, {"$set": {"tag": TAG}})
+        finally:
+            await db.staff_redemptions.delete_many({"staff_id": {"$regex": f"^{TAG}"}})
+            await _cleanup(db)
+    asyncio.run(t())

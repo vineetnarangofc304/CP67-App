@@ -47,6 +47,11 @@
 - Admin stats endpoint now returns `platform_counts` so admins can see iOS vs Android split in the Download QR panel.
 - **Tested**: `iteration_85` — 6/6 pytest pass (iPhone → App Store, iPad → App Store, iPad masquerade → App Store, Android → Play, desktop → Play, empty UA → Play).
 
+## Jun 2026 — Retailer Doc points 23–24 (Preview, not deployed)
+- 23: staff available balance = (redeemable+redeemed incentives) − requested/approved/settled redemptions (rejected restores); recalculated from history. `staff_balances()` used by staff dashboard, /staff/redeem, manager dashboard, admin metrics (available_balance KPI). Per-staff redeem lock (no double-spend); admin PATCH status is a fixed list and settled/rejected are final.
+- 24: rule kept (same-brand verified bill unlocks registration incentive); now alias-aware.
+- Tests: iteration_89 + 9/9 pytest.
+
 ## Jun 2026 — Doc points 56–59 (Preview, not deployed)
 - 56: tier now from Fundle (spend-based): current = slab below Fundle next_tier_name; 'Spend ₹X more' = next_tier_pending_amt. `fundle_tier()` in routes/consumer.py used by /home, /profile, /wallet, /wallet/detailed, /tier-info. Fallback = stored users.tier (unsynced hides progress).
 - 57: iOS SplashView + LaunchScreen use AppLogo asset (needs new iOS build); PWA boot loader shows /ha-logo-full.png.

@@ -215,6 +215,7 @@ export default function StaffIncentives() {
 
   const settleRedemption = async (id, status) => {
     const ref = status === 'settled' ? window.prompt('Payout reference (UPI txn / cheque # etc.)') : null;
+    if (status === 'settled' && ref === null) return;
     const r = await api(`/admin/staff/redemptions/${id}`, {
       method: 'PATCH',
       body: JSON.stringify({ status, payout_ref: ref || undefined }),
