@@ -462,7 +462,7 @@ export default function StaffIncentives() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card><CardContent className="p-4"><div className="text-xs text-slate-500 uppercase">Total Staff</div><div className="text-3xl font-bold mt-1">{metrics.total_staff}</div></CardContent></Card>
             <Card><CardContent className="p-4"><div className="text-xs text-slate-500 uppercase">Active</div><div className="text-3xl font-bold mt-1 text-emerald-600">{metrics.active_staff}</div></CardContent></Card>
-            <Card><CardContent className="p-4"><div className="text-xs text-slate-500 uppercase">Redeemable</div><div className="text-3xl font-bold mt-1">₹{metrics.incentives_by_status?.redeemable?.amount || 0}</div></CardContent></Card>
+            <Card><CardContent className="p-4"><div className="text-xs text-slate-500 uppercase">Available Balance</div><div className="text-3xl font-bold mt-1" data-testid="admin-staff-available-balance">₹{metrics.available_balance ?? 0}</div></CardContent></Card>
             <Card><CardContent className="p-4"><div className="text-xs text-slate-500 uppercase">Pending</div><div className="text-3xl font-bold mt-1">₹{(metrics.incentives_by_status?.pending?.amount || 0) + (metrics.incentives_by_status?.pending_verification?.amount || 0)}</div></CardContent></Card>
           </div>
         )}

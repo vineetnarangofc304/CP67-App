@@ -980,6 +980,33 @@ async def admin_update_staff_config(update: StaffConfigUpdate, auth=Depends(_ver
 
 # ==================== ADMIN: METRICS ====================
 
+REDEMPTION_HOLD_STATUSES = ("requested", "approved", "settled")
+
+
+async def staff_balances(staff_ids: Optional[List[str]] = None) -> Dict[str, Dict[str, float]]:
+    """Point 23: available = (redeemable + redeemed incentives) - every non-rejected
+    redemption request. Settled is also reported separately as 'redeemed'."""
+    inc_match: Dict = {"status": {"$in": ["redeemable", "redeemed"]}}
+    red_match: Dict = {"status": {"$in": list(REDEMPTION_HOLD_STATUSES)}}
+    if staff_ids is not None:
+        inc_match["staff_id"] = {"$in": staff_ids}
+        red_match["staff_id"] = {"$in": staff_ids}
+    out: Dict[str, Dict[str, float]] = {}
+    async for r in _db.staff_incentives.aggregate([{"$match": inc_match}, {"$group": {"_id": "$staff_id", "t": {"$sum": "$amount"}}}]):
+        out.setdefault(r["_id"], {})["unlocked"] = float(r["t"] or 0)
+    async for r in _db.staff_redemptions.aggregate([{"$match": red_match}, {"$group": {"_id": {"s": "$staff_id", "st": "$status"}, "t": {"$sum": "$amount"}}}]):
+        d = out.setdefault(r["_id"]["s"], {})
+        key = "settled" if r["_id"]["st"] == "settled" else "in_process"
+        d[key] = d.get(key, 0.0) + float(r["t"] or 0)
+    for d in out.values():
+        unlocked = d.get("unlocked", 0.0)
+        settled = d.get("settled", 0.0)
+        in_process = d.get("in_process", 0.0)
+        d.update({"unlocked": unlocked, "settled": settled, "in_process": in_process,
+                  "available": round(max(0.0, unlocked - settled - in_process), 2)})
+    return out
+
+
 @staff_admin_router.get("/metrics/overview")
 async def admin_metrics_overview(auth=Depends(_verify_admin)):
     total_staff = await _db.retail_staff.count_documents({})
@@ -993,11 +1020,14 @@ async def admin_metrics_overview(auth=Depends(_verify_admin)):
     inc_agg = {}
     async for row in _db.staff_incentives.aggregate(pipe):
         inc_agg[row["_id"]] = {"count": row["count"], "amount": row["total_amount"]}
+    balances = await staff_balances()
 
     return {
         "total_staff": total_staff,
         "active_staff": active_staff,
         "incentives_by_status": inc_agg,
+        "available_balance": round(sum(b["available"] for b in balances.values()), 2),
+        "settled_amount": round(sum(b["settled"] for b in balances.values()), 2),
     }
 
 
@@ -1456,9 +1486,10 @@ async def staff_dashboard(staff=Depends(_verify_staff)):
     ]
     by_status = {row["_id"]: {"amount": row["total_amount"], "count": row["count"]} async for row in _db.staff_incentives.aggregate(pipe)}
     earned = sum(v["amount"] for k, v in by_status.items() if k in ("approved", "redeemable", "redeemed"))
-    redeemable = sum(v["amount"] for k, v in by_status.items() if k == "redeemable")
     on_hold = sum(v["amount"] for k, v in by_status.items() if k in ("pending", "pending_verification"))
-    redeemed = by_status.get("redeemed", {}).get("amount", 0)
+    bal = (await staff_balances([sid])).get(sid, {})
+    redeemable = bal.get("available", 0)
+    redeemed = bal.get("settled", 0)
 
     reg_count = await _db.staff_incentives.count_documents({"staff_id": sid, "type": "registration"})
     upload_count = await _db.staff_incentives.count_documents({"staff_id": sid, "type": "bill_upload"})
@@ -1475,6 +1506,7 @@ async def staff_dashboard(staff=Depends(_verify_staff)):
             "redeemable": redeemable,
             "on_hold": on_hold,
             "redeemed": redeemed,
+            "in_process": bal.get("in_process", 0),
         },
         "performance": {
             "registrations": reg_count,
@@ -1813,8 +1845,7 @@ async def create_or_activate_bill_incentive(bill_id: str, customer_phone: str, b
             reg_staff_id = pending_reg.get("staff_id")
             reg_staff = await _db.retail_staff.find_one({"id": reg_staff_id}, {"_id": 0, "brand_name": 1})
             reg_brand = (reg_staff or {}).get("brand_name") or ""
-            reg_brand_norm = _norm(reg_brand)
-            if not current_bill_brand_norm or not reg_brand_norm or current_bill_brand_norm != reg_brand_norm:
+            if not current_bill_brand_norm or not _norm(reg_brand) or not await _brands_match(current_bill_brand, reg_brand):
                 skipped_wrong_brand += 1
                 # Audit: this bill did NOT unlock the registration incentive
                 # because it was for a different brand. Log so admin can see
@@ -1878,14 +1909,7 @@ class StaffRedeemRequest(BaseModel):
 
 @staff_router.post("/redeem")
 async def staff_redeem(payload: StaffRedeemRequest, staff=Depends(_verify_staff)):
-    # Sum current redeemable
-    pipe = [
-        {"$match": {"staff_id": staff["id"], "status": "redeemable"}},
-        {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
-    ]
-    total = 0
-    async for r in _db.staff_incentives.aggregate(pipe):
-        total = r["total"]
+    total = (await staff_balances([staff["id"]])).get(staff["id"], {}).get("available", 0)
     if payload.amount <= 0 or payload.amount > total:
         raise HTTPException(status_code=400, detail=f"Amount exceeds redeemable balance (₹{total})")
     # Simple FIFO redemption
@@ -2206,15 +2230,16 @@ async def retailer_dashboard(mgr=Depends(_verify_retailer_manager)):
             status = row["_id"]["status"]
             by_staff.setdefault(sid, {})[status] = row["amount"]
 
-    def _redeemable(d: Dict) -> float: return float(d.get("redeemable") or 0)
-    def _redeemed(d: Dict) -> float: return float(d.get("redeemed") or 0)
+    balances = await staff_balances(staff_ids) if staff_ids else {}
+
     def _pending(d: Dict) -> float: return float(d.get("pending") or 0) + float(d.get("pending_verification") or 0)
 
     staff_view = []
     total_redeemable = total_redeemed = total_pending = 0.0
     for s in staff_docs:
         d = by_staff.get(s["id"], {})
-        r = _redeemable(d); rd = _redeemed(d); p = _pending(d)
+        b = balances.get(s["id"], {})
+        r = b.get("available", 0.0); rd = b.get("settled", 0.0); p = _pending(d)
         total_redeemable += r; total_redeemed += rd; total_pending += p
         staff_view.append({
             "staff_code": s.get("staff_code"),
